@@ -1,7 +1,7 @@
 /* Typography */
 body, span {
   font-size: 13px;
-  font-family: 'Open Sans', sans-serif;
+  font-family: 'Inter', sans-serif;
   line-height: 1.6;
   letter-spacing: 0.1px;
   color: rgb(79, 79, 79);
@@ -92,7 +92,7 @@ h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
 #searchItems {
   border-radius: 20px;
   padding-left: 12px;
-  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="%23446e9b" class="bi bi-search" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>') no-repeat;
+  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="%23446e9b" class="bi bi-search" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>') no-repeat;
   background-position: right 10px center;
   padding-right: 30px;
 }
@@ -181,8 +181,6 @@ pre {
 /* Modern Table Styling */
 .modern-table {
   border-collapse: collapse;
-  font-size: 0.9em;
-  font-family: sans-serif;
   min-width: 400px;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
   width: 100%;
@@ -310,7 +308,57 @@ pre {
   transform: rotate(360deg);
 }
 
-pre {
-  max-width: 48vw;
-  overflow-x: auto;
+/* DataTable Component Styles */
+data-table {
+  display: table;
+  width: 100%;
+  margin-bottom: 1rem;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+data-table thead,
+data-table tbody,
+data-table tr,
+data-table th,
+data-table td {
+  display: revert; /* Reset display to browser default */
+}
+
+data-table.table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+}
+
+data-table.modern-table thead tr {
+  background-color: #009879;
+  color: #ffffff;
+  text-align: left;
+}
+
+data-table.modern-table tbody tr {
+  border-bottom: 1px solid #dddddd;
+}
+
+data-table.modern-table tbody tr:nth-of-type(even) {
+  background-color: #f3f3f3;
+}
+
+data-table.modern-table tbody tr:last-of-type {
+  border-bottom: 2px solid #009879;
+}
+
+data-table.modern-table tbody tr:hover {
+  background-color: #f1fff9;
+}
+
+data-table.modern-table .text-danger {
+  color: #dc3545 !important;
+}
+
+data-table.modern-table .text-success {
+  color: #28a745 !important;
 }
