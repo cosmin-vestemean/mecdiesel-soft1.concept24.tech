@@ -16,89 +16,21 @@ import {
 } from './dataFetching.js';
 import { paginate, paginateErr, paginateConvAuto, paginateMappings, paginateStock } from './pagination.js';
 
+// Create a loading indicator function
+function showLoading(elementId, message = 'Loading...') {
+  const loadingHtml = `
+    <div class="d-flex align-items-center">
+      <div class="spinner-border text-primary spinner-border-sm me-2" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <span>${message}</span>
+    </div>
+  `;
+  $(elementId).html(loadingHtml);
+}
+
 export function initializeUserInteractions() {
-  renderTable(shared.table, "#items");
-
-  $("#tables").change(() => {
-    shared.table = $("#tables").val();
-    shared.skip = 0;
-    $("#searchItems").val("");
-    renderTable(shared.table, "#items");
-  });
-
-  $("#firstItems").click(() => {
-    shared.skip = 0;
-    renderTable(shared.table, "#items", shared.skip);
-  });
-
-  $("#firstErrors").click(() => {
-    shared.skipErr = 0;
-    getS1Data("Loading messages, please wait...", "#errors", getErrors);
-  });
-
-  $("#firstConvAuto").click(() => {
-    shared.skipConvAuto = 0;
-    getS1Data(
-      "Loading mesagerie conversie automata, please wait...",
-      "#convAuto",
-      getMesagerieConvAuto
-    );
-  });
-
-  $("#firstMappings").click(() => {
-    shared.skipMappings = 0;
-    getS1Data("Loading mappings, please wait...", "#mappings", getMappings);
-  });
-
-  $("#firstStockChanges").click(() => {
-    shared.skipStock = 0;
-    getS1Data("Loading stock, please wait...", "#stockChanges", getSchimbareStoc);
-  });
-
-  $("#nextItems").click(() => {
-    paginate(1);
-  });
-
-  $("#nextErrors").click(() => {
-    paginateErr(1);
-  });
-
-  $("#nextConvAuto").click(() => {
-    paginateConvAuto(1);
-  });
-
-  $("#nextMappings").click(() => {
-    paginateMappings(1);
-  });
-
-  $("#nextStockChanges").click(() => {
-    paginateStock(1);
-  });
-
-  $("#prevItems").click(() => {
-    paginate(-1);
-  });
-
-  $("#prevErrors").click(() => {
-    paginateErr(-1);
-  });
-
-  $("#prevConvAuto").click(() => {
-    paginateConvAuto(-1);
-  });
-
-  $("#prevMappings").click(() => {
-    paginateMappings(-1);
-  });
-
-  $("#prevStockChanges").click(() => {
-    paginateStock(-1);
-  });
-
-  $("#itemsButton").click(() => {
-    hideAllButArray(["itemsContent", "searchItems", "tables", "tablesLabel"]);
-  });
-
+  // First hide all content initially
   const arrOfHtmlElements = [
     "itemsContent",
     "tables",
@@ -119,6 +51,110 @@ export function initializeUserInteractions() {
     "stockChangesCheckboxVerbose",
     "stockChangesLabelVerbose",
   ];
+  
+  // Hide all elements at startup
+  arrOfHtmlElements.forEach(elem => {
+    $("#" + elem).hide();
+  });
+  
+  //show #mainContent, hidden by default with d-none class
+  $("#mainContent").removeClass("d-none");
+  
+  // Show loading indicator when rendering table
+  showLoading("#items", "Loading table data...");
+  renderTable(shared.table, "#items");
+
+  $("#tables").change(() => {
+    showLoading("#items", "Loading table data...");
+    shared.table = $("#tables").val();
+    shared.skip = 0;
+    $("#searchItems").val("");
+    renderTable(shared.table, "#items");
+  });
+
+  $("#firstItems").click(() => {
+    showLoading("#items", "Loading first page...");
+    shared.skip = 0;
+    renderTable(shared.table, "#items", shared.skip);
+  });
+
+  $("#firstErrors").click(() => {
+    showLoading("#errors", "Loading first page of messages...");
+    shared.skipErr = 0;
+    getS1Data("Loading messages, please wait...", "#errors", getErrors);
+  });
+
+  $("#firstConvAuto").click(() => {
+    showLoading("#convAuto", "Loading first page of conversie automata...");
+    shared.skipConvAuto = 0;
+    getS1Data(
+      "Loading mesagerie conversie automata, please wait...",
+      "#convAuto",
+      getMesagerieConvAuto
+    );
+  });
+
+  $("#firstMappings").click(() => {
+    showLoading("#mappings", "Loading first page of mappings...");
+    shared.skipMappings = 0;
+    getS1Data("Loading mappings, please wait...", "#mappings", getMappings);
+  });
+
+  $("#firstStockChanges").click(() => {
+    showLoading("#stockChanges", "Loading first page of stock changes...");
+    shared.skipStock = 0;
+    getS1Data("Loading stock, please wait...", "#stockChanges", getSchimbareStoc);
+  });
+
+  $("#nextItems").click(() => {
+    showLoading("#items", "Loading next page...");
+    paginate(1);
+  });
+
+  $("#nextErrors").click(() => {
+    showLoading("#errors", "Loading next page...");
+    paginateErr(1);
+  });
+
+  $("#nextConvAuto").click(() => {
+    showLoading("#convAuto", "Loading next page...");
+    paginateConvAuto(1);
+  });
+
+  $("#nextMappings").click(() => {
+    showLoading("#mappings", "Loading next page...");
+    paginateMappings(1);
+  });
+
+  $("#nextStockChanges").click(() => {
+    showLoading("#stockChanges", "Loading next page...");
+    paginateStock(1);
+  });
+
+  $("#prevItems").click(() => {
+    showLoading("#items", "Loading previous page...");
+    paginate(-1);
+  });
+
+  $("#prevErrors").click(() => {
+    showLoading("#errors", "Loading previous page...");
+    paginateErr(-1);
+  });
+
+  $("#prevConvAuto").click(() => {
+    showLoading("#convAuto", "Loading previous page...");
+    paginateConvAuto(-1);
+  });
+
+  $("#prevMappings").click(() => {
+    showLoading("#mappings", "Loading previous page...");
+    paginateMappings(-1);
+  });
+
+  $("#prevStockChanges").click(() => {
+    showLoading("#stockChanges", "Loading previous page...");
+    paginateStock(-1);
+  });
 
   function hideAllButArray(arr) {
     arrOfHtmlElements.forEach((elem) => {
@@ -132,12 +168,25 @@ export function initializeUserInteractions() {
     });
   }
 
+  // Keep existing click handlers, but add loading indicators
+  $("#itemsButton").click(() => {
+    hideAllButArray(["itemsContent", "searchItems", "tables", "tablesLabel"]);
+    showLoading("#items", "Loading items...");
+    renderTable(shared.table, "#items");
+  });
+
   $("#mappingsButton").click(() => {
     hideAllButArray(["mappingsContent"]);
+    showLoading("#mappings", "Loading mappings...");
+    getS1Data("Loading mappings, please wait...", "#mappings", getMappings);
   });
 
   $("#errorsButton").click(() => {
     hideAllButArray(["errorsContent", "searchErrors"]);
+    showLoading("#errors", "Loading messages...");
+    getS1Data("Loading messages, please wait...", "#errors", getErrors);
+    
+    // Rest of the code remains the same
     if (!document.getElementById("searchErrors")) {
       var input = document.createElement("input");
       input.setAttribute("type", "text");
@@ -185,6 +234,12 @@ export function initializeUserInteractions() {
 
   $("#convAutoButton").click(() => {
     hideAllButArray(["convAutoContent"]);
+    showLoading("#convAuto", "Loading conversie automata...");
+    getS1Data(
+      "Loading mesagerie conversie automata, please wait...",
+      "#convAuto",
+      getMesagerieConvAuto
+    );
   });
 
   $("#batchButton").click(() => {
@@ -192,6 +247,24 @@ export function initializeUserInteractions() {
   });
 
   $("#stockChangesButton").click(() => {
+    hideAllButArray([
+      "stockChangesContent",
+      "searchStockChanges",
+      "stockChangesSelect",
+      "stockChangesCheckbox",
+      "stockChangesLabel",
+      "stockChangesCheckboxVerbose",
+      "stockChangesLabelVerbose",
+    ]);
+    
+    showLoading("#stockChanges", "Loading stock changes...");
+    getS1Data(
+      "Loading stock changes, please wait...",
+      "#stockChanges",
+      getSchimbareStoc
+    );
+    
+    // Rest of the code remains the same
     if (!document.getElementById("searchStockChanges")) {
       var input = document.createElement("input");
       input.setAttribute("type", "text");
@@ -227,19 +300,10 @@ export function initializeUserInteractions() {
     } else {
       $("#searchStockChanges").show();
     }
-
-    hideAllButArray([
-      "stockChangesContent",
-      "searchStockChanges",
-      "stockChangesSelect",
-      "stockChangesCheckbox",
-      "stockChangesLabel",
-      "stockChangesCheckboxVerbose",
-      "stockChangesLabelVerbose",
-    ]);
   });
 
   $("#stockChangesCheckbox").change(() => {
+    showLoading("#stockChanges", "Refreshing stock changes...");
     getS1Data(
       "Loading stock changes, please wait...", 
       "#stockChanges", 
@@ -247,17 +311,9 @@ export function initializeUserInteractions() {
     );
   });
 
-  $("#showLightLines").change(() => {
-    const isChecked = $("#showLightLines").is(":checked");
-    if (isChecked) {
-      $("#stockChanges .table-light").show();
-    } else {
-      $("#stockChanges .table-light").hide();
-    }
-  });
-
   $("#printConfigButton").click(() => {
     hideAllButArray(["print_config"]);
+    $("#print_config").html('<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div> Loading configuration...');
     connectToS1((token) => {
       getAllSoSourceObjectsRo(token, (sosourceOptions) => {
         addOptions(sosourceOptions, ".sosource", "sosource");
@@ -265,14 +321,18 @@ export function initializeUserInteractions() {
     });
   });
 
+  // Initialize with mappings tab active
   $("#mappingsButton").click();
 
+  // Add loading indicators to reload buttons
   document.getElementById("errorsReload").onclick = () => {
+    showLoading("#errors", "Reloading messages...");
     getS1Data("Loading messages, please wait...", "#errors", getErrors);
     document.getElementById("searchErrors").value = "";
   };
 
   document.getElementById("convAutoReload").onclick = () => {
+    showLoading("#convAuto", "Reloading conversie automata...");
     getS1Data(
       "Loading mesagerie conversie automata, please wait...",
       "#convAuto",
@@ -280,15 +340,8 @@ export function initializeUserInteractions() {
     );
   };
 
-  document.getElementById("convAutoReload").onclick = () => {
-    getS1Data(
-      "Loading mesagerie conversie auto, please wait...",
-      "#convAuto",
-      getMesagerieConvAuto
-    );
-  };
-
   document.getElementById("stockChangesReload").onclick = () => {
+    showLoading("#stockChanges", "Reloading stock changes...");
     getS1Data(
       "Loading stock changes, please wait...",
       "#stockChanges",
@@ -297,22 +350,25 @@ export function initializeUserInteractions() {
   };
 
   document.getElementById("mappingsReload").onclick = () => {
+    showLoading("#mappings", "Reloading mappings...");
     getS1Data("Loading mappings, please wait...", "#mappings", getMappings);
   };
 
   document.getElementById("itemsReload").onclick = () => {
+    showLoading("#items", "Reloading items...");
     renderTable(shared.table, "#items");
   };
 
+  // The batch processing logic with loading indicators
   document.getElementById("stopBatch").onclick = () => {
     $("#batchStatus").html("Stopped");
     isStopped = true;
     $("#process").prop("disabled", false);
-    $("upload").prop("disabled", false);
+    $("#upload").prop("disabled", false);
   };
 
   document.getElementById("upload").onchange = () => {
-    $("#batchStatus").html("Loading codes...");
+    $("#batchStatus").html('<div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div> Loading codes...');
     var files = document.getElementById("upload").files;
     if (files.length <= 0) {
       $("#batchStatus").html("No file selected");
@@ -363,11 +419,11 @@ export function initializeUserInteractions() {
     $("#batchRadio").prop("disabled", true);
     if (document.getElementById("moveItemsOnline").checked) {
       checked = true;
-      $("#batchStatus").html("Processing list for sending to webshop...");
+      $("#batchStatus").html('<div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div> Processing list for sending to webshop...');
       batchProcessList(makeBatchRequest);
     } else if (document.getElementById("stockEvidence").checked) {
       checked = true;
-      $("#batchStatus").html("Processing list for stock evidence...");
+      $("#batchStatus").html('<div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div> Processing list for stock evidence...');
       batchProcessList(processListOfStocks);
     }
     if (!checked) {
@@ -386,7 +442,7 @@ export function initializeUserInteractions() {
       return;
     }
 
-    $("#batchStatus").html("Batch process started");
+    $("#batchStatus").html('<div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div> Batch process started');
 
     var batch = [];
     for (var i = 0; i < codes.length; i++) {
@@ -432,8 +488,10 @@ export function initializeUserInteractions() {
     }
   }
 
+  // Add loading indicators for searching
   document.getElementById("searchItems").oninput = () => {
     if ($("#searchItems").val().length > 4) {
+      showLoading("#items", "Searching...");
       var query = {};
       switch (shared.table) {
         case "mec_item":
@@ -474,55 +532,57 @@ export function initializeUserInteractions() {
     }
   };
 
+  // Add loading indicators for pagination limit changes
   document.getElementById("items50").onclick = () => {
     shared.htmlLimit = 50;
-    renderTable(shared.table, "#items");
-    getS1Data("", "#mappings", getMappings);
-    getS1Data("", "#errors", getErrors);
-    getS1Data("", "#convAuto", getMesagerieConvAuto);
-    getS1Data("", "#stockChanges", getSchimbareStoc);
+    updateAllTables();
   };
 
   document.getElementById("items100").onclick = () => {
     shared.htmlLimit = 100;
-    renderTable(shared.table, "#items");
-    getS1Data("", "#mappings", getMappings);
-    getS1Data("", "#errors", getErrors);
-    getS1Data("", "#convAuto", getMesagerieConvAuto);
-    getS1Data("", "#stockChanges", getSchimbareStoc);
+    updateAllTables();
   };
 
   document.getElementById("items200").onclick = () => {
     shared.htmlLimit = 200;
-    renderTable(shared.table, "#items");
-    getS1Data("", "#mappings", getMappings);
-    getS1Data("", "#errors", getErrors);
-    getS1Data("", "#convAuto", getMesagerieConvAuto);
-    getS1Data("", "#stockChanges", getSchimbareStoc);
+    updateAllTables();
   };
 
   document.getElementById("items500").onclick = () => {
     shared.htmlLimit = 500;
-    renderTable(shared.table, "#items");
-    getS1Data("", "#mappings", getMappings);
-    getS1Data("", "#errors", getErrors);
-    getS1Data("", "#convAuto", getMesagerieConvAuto);
-    getS1Data("", "#stockChanges", getSchimbareStoc);
+    updateAllTables();
   };
 
   document.getElementById("items1000").onclick = () => {
     shared.htmlLimit = 1000;
-    renderTable(shared.table, "#items");
-    getS1Data("", "#mappings", getMappings);
-    getS1Data("", "#errors", getErrors);
-    getS1Data("", "#convAuto", getMesagerieConvAuto);
-    getS1Data("", "#stockChanges", getSchimbareStoc);
+    updateAllTables();
   };
+  
+  // Helper function to update all tables with loading indicators
+  function updateAllTables() {
+    showLoading("#items", "Updating tables...");
+    renderTable(shared.table, "#items");
+    
+    showLoading("#mappings", "Updating mappings...");
+    getS1Data("", "#mappings", getMappings);
+    
+    showLoading("#errors", "Updating messages...");
+    getS1Data("", "#errors", getErrors);
+    
+    showLoading("#convAuto", "Updating conversie automata...");
+    getS1Data("", "#convAuto", getMesagerieConvAuto);
+    
+    showLoading("#stockChanges", "Updating stock changes...");
+    getS1Data("", "#stockChanges", getSchimbareStoc);
+  }
 
   $(document).on("change", ".sosource", function () {
-    var sosource = $(this).val();
     var row = $(this).closest("tr");
+    var sosource = $(this).val();
     var fprms = row.find(".fprms");
+    
+    fprms.html('<option>Loading...</option>');
+    
     connectToS1((token) => {
       getAllFprmsForSoSource(token, sosource, (frpms) => {
         fprms.html("");
@@ -544,10 +604,13 @@ export function initializeUserInteractions() {
   });
 
   $(document).on("change", ".fprms", function () {
-    var fprms = $(this).val();
     var row = $(this).closest("tr");
+    var fprms = $(this).val();
     var sosource = row.find(".sosource");
     var seriesCell = row.find(".series");
+    
+    seriesCell.html('<option>Loading...</option>');
+    
     connectToS1((token) => {
       getAllSeriesForFprms(token, sosource.val(), fprms, (series) => {
         seriesCell.html("");
@@ -561,9 +624,11 @@ export function initializeUserInteractions() {
           );
         }
       });
+      
+      var printTemplate = row.find(".printTemplates");
+      printTemplate.html('<option>Loading...</option>');
+      
       getAllPrintTemplatesForSoSource(token, sosource.val(), (templates) => {
-        console.log("print templates for sosource=" + sosource.val(), templates);
-        var printTemplate = row.find(".printTemplates");
         printTemplate.html("");
         for (var i = 0; i < templates.length; i++) {
           printTemplate.append(
@@ -584,6 +649,12 @@ export function initializeUserInteractions() {
     var sosource = row.find(".sosource");
     var fprms = row.find(".fprms");
     var printTemplate = row.find(".printTemplates");
+    
+    // Add a temporary "Loading..." option
+    if (printTemplate.find('option:contains("Loading templates...")').length === 0) {
+      printTemplate.append('<option>Loading templates...</option>');
+    }
+    
     connectToS1((token) => {
       getPrintTemplates(
         token,
@@ -591,19 +662,8 @@ export function initializeUserInteractions() {
         fprms.val(),
         series,
         (templates) => {
-          console.log("implicit template", templates);
-          if (templates.length == 1) {
+          if (templates && templates.length == 1) {
             printTemplate.val(templates[0].templates);
-          }
-          if (!templates || templates.length == 0) {
-            console.log(
-              "no template found for sosource=" +
-                sosource.val() +
-                " fprms=" +
-                fprms.val() +
-                " series=" +
-                series
-            );
           }
         }
       );
