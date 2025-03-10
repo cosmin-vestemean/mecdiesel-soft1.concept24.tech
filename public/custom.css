@@ -311,5 +311,6 @@ pre {
 }
 
 pre {
-  max-width: 700px;
+  max-width: 48vw;
+  overflow-x: auto;
 }
