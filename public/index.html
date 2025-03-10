@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Italy sync</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--load fontawesome-->
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/gh/google/code-prettify@master/loader/run_prettify.js"></script>
+    <!--add local bootstrap.css-->
+    <link rel="stylesheet" href="bootstrap.css" />
+    <link rel="stylesheet" href="custom.css" />
+    <style>
+      /* Keeping only the essential inline styles that might be needed for backward compatibility */
+      pre {
+        white-space: pre-wrap !important;
+      }
+    </style>
+  </head>
+
+  <body>
+    <script src="https://unpkg.com/@feathersjs/client@^5.0.0-pre.34/dist/feathers.js"></script>
+    <!--load socket.io-->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.1.2/socket.io.min.js"></script>
+    <!--load jquery-->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <!--load bootstrap-->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.0.2/js/bootstrap.bundle.min.js"></script>
+    <!--load xlsx-->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+
+    <div id="app" class="container-fluid p-1">
+      <div id="header" class="d-flex flex-column flex-md-row sticky-top bg-white w-100 mb-2">
+        <div class="col-12 col-md-2 d-flex align-items-center mb-2 mb-md-0">
+          <a href="https://www.mecdiesel.ro" target="_blank" class="text-decoration-none">
+            <img
+              src="https://www.mecdiesel.ro/img/logo.png"
+              alt="MEC Diesel Logo"
+              class="img-fluid"
+              height="50"
+              loading="lazy"
+            />
+          </a>
+        </div>
+        <div class="col-12 col-md-10">
+          <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="mappingsButton" data-bs-toggle="tab" type="button" role="tab">
+                Mappings <i id="mappingsReload" class="fas fa-sync reload-icon"></i>
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="itemsButton" data-bs-toggle="tab" type="button" role="tab">
+                Tables <i id="itemsReload" class="fas fa-sync reload-icon"></i>
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="errorsButton" data-bs-toggle="tab" type="button" role="tab">
+                Messages <i id="errorsReload" class="fas fa-sync reload-icon"></i>
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="convAutoButton" data-bs-toggle="tab" type="button" role="tab">
+                Conversie automata <i id="convAutoReload" class="fas fa-sync reload-icon"></i>
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="stockChangesButton" data-bs-toggle="tab" type="button" role="tab">
+                Stock changes <i id="stockChangesReload" class="fas fa-sync reload-icon"></i>
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="batchButton" data-bs-toggle="tab" type="button" role="tab">
+                Batch
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="printConfigButton" data-bs-toggle="tab" type="button" role="tab">
+                Print config
+              </button>
+            </li>
+          </ul>
+          <div class="d-flex align-items-center mt-2 gap-2">
+            <select id="tables" class="form-select w-auto">
+              <option value="mec_item">mec_item</option>
+              <option value="mec_item_producer_relation">mec_item_producer_relation</option>
+              <option value="site_product_changes_history">site_product_changes_history</option>
+              <option value="site_product_frequent_changes">site_product_frequent_changes</option>
+              <option value="mec_item_altref">mec_item_altref</option>
+              <option value="mec_ro_item_rel_supplier">mec_ro_item_rel_supplier</option>
+            </select>
+            <input id="searchItems" type="text" class="form-control" placeholder="Search items by Item or mec_code"/>
+            <input id="batchSize" type="number" class="form-control" value="50" style="width: 100px"/>
+          </div>
+        </div>
+      </div>
+      <div id="mainContent" class="container-fluid">
+        <div id="itemsContent" class="table-responsive">
+          <table
+            id="items"
+            class="table table-sm modern-table"
+          ></table>
+          <div id="paginationItems" class="p-1 pagination-modern">
+            <button id="firstItems" class="btn btn-primary shadow-sm rounded">
+              First
+            </button>
+            <button id="prevItems" class="btn btn-primary shadow-sm rounded">
+              Prev
+            </button>
+            <button id="nextItems" class="btn btn-primary shadow-sm rounded">
+              Next
+            </button>
+          </div>
+        </div>
+        <div id="mappingsContent" class="table-responsive">
+          <table
+            id="mappings"
+            class="table table-sm modern-table"
+          ></table>
+          <div id="paginationMappings" class="p-1 pagination-modern">
+            <button
+              id="firstMappings"
+              class="btn btn-primary shadow-sm rounded"
+            >
+              First
+            </button>
+            <button id="prevMappings" class="btn btn-primary shadow-sm rounded">
+              Prev
+            </button>
+            <button id="nextMappings" class="btn btn-primary shadow-sm rounded">
+              Next
+            </button>
+          </div>
+        </div>
+        <div id="errorsContent" class="table-responsive">
+          <table
+            id="errors"
+            class="table table-sm modern-table"
+          ></table>
+          <div id="paginationErrors" class="p-1 pagination-modern">
+            <button id="firstErrors" class="btn btn-primary shadow-sm rounded">
+              First
+            </button>
+            <button id="prevErrors" class="btn btn-primary shadow-sm rounded">
+              Prev
+            </button>
+            <button id="nextErrors" class="btn btn-primary shadow-sm rounded">
+              Next
+            </button>
+          </div>
+        </div>
+        <div id="convAutoContent" class="table-responsive">
+          <table
+            id="convAuto"
+            class="table table-sm modern-table"
+          ></table>
+          <div id="paginationConvAuto" class="p-1 pagination-modern">
+            <button
+              id="firstConvAuto"
+              class="btn btn-primary shadow-sm rounded"
+            >
+              First
+            </button>
+            <button id="prevConvAuto" class="btn btn-primary shadow-sm rounded">
+              Prev
+            </button>
+            <button id="nextConvAuto" class="btn btn-primary shadow-sm rounded">
+              Next
+            </button>
+          </div>
+        </div>
+        <div id="stockChangesContent" class="table-responsive">
+          <div class="d-flex align-items-center gap-3 mb-3">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="stockChangesCheckbox"/>
+              <label class="form-check-label text-success fw-bold" for="stockChangesCheckbox">Show only out of stock items</label>
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="showLightLines" checked/>
+              <label class="form-check-label text-secondary fw-bold" for="showLightLines">Show informational lines</label>
+            </div>
+          </div>
+          <table
+            id="stockChanges"
+            class="table table-sm modern-table"
+          ></table>
+          <div id="paginationStockChanges" class="p-1 pagination-modern">
+            <button
+              id="firstStockChanges"
+              class="btn btn-primary shadow-sm rounded"
+            >
+              First
+            </button>
+            <button
+              id="prevStockChanges"
+              class="btn btn-primary shadow-sm rounded"
+            >
+              Prev
+            </button>
+            <button
+              id="nextStockChanges"
+              class="btn btn-primary shadow-sm rounded"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+        <!--
+          1.batchApp: set height and width and center
+        -->
+        <div id="batchApp">
+          <div id="batchControlPanel" class="mb-2 mt-2">
+            <div
+              class="btn-group"
+              role="group"
+              aria-label="Batch jobs radio toggle button group"
+              class="d-flex flex-row"
+              id="batchRadio"
+            >
+              <input
+                type="radio"
+                class="btn-check p-1"
+                name="btnradio"
+                id="moveItemsOnline"
+                autocomplete="off"
+              />
+              <label
+                class="btn btn-outline-primary btn-sm btn-outline-secondary me-1"
+                for="moveItemsOnline"
+                >Move items online</label
+              >
+
+              <input
+                type="radio"
+                class="btn-check p-1"
+                name="btnradio"
+                id="stockEvidence"
+                autocomplete="off"
+              />
+              <label
+                class="btn btn-outline-primary btn-sm btn-outline-secondary me-1"
+                for="stockEvidence"
+                >Stock evidence</label
+              >
+            </div>
+            <div class="d-flex flex-row">
+              <div class="p-1">
+                <form id="uploadForm">
+                  <input
+                    id="upload"
+                    type="file"
+                    class="form-control form-control-sm w-100 me-1"
+                    accept=".xlsx"
+                  />
+                </form>
+              </div>
+              <div class="p-1">
+                <button id="process" class="btn btn-sm btn-outline-secondary">
+                  Process
+                </button>
+              </div>
+              <div class="p-1">
+                <button id="stopBatch" class="btn btn-sm btn-outline-secondary">
+                  Stop
+                </button>
+              </div>
+            </div>
+            <div class="d-flex flex-row">
+              <span
+                id="batchStatus"
+                class="h5 fw-bold font-monospace text-success"
+              ></span>
+            </div>
+          </div>
+          <div class="row">
+            <div id="fileContent" class="column w-25 overflow-auto vh-100">
+              <table
+                id="batchTable"
+                class="table table-sm table-responsive modern-table mb-2"
+              ></table>
+            </div>
+            <div
+              id="batchMessagesContent"
+              class="column w-75 overflow-auto vh-100 mb-2"
+            >
+              <span id="batchMessages"></span>
+            </div>
+          </div>
+        </div>
+        <div id="print_config">
+          <script>
+            //jQuery" include here content of print_config.html
+            $(function () {
+              $('#print_config').load('print_config.html')
+            })
+          </script>
+        </div>
+      </div>
+      <!--footer-->
+      <div id="footer">
+        <div class="row fixed-bottom shadow-sm">
+          <div class="col">
+            <span class="h5 lh-lg font-monospace px-2"
+              >Dubhe DB Hub</span
+            >
+            <div
+              class="btn-group"
+              role="group"
+              aria-label="Basic radio toggle button group"
+            >
+              <input
+                type="radio"
+                class="btn-check"
+                name="btnradio"
+                id="items50"
+                autocomplete="off"
+              />
+              <label
+                class="btn btn-outline-primary btn-sm btn-outline-secondary"
+                for="items50"
+                >50</label
+              >
+
+              <input
+                type="radio"
+                class="btn-check"
+                name="btnradio"
+                id="items100"
+                autocomplete="off"
+                checked
+              />
+              <label
+                class="btn btn-outline-primary btn-sm btn-outline-secondary"
+                for="items100"
+                >100</label
+              >
+
+              <input
+                type="radio"
+                class="btn-check"
+                name="btnradio"
+                id="items200"
+                autocomplete="off"
+              />
+              <label
+                class="btn btn-outline-primary btn-sm btn-outline-secondary"
+                for="items200"
+                >200</label
+              >
+
+              <input
+                type="radio"
+                class="btn-check"
+                name="btnradio"
+                id="items500"
+                autocomplete="off"
+              />
+              <label
+                class="btn btn-outline-primary btn-sm btn-outline-secondary"
+                for="items500"
+                >500</label
+              >
+
+              <input
+                type="radio"
+                class="btn-check"
+                name="btnradio"
+                id="items1000"
+                autocomplete="off"
+              />
+              <label
+                class="btn btn-outline-primary btn-sm btn-outline-secondary"
+                for="items1000"
+                >1000</label
+              >
+            </div>
+          </div>
+          <div class="col">
+            <!-- back to top icon from fontawesome-->
+            <a href="#top" class="btn btn-outline-primary">
+              <i class="fas fa-arrow-up"></i>
+            </a>
+            <span
+              id="messages"
+              class="h5 lh-lg font-monospace px-2 text-primary"
+            ></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+      crossorigin="anonymous"
+    ></script>
+    <script type="module" src="client.js"></script>
+  </body>
+</html>

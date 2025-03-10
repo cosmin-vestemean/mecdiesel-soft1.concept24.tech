@@ -1,0 +1,80 @@
+{
+  "name": "italysync",
+  "description": "Soft1 Romania DB / Italy DB",
+  "version": "0.0.0",
+  "homepage": "",
+  "private": true,
+  "keywords": [
+    "feathers"
+  ],
+  "author": {
+    "name": "Cosmin Vestemean",
+    "email": "cosmin.vestemean@serrasoftware.ro"
+  },
+  "contributors": [],
+  "bugs": {},
+  "engines": {
+    "node": ">= 18.12.1"
+  },
+  "feathers": {
+    "language": "js",
+    "packager": "npm",
+    "database": "mssql",
+    "framework": "koa",
+    "transports": [
+      "websockets"
+    ],
+    "schema": "typebox"
+  },
+  "directories": {
+    "lib": "src",
+    "test": "test"
+  },
+  "files": [
+    "lib/client.js",
+    "lib/**/*.d.ts",
+    "lib/**/*.shared.js"
+  ],
+  "main": "src/client",
+  "type": "module",
+  "scripts": {
+    "start": "node src",
+    "dev": "DEBUG=knex:query nodemon src/",
+    "prettier": "npx prettier \"**/*.js\" --write",
+    "mocha": "cross-env NODE_ENV=test mocha test/ --recursive --exit",
+    "test": "cross-env NODE_ENV=test npm run migrate && npm run mocha",
+    "bundle:client": "npm pack --pack-destination ./public",
+    "migrate": "knex migrate:latest",
+    "migrate:make": "knex migrate:make"
+  },
+  "dependencies": {
+    "@feathersjs/adapter-commons": "^5.0.1",
+    "@feathersjs/authentication": "^5.0.1",
+    "@feathersjs/authentication-client": "^5.0.2",
+    "@feathersjs/configuration": "^5.0.1",
+    "@feathersjs/errors": "^5.0.1",
+    "@feathersjs/feathers": "^5.0.3",
+    "@feathersjs/knex": "^5.0.1",
+    "@feathersjs/koa": "^5.0.1",
+    "@feathersjs/schema": "^5.0.1",
+    "@feathersjs/socketio": "^5.0.1",
+    "@feathersjs/socketio-client": "^5.0.3",
+    "@feathersjs/transport-commons": "^5.0.1",
+    "@feathersjs/typebox": "^5.0.1",
+    "ItalySync": "file:public/ItalySync-0.0.0.tgz",
+    "knex": "^2.4.2",
+    "mssql": "^9.1.1",
+    "request-promise": "^4.2.6",
+    "socket.io-client": "^4.6.1",
+    "winston": "^3.8.2"
+  },
+  "devDependencies": {
+    "@feathersjs/cli": "^5.0.2",
+    "@feathersjs/rest-client": "^5.0.1",
+    "axios": "^1.3.4",
+    "cross-env": "^7.0.3",
+    "mocha": "^10.2.0",
+    "nodemon": "^2.0.22",
+    "prettier": "^2.8.7"
+  }
+}

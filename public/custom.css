@@ -1,0 +1,315 @@
+/* Typography */
+body, span {
+  font-size: 13px;
+  font-family: 'Open Sans', sans-serif;
+  line-height: 1.6;
+  letter-spacing: 0.1px;
+  color: rgb(79, 79, 79);
+}
+
+h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
+  font-weight: 600;
+  color: #333;
+}
+
+.font-monospace {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+/* Layout */
+#mainContent {
+  margin-bottom: 50px;
+  padding: 20px 15px;
+  margin-top: 10px;
+}
+
+/* Header */
+#header {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  padding: 10px 15px;
+  border-radius: 0 0 10px 10px;
+  background-color: #fff;
+}
+
+/* Footer */
+#footer {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  height: 40px;
+  background-color: #f8f9fa;
+  border-top: 1px solid #dee2e6;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+}
+
+#footer .btn-group {
+  border-radius: 20px;
+}
+
+#footer .btn-group label {
+  border-radius: 0;
+  margin: 0;
+  font-size: 12px;
+}
+
+/* Button styling */
+.btn {
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  border-radius: 6px;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.btn-success {
+  background-color: #3cb521;
+  border-color: #3cb521;
+}
+
+.btn-primary {
+  background-color: #446e9b;
+  border-color: #446e9b;
+}
+
+/* Form controls */
+.form-control, .form-select {
+  border-radius: 6px;
+  border: 1px solid #ced4da;
+  padding: 8px 12px;
+  transition: all 0.2s ease;
+}
+
+.form-control:focus, .form-select:focus {
+  border-color: #446e9b;
+  box-shadow: 0 0 0 0.25rem rgba(68, 110, 155, 0.25);
+}
+
+/* Search input */
+#searchItems {
+  border-radius: 20px;
+  padding-left: 12px;
+  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="%23446e9b" class="bi bi-search" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>') no-repeat;
+  background-position: right 10px center;
+  padding-right: 30px;
+}
+
+/* Content sections */
+#itemsContent, #mappingsContent, #errorsContent, 
+#convAutoContent, #stockChangesContent {
+  background-color: #fff;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+
+/* Table styling */
+.table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+}
+
+.table thead th {
+  background-color: #f8f9fa;
+  color: #446e9b;
+  font-weight: 600;
+  border-bottom: 2px solid #dee2e6;
+  padding: 12px;
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.table-hover tbody tr:hover {
+  background-color: rgba(68, 110, 155, 0.075);
+}
+
+/* Pagination styling */
+[id^="pagination"] {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+/* Batch processing UI */
+#batchApp {
+  height: auto;
+  max-height: 85vh;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+  background-color: #fff;
+  padding: 15px;
+}
+
+#batchControlPanel {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 15px;
+}
+
+#fileContent, #batchMessagesContent {
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 10px;
+  height: 500px;
+}
+
+/* Messages */
+#messages, #batchMessages, #batchStatus {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Code */
+pre {
+  white-space: pre-wrap !important;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  padding: 12px;
+  border: 1px solid #e9ecef;
+}
+
+/* Modern Table Styling */
+.modern-table {
+  border-collapse: collapse;
+  font-size: 0.9em;
+  font-family: sans-serif;
+  min-width: 400px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+  width: 100%;
+}
+
+.modern-table thead tr {
+  background-color: #009879;
+  color: #ffffff;
+  text-align: left;
+}
+
+.modern-table th,
+.modern-table td {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+.modern-table tbody tr {
+  border-bottom: 1px solid #dddddd;
+}
+
+.modern-table tbody tr:nth-of-type(even) {
+  background-color: #f3f3f3;
+}
+
+.modern-table tbody tr:last-of-type {
+  border-bottom: 2px solid #009879;
+}
+
+.modern-table tbody tr.active-row {
+  font-weight: bold;
+  color: #009879;
+}
+
+/* Hover effect */
+.modern-table tbody tr:hover {
+  background-color: #f1fff9;
+}
+
+/* Responsive table */
+@media screen and (max-width: 600px) {
+  .table-responsive {
+    overflow-x: auto;
+  }
+}
+
+/* Pagination styling */
+.pagination-modern {
+  margin-top: 10px;
+  display: flex;
+  gap: 5px;
+}
+
+.pagination-modern .btn {
+  background-color: #009879;
+  border-color: #009879;
+}
+
+.pagination-modern .btn:hover {
+  background-color: #007c63;
+  border-color: #007c63;
+}
+
+/* Tab Navigation Styling */
+.nav-tabs {
+  border-bottom: 2px solid #dee2e6;
+}
+
+.nav-tabs .nav-link {
+  border: none;
+  color: #446e9b;
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  transition: all 0.2s ease-in-out;
+}
+
+.nav-tabs .nav-link:hover {
+  border: none;
+  color: #009879;
+}
+
+.nav-tabs .nav-link.active {
+  border: none;
+  border-bottom: 2px solid #009879;
+  color: #009879;
+  font-weight: 600;
+}
+
+.nav-tabs .nav-link i {
+  margin-left: 5px;
+  font-size: 0.875rem;
+}
+
+/* Form controls in header */
+#header .form-control,
+#header .form-select {
+  height: 35px;
+  font-size: 0.875rem;
+}
+
+#header .form-check {
+  margin-bottom: 0;
+}
+
+/* Reload button styling */
+.reload-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 8px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.2);
+  transition: transform 0.3s ease;
+}
+
+.reload-icon:hover {
+  transform: rotate(180deg);
+  cursor: pointer;
+  color: #009879;
+}
+
+.reload-icon:active {
+  transform: rotate(360deg);
+}
+
+pre {
+  max-width: 700px;
+}

@@ -1,0 +1,75 @@
+<!--
+    1. table with id="printConfig" with columns: sosource, fprms, series, printTemplates
+    2. every cell has a select with options from a WS call
+    3. fprms = f(sosource)
+    4. series = f(sosource, fprms)
+    5. printTemplates = f(sosource, fprms, series)
+    6. if sosource is changed, fprms, series, printTemplates are reset
+    7. if fprms is changed, series, printTemplates are reset
+    8. if series is changed, printTemplates is reset
+    9. save button
+    10. add a row button
+-->
+
+<div class="container">
+  <div class="row">
+    <div class="col-md-12">
+      <h1>Print Config</h1>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md-12">
+      <table id="printConfig" class="table table-bordered">
+        <thead>
+          <tr>
+            <th>Source</th>
+            <th>Document type</th>
+            <th>Document series</th>
+            <th>Print Template for series</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <select class="form-control sosource">
+                <option selected value="1">Select sosource</option>
+              </select>
+            </td>
+            <td>
+              <select class="form-control fprms">
+                <option selected value="1">Select fprms</option>
+              </select>
+            </td>
+            <td>
+              <select series" class="form-control series">
+                <option selected value="1">Select series</option>
+              </select>
+            </td>
+            <td>
+              <select class="form-control printTemplates">
+                <option selected value="1">Select print template</option>
+              </select>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md-12">
+      <button id="save" class="btn btn-primary">Save</button>
+      <button id="addRow" class="btn btn-primary">Add Row</button>
+    </div>
+  </div>
+</div>
+<script>
+  //addRow button adds a new row to #printConfig table
+$("#addRow").click(function () {
+  var row = $("#printConfig tbody tr:last-child").clone();
+  row.find(".sosource").val("");
+  row.find(".fprms").html("");
+  row.find(".series").html("");
+  row.find(".printTemplates").html("");
+  $("#printConfig tbody").append(row);
+});
+</script>
