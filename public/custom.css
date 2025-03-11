@@ -176,6 +176,7 @@ pre {
   border-radius: 6px;
   padding: 12px;
   border: 1px solid #e9ecef;
+  max-width: 48vw;
 }
 
 /* Modern Table Styling */
@@ -311,6 +312,7 @@ pre {
 /* DataTable Component Styles */
 data-table {
   display: table;
+  font-size: 0.75rem;
   width: 100%;
   margin-bottom: 1rem;
   border-collapse: separate;

@@ -1,5 +1,4 @@
-import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js';
-import { unsafeHTML } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
+import { LitElement, html, unsafeHTML } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
 
 class DataTable extends LitElement {
   static properties = {
@@ -21,7 +20,10 @@ class DataTable extends LitElement {
   // Helper function to determine if content might contain HTML
   containsHtml(str) {
     if (typeof str !== 'string') return false;
-    return /<[a-z][\s\S]*>/i.test(str);
+    
+    // More comprehensive test for HTML content
+    const htmlRegex = /<(?=.*? .*?\/ ?>|br|hr|input|!--|wbr)[a-z]+.*?>|<([a-z]+).*?<\/\1>/i;
+    return htmlRegex.test(str);
   }
 
   // Helper function to safely render cell content (HTML or plain text)
@@ -32,9 +34,43 @@ class DataTable extends LitElement {
     return html`${content}`;
   }
 
+  showToast(message, type = 'info') {
+    const toastId = `toast-${Date.now()}`;
+    const toastHtml = `
+      <div id="${toastId}" class="toast align-items-center text-white bg-${type}" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+          <div class="toast-body">${message}</div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+      </div>
+    `;
+    
+    const toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+      const container = document.createElement('div');
+      container.id = 'toast-container';
+      container.className = 'toast-container position-fixed top-0 end-0 p-3';
+      document.body.appendChild(container);
+    }
+    
+    document.getElementById('toast-container').insertAdjacentHTML('beforeend', toastHtml);
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement);
+    toast.show();
+  }
+
+  updated(changedProperties) {
+    if (changedProperties.has('items')) {
+      if (this.items && this.items.length > 0) {
+        this.showToast(`Successfully loaded ${this.items.length} records`, 'success');
+      }
+    }
+  }
+
   renderTableContent() {
     if (!this.items || this.items.length === 0) {
-      return html`<tr><td colspan="100%"><h2 class="text-danger">No data</h2></td></tr>`;
+      //this.showToast('No data available', 'warning');
+      return html`<tr><td colspan="100%"><h6 class="text-danger">No data (yet?)</h2></td></tr>`;
     }
 
     // Find the lengthier item as object
@@ -64,8 +100,6 @@ class DataTable extends LitElement {
       for (let i = 0; i < columnNo; i++) {
         const key = Object.keys(item)[i].toLowerCase();
         const value = Object.values(item)[i];
-
-        console.log('key:', key, 'value:', value);
         
         switch (key) {
           case "stoc":

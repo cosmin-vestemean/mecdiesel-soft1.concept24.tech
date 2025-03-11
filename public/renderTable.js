@@ -86,20 +86,15 @@ function renderTable(dbtable, htmltable, skip = 0) {
 function renderData(items, htmlElementId) {
   console.log("rendering " + htmlElementId);
   console.log(items);
-  $(htmlElementId).empty();
   
   if (!items || (items && items.length == 0)) {
-    $(htmlElementId).append(
-      `<tr><td><h2 class="text-danger">No data</h2></td></tr>`
-    );
+    const dataTable = document.querySelector(htmlElementId);
+    if (dataTable) {
+      dataTable.items = [];
+    }
     return;
   }
   
-  if (Object.keys(items[0]).includes("is_signaled")) {
-    //remove class table-striped from table htmlElementId
-    $(htmlElementId).removeClass("table-striped");
-  }
-
   var skipNr = 0;
   switch (htmlElementId) {
     case "#items":
@@ -119,62 +114,15 @@ function renderData(items, htmlElementId) {
       break;
   }
   
-  // Create table header
-  const columns = Object.keys(items[0]);
-  const headerRow = document.createElement('tr');
-  
-  // Add header cells
-  columns.forEach(column => {
-    const headerCell = document.createElement('th');
-    headerCell.textContent = column;
-    headerRow.appendChild(headerCell);
-  });
-  
-  // Create a table header element and append the header row
-  const tableHeader = document.createElement('thead');
-  tableHeader.appendChild(headerRow);
-  
-  // Create table body
-  const tableBody = document.createElement('tbody');
-  
-  // Add data rows
-  items.forEach((item, index) => {
-    const dataRow = document.createElement('tr');
-    
-    // Add special styling for signaled items if applicable
-    if (item.is_signaled) {
-      dataRow.classList.add('table-warning');
-    }
-    
-    // Add data cells
-    columns.forEach(column => {
-      const cell = document.createElement('td');
-      
-      // Handle different data types appropriately
-      if (item[column] === null || item[column] === undefined) {
-        cell.textContent = '';
-      } else if (typeof item[column] === 'object') {
-        cell.textContent = JSON.stringify(item[column]);
-      } else {
-        cell.textContent = item[column];
-      }
-      
-      dataRow.appendChild(cell);
-    });
-    
-    tableBody.appendChild(dataRow);
-  });
-  
-  // Add the index number to the table element for pagination tracking
+  // Set properties directly on the custom element
   const dataTable = document.querySelector(htmlElementId);
   if (dataTable) {
+    dataTable.skipNr = skipNr;
+    dataTable.items = items; // This triggers a render in the custom element
+    
+    // Store pagination info as attributes for later use
     dataTable.setAttribute('data-skip', skipNr);
     dataTable.setAttribute('data-count', items.length);
-    
-    // Clear and update the data-table content
-    dataTable.innerHTML = '';
-    dataTable.appendChild(tableHeader);
-    dataTable.appendChild(tableBody);
   }
 }
 

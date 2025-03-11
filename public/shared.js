@@ -1,5 +1,5 @@
 export const shared = {
-  htmlLimit: 100,
+  htmlLimit: 500,
   skip: 0,
   skipErr: 0,
   skipConvAuto: 0,
