@@ -15,8 +15,25 @@ import {
   getItemsFromService
 } from './dataFetching.js';
 import { paginate, paginateErr, paginateConvAuto, paginateMappings, paginateStock } from './pagination.js';
+import { client } from './socketConfig.js'; // Add this import
 
 let codes = [];
+let isStopped = false;
+
+// Define the batch request functions
+function makeBatchRequest(token, batch) {
+  return client.service("s1").makeBatchRequest({
+    token: token,
+    codes: batch
+  });
+}
+
+function processListOfStocks(token, batch) {
+  return client.service("s1").processListOfStocks({
+    token: token,
+    codes: batch
+  });
+}
 
 export function initializeUserInteractions() {
   //show #mainContent, hidden by default with d-none class
