@@ -98,74 +98,24 @@
             id="items"
             class="table table-sm table-responsive modern-table"
           ></data-table>
-          <div id="paginationItems" class="p-1 pagination-modern">
-            <button id="firstItems" class="btn btn-primary shadow-sm rounded">
-              First
-            </button>
-            <button id="prevItems" class="btn btn-primary shadow-sm rounded">
-              Prev
-            </button>
-            <button id="nextItems" class="btn btn-primary shadow-sm rounded">
-              Next
-            </button>
-          </div>
         </div>
         <div id="mappingsContent" class="table-responsive">
           <data-table
             id="mappings"
             class="table table-sm table-responsive modern-table"
           ></data-table>
-          <div id="paginationMappings" class="p-1 pagination-modern">
-            <button
-              id="firstMappings"
-              class="btn btn-primary shadow-sm rounded"
-            >
-              First
-            </button>
-            <button id="prevMappings" class="btn btn-primary shadow-sm rounded">
-              Prev
-            </button>
-            <button id="nextMappings" class="btn btn-primary shadow-sm rounded">
-              Next
-            </button>
-          </div>
         </div>
         <div id="errorsContent" class="table-responsive">
           <data-table
             id="errors"
             class="table table-sm table-responsive modern-table"
           ></data-table>
-          <div id="paginationErrors" class="p-1 pagination-modern">
-            <button id="firstErrors" class="btn btn-primary shadow-sm rounded">
-              First
-            </button>
-            <button id="prevErrors" class="btn btn-primary shadow-sm rounded">
-              Prev
-            </button>
-            <button id="nextErrors" class="btn btn-primary shadow-sm rounded">
-              Next
-            </button>
-          </div>
         </div>
         <div id="convAutoContent" class="table-responsive">
           <data-table
             id="convAuto"
             class="table table-sm table-responsive modern-table"
           ></data-table>
-          <div id="paginationConvAuto" class="p-1 pagination-modern">
-            <button
-              id="firstConvAuto"
-              class="btn btn-primary shadow-sm rounded"
-            >
-              First
-            </button>
-            <button id="prevConvAuto" class="btn btn-primary shadow-sm rounded">
-              Prev
-            </button>
-            <button id="nextConvAuto" class="btn btn-primary shadow-sm rounded">
-              Next
-            </button>
-          </div>
         </div>
         <div id="stockChangesContent" class="table-responsive">
           <div class="d-flex align-items-center gap-3 mb-3">
@@ -182,26 +132,6 @@
             id="stockChanges"
             class="table table-sm table-responsive modern-table"
           ></data-table>
-          <div id="paginationStockChanges" class="p-1 pagination-modern">
-            <button
-              id="firstStockChanges"
-              class="btn btn-primary shadow-sm rounded"
-            >
-              First
-            </button>
-            <button
-              id="prevStockChanges"
-              class="btn btn-primary shadow-sm rounded"
-            >
-              Prev
-            </button>
-            <button
-              id="nextStockChanges"
-              class="btn btn-primary shadow-sm rounded"
-            >
-              Next
-            </button>
-          </div>
         </div>
         <!--
           1.batchApp: set height and width and center
@@ -291,16 +221,11 @@
       </div>
       <!--footer-->
       <div id="footer">
-        <div class="row fixed-bottom shadow-sm">
-          <div class="col">
-            <span class="h5 lh-lg font-monospace px-2"
-              >Dubhe DB Hub</span
-            >
-            <div
-              class="btn-group"
-              role="group"
-              aria-label="Basic radio toggle button group"
-            >
+        <div class="row fixed-bottom bg-white border-top shadow-sm py-2">
+          <div class="col d-flex align-items-center">
+            <span class="h5 mb-0 font-monospace px-2">Dubhe DB Hub</span>
+            <!-- Item limit controls -->
+            <div class="btn-group me-3" role="group">
               <input
                 type="radio"
                 class="btn-check"
@@ -320,6 +245,7 @@
                 name="btnradio"
                 id="items100"
                 autocomplete="off"
+                checked
               />
               <label
                 class="btn btn-outline-primary btn-sm btn-outline-secondary"
@@ -346,7 +272,6 @@
                 name="btnradio"
                 id="items500"
                 autocomplete="off"
-                checked
               />
               <label
                 class="btn btn-outline-primary btn-sm btn-outline-secondary"
@@ -367,16 +292,20 @@
                 >1000</label
               >
             </div>
+            <!-- Global pagination controls -->
+            <div class="btn-group me-3" role="group">
+              <button id="firstPage" class="btn btn-primary btn-sm">First</button>
+              <button id="prevPage" class="btn btn-primary btn-sm">Prev</button>
+              <button id="nextPage" class="btn btn-primary btn-sm">Next</button>
+            </div>
+            <!-- Pagination status indicator -->
+            <div id="paginationStatus" class="text-muted me-3 align-self-center"></div>
           </div>
-          <div class="col">
-            <!-- back to top icon from fontawesome-->
-            <a href="#top" class="btn btn-outline-primary">
+          <div class="col-auto d-flex align-items-center">
+            <span id="messages" class="h5 mb-0 font-monospace text-primary"></span>
+            <a href="#top" class="btn btn-outline-primary btn-sm me-2">
               <i class="fas fa-arrow-up"></i>
             </a>
-            <span
-              id="messages"
-              class="h5 lh-lg font-monospace px-2 text-primary"
-            ></span>
           </div>
         </div>
       </div>

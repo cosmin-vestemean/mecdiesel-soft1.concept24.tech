@@ -67,92 +67,82 @@ class DataTable extends LitElement {
     }
   }
 
-  renderTableContent() {
-    if (!this.items || this.items.length === 0) {
-      //this.showToast('No data available', 'warning');
-      return html`<tr><td colspan="100%"><h6 class="text-danger">No data (yet?)</h2></td></tr>`;
-    }
-
-    // Find the lengthier item as object
-    const itemsClone = [...this.items];
-    itemsClone.sort((a, b) => Object.keys(b).length - Object.keys(a).length);
-    const columnNo = Object.keys(itemsClone[0]).length;
-    
-    // Generate header cells
+  renderHeader(item) {
     const headerCells = [html`<th>Row</th>`];
-    for (let i = 0; i < columnNo; i++) {
-      if (Object.keys(this.items[0])[i].toLowerCase() !== "is_signaled") {
-        headerCells.push(html`<th>${Object.keys(this.items[0])[i]}</th>`);
+    for (let key of Object.keys(item)) {
+      if (key.toLowerCase() !== "is_signaled") {
+        headerCells.push(html`<th>${key}</th>`);
       }
     }
+    return html`<tr>${headerCells}</tr>`;
+  }
 
-    // Generate row cells
-    const rows = this.items.map((item, rowIndex) => {
-      // Determine row class
-      let rowClass = '';
-      if (Object.keys(item).includes("is_signaled") && item.is_signaled == 0) {
-        rowClass = 'table-light';
-      }
-      
-      // Generate cells for this row
-      const cells = [html`<td>${rowIndex + 1 + this.skipNr}</td>`];
-      
-      for (let i = 0; i < columnNo; i++) {
-        const key = Object.keys(item)[i].toLowerCase();
-        const value = Object.values(item)[i];
-        
-        switch (key) {
-          case "stoc":
-            if (value == 0) {
-              if (item.is_signaled > 0) {
-                cells.push(html`<td class="fw-bold text-danger">${this.renderCellContent(value)}<i class="fas fa-caret-down me-1"></i></td>`);
-              } else {
-                cells.push(html`<td>${this.renderCellContent(value)}</td>`);
-              }
-            } else if (value > 0) {
-              if (item.is_processed == -1 && item.is_available == -1) {
-                cells.push(html`<td>${this.renderCellContent(value)}</td>`);
-              } else {
-                cells.push(html`<td class="fw-bold text-success">${this.renderCellContent(value)}<i class="fas fa-caret-up me-1"></i></td>`);
-              }
-            }
-            break;
-          case "is_processed":
-            if (item.is_processed == -1) {
-              cells.push(html`<td class="table-light">-</td>`);
+  renderRow(item, index) {
+    const rowNumber = this.skipNr + index + 1;
+    let rowClass = '';
+    if (Object.keys(item).includes("is_signaled") && item.is_signaled == 0) {
+      rowClass = 'table-light';
+    }
+
+    const cells = [html`<td>${rowNumber}</td>`];
+    for (let key of Object.keys(item)) {
+      const value = item[key];
+      switch (key.toLowerCase()) {
+        case "stoc":
+          if (value == 0) {
+            if (item.is_signaled > 0) {
+              cells.push(html`<td class="fw-bold text-danger">${this.renderCellContent(value)}<i class="fas fa-caret-down me-1"></i></td>`);
             } else {
               cells.push(html`<td>${this.renderCellContent(value)}</td>`);
             }
-            break;
-          case "is_available":
-            if (item.is_available == -1) {
-              cells.push(html`<td class="table-light">-</td>`);
-            } else {
+          } else if (value > 0) {
+            if (item.is_processed == -1 && item.is_available == -1) {
               cells.push(html`<td>${this.renderCellContent(value)}</td>`);
+            } else {
+              cells.push(html`<td class="fw-bold text-success">${this.renderCellContent(value)}<i class="fas fa-caret-up me-1"></i></td>`);
             }
-            break;
-          case "is_signaled":
-            // Skip this field
-            break;
-          default:
+          }
+          break;
+        case "is_processed":
+          if (item.is_processed == -1) {
+            cells.push(html`<td class="table-light">-</td>`);
+          } else {
             cells.push(html`<td>${this.renderCellContent(value)}</td>`);
-            break;
-        }
+          }
+          break;
+        case "is_available":
+          if (item.is_available == -1) {
+            cells.push(html`<td class="table-light">-</td>`);
+          } else {
+            cells.push(html`<td>${this.renderCellContent(value)}</td>`);
+          }
+          break;
+        case "is_signaled":
+          // Skip this field
+          break;
+        default:
+          cells.push(html`<td>${this.renderCellContent(value)}</td>`);
+          break;
       }
-      
-      return html`<tr class="${rowClass}">${cells}</tr>`;
-    });
-
-    return html`
-      <thead>
-        <tr>${headerCells}</tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    `;
+    }
+    return html`<tr class="${rowClass}">${cells}</tr>`;
   }
 
   render() {
-    return html`${this.renderTableContent()}`;
+    if (!this.items || this.items.length === 0) {
+      return html`<p>No data available</p>`;
+    }
+
+    return html`
+      <table class="table table-striped table-hover">
+        <thead>
+          ${this.renderHeader(this.items[0])}
+        </thead>
+        <tbody>
+          ${this.items.map((item, index) => this.renderRow(item, index))}
+        </tbody>
+      </table>
+    `;
   }
 }
 

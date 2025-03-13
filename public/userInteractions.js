@@ -1,10 +1,10 @@
 import { shared } from './shared.js';
 import { renderTable, renderData } from './renderTable.js';
-import { 
+import {
   getS1Data,
-  getSchimbareStoc, 
-  getErrors, 
-  getMesagerieConvAuto, 
+  getSchimbareStoc,
+  getErrors,
+  getMesagerieConvAuto,
   getMappings,
   connectToS1,
   getAllSoSourceObjectsRo,
@@ -14,8 +14,8 @@ import {
   getAllPrintTemplatesForSoSource,
   getItemsFromService
 } from './dataFetching.js';
-import { paginate, paginateErr, paginateConvAuto, paginateMappings, paginateStock } from './pagination.js';
 import { client } from './socketConfig.js'; // Add this import
+import { paginationManager } from './paginationManager.js';
 
 let codes = [];
 let isStopped = false;
@@ -77,43 +77,43 @@ export function initializeUserInteractions() {
   });
 
   $("#nextItems").click(() => {
-    paginate(1);
+    paginationManager.paginate(1);
   });
 
   $("#nextErrors").click(() => {
-    paginateErr(1);
+    paginationManager.paginate(1);
   });
 
   $("#nextConvAuto").click(() => {
-    paginateConvAuto(1);
+    paginationManager.paginate(1);
   });
 
   $("#nextMappings").click(() => {
-    paginateMappings(1);
+    paginationManager.paginate(1);
   });
 
   $("#nextStockChanges").click(() => {
-    paginateStock(1);
+    paginationManager.paginate(1);
   });
 
   $("#prevItems").click(() => {
-    paginate(-1);
+    paginationManager.paginate(-1);
   });
 
   $("#prevErrors").click(() => {
-    paginateErr(-1);
+    paginationManager.paginate(-1);
   });
 
   $("#prevConvAuto").click(() => {
-    paginateConvAuto(-1);
+    paginationManager.paginate(-1);
   });
 
   $("#prevMappings").click(() => {
-    paginateMappings(-1);
+    paginationManager.paginate(-1);
   });
 
   $("#prevStockChanges").click(() => {
-    paginateStock(-1);
+    paginationManager.paginate(-1);
   });
 
   $("#itemsButton").click(() => {
@@ -206,6 +206,8 @@ export function initializeUserInteractions() {
 
   $("#convAutoButton").click(() => {
     hideAllButArray(["convAutoContent"]);
+    // Update active tab in pagination manager
+    paginationManager.setActiveTab("convAutoButton");
   });
 
   $("#batchButton").click(() => {
@@ -258,12 +260,15 @@ export function initializeUserInteractions() {
       "stockChangesCheckboxVerbose",
       "stockChangesLabelVerbose",
     ]);
+    
+    // Update active tab in pagination manager
+    paginationManager.setActiveTab("stockChangesButton");
   });
 
   $("#stockChangesCheckbox").change(() => {
     getS1Data(
-      "Loading stock changes, please wait...", 
-      "#stockChanges", 
+      "Loading stock changes, please wait...",
+      "#stockChanges",
       getSchimbareStoc
     );
   });
@@ -289,40 +294,51 @@ export function initializeUserInteractions() {
   $("#mappingsButton").click();
 
   document.getElementById("errorsReload").onclick = () => {
+    shared.skipErr = 0; // Reset skip value
     getS1Data("Loading messages, please wait...", "#errors", getErrors);
-    document.getElementById("searchErrors").value = "";
+    // Clear the search input value
+    const searchErrors = document.getElementById("searchErrors");
+    if (searchErrors) {
+      searchErrors.value = "";
+    }
+    // Update pagination status
+    paginationManager.updatePaginationStatus();
   };
 
   document.getElementById("convAutoReload").onclick = () => {
-    getS1Data(
-      "Loading mesagerie conversie automata, please wait...",
-      "#convAuto",
-      getMesagerieConvAuto
-    );
-  };
-
-  document.getElementById("convAutoReload").onclick = () => {
+    shared.skipConvAuto = 0; // Reset skip value
     getS1Data(
       "Loading mesagerie conversie auto, please wait...",
       "#convAuto",
       getMesagerieConvAuto
     );
+    // Update pagination status
+    paginationManager.updatePaginationStatus();
   };
 
   document.getElementById("stockChangesReload").onclick = () => {
+    shared.skipStock = 0; // Reset skip value
     getS1Data(
       "Loading stock changes, please wait...",
       "#stockChanges",
       getSchimbareStoc
     );
+    // Update pagination status
+    paginationManager.updatePaginationStatus();
   };
 
   document.getElementById("mappingsReload").onclick = () => {
+    shared.skipMappings = 0; // Reset skip value
     getS1Data("Loading mappings, please wait...", "#mappings", getMappings);
+    // Update pagination status
+    paginationManager.updatePaginationStatus();
   };
 
   document.getElementById("itemsReload").onclick = () => {
+    shared.skip = 0; // Reset skip value
     renderTable(shared.table, "#items");
+    // Update pagination status
+    paginationManager.updatePaginationStatus();
   };
 
   document.getElementById("stopBatch").onclick = () => {
@@ -335,21 +351,21 @@ export function initializeUserInteractions() {
   document.getElementById("upload").onchange = () => {
     $("#batchStatus").html("Loading codes...");
     const files = document.getElementById("upload").files;
-    
+
     if (!validateUploadFile(files)) return;
-  
+
     const fr = new FileReader();
     fr.onload = function (e) {
       const data = new Uint8Array(e.target.result);
       const workbook = XLSX.read(data, { type: "array" });
-      
+
       workbook.SheetNames.forEach(function (sheetName) {
         const roa = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
         if (roa.length > 0) {
           codes = roa;
         }
       });
-  
+
       const batchTable = document.querySelector('#batchTable');
       if (batchTable) {
         batchTable.items = codes;
@@ -360,11 +376,11 @@ export function initializeUserInteractions() {
         }, 100);
       }
     };
-  
+
     fr.readAsArrayBuffer(files.item(0));
     $("#batchStatus").html("");
   };
-  
+
   // Helper function to validate upload file
   function validateUploadFile(files) {
     if (files.length <= 0) {
@@ -379,7 +395,7 @@ export function initializeUserInteractions() {
       $("#batchStatus").html("File size must be less than 1MB");
       return false;
     }
-    
+
     $("#batchFileName").html(files[0].name);
     return true;
   }
@@ -441,7 +457,7 @@ export function initializeUserInteractions() {
           } else {
             $("#batchStatus").html(
               "Batch process finished, last file processed: " +
-                $("#upload").val().split("\\").pop()
+              $("#upload").val().split("\\").pop()
             );
             $("#process").prop("disabled", false);
             $("#upload").prop("disabled", false);
@@ -453,7 +469,7 @@ export function initializeUserInteractions() {
       console.log(err);
       $("#batchStatus").html(
         "Batch process failed, last file processed: " +
-          $("#upload").val().split("\\").pop()
+        $("#upload").val().split("\\").pop()
       );
       $("#process").prop("disabled", false);
       $("#upload").prop("disabled", false);
@@ -510,15 +526,19 @@ export function initializeUserInteractions() {
     getS1Data("", "#errors", getErrors);
     getS1Data("", "#convAuto", getMesagerieConvAuto);
     getS1Data("", "#stockChanges", getSchimbareStoc);
+    // Update pagination status after changing limit
+    paginationManager.updatePaginationStatus();
   };
 
   document.getElementById("items100").onclick = () => {
     shared.htmlLimit = 100;
     renderTable(shared.table, "#items");
-    getS1Data("", "#mappings", getMappings);6
+    getS1Data("", "#mappings", getMappings); 6
     getS1Data("", "#errors", getErrors);
     getS1Data("", "#convAuto", getMesagerieConvAuto);
     getS1Data("", "#stockChanges", getSchimbareStoc);
+    // Update pagination status after changing limit
+    paginationManager.updatePaginationStatus();
   };
 
   document.getElementById("items200").onclick = () => {
@@ -528,6 +548,8 @@ export function initializeUserInteractions() {
     getS1Data("", "#errors", getErrors);
     getS1Data("", "#convAuto", getMesagerieConvAuto);
     getS1Data("", "#stockChanges", getSchimbareStoc);
+    // Update pagination status after changing limit
+    paginationManager.updatePaginationStatus();
   };
 
   document.getElementById("items500").onclick = () => {
@@ -537,6 +559,8 @@ export function initializeUserInteractions() {
     getS1Data("", "#errors", getErrors);
     getS1Data("", "#convAuto", getMesagerieConvAuto);
     getS1Data("", "#stockChanges", getSchimbareStoc);
+    // Update pagination status after changing limit
+    paginationManager.updatePaginationStatus();
   };
 
   document.getElementById("items1000").onclick = () => {
@@ -546,6 +570,8 @@ export function initializeUserInteractions() {
     getS1Data("", "#errors", getErrors);
     getS1Data("", "#convAuto", getMesagerieConvAuto);
     getS1Data("", "#stockChanges", getSchimbareStoc);
+    // Update pagination status after changing limit
+    paginationManager.updatePaginationStatus();
   };
 
   $(document).on("change", ".sosource", function () {
@@ -558,10 +584,10 @@ export function initializeUserInteractions() {
         for (var i = 0; i < frpms.length; i++) {
           fprms.append(
             '<option value="' +
-              frpms[i].fprms +
-              '">' +
-              frpms[i].name +
-              "</option>"
+            frpms[i].fprms +
+            '">' +
+            frpms[i].name +
+            "</option>"
           );
         }
       });
@@ -583,10 +609,10 @@ export function initializeUserInteractions() {
         for (var i = 0; i < series.length; i++) {
           seriesCell.append(
             '<option value="' +
-              series[i].series +
-              '">' +
-              series[i].name +
-              "</option>"
+            series[i].series +
+            '">' +
+            series[i].name +
+            "</option>"
           );
         }
       });
@@ -597,10 +623,10 @@ export function initializeUserInteractions() {
         for (var i = 0; i < templates.length; i++) {
           printTemplate.append(
             '<option value="' +
-              templates[i].templates +
-              '">' +
-              templates[i].name +
-              "</option>"
+            templates[i].templates +
+            '">' +
+            templates[i].name +
+            "</option>"
           );
         }
       });
@@ -627,11 +653,11 @@ export function initializeUserInteractions() {
           if (!templates || templates.length == 0) {
             console.log(
               "no template found for sosource=" +
-                sosource.val() +
-                " fprms=" +
-                fprms.val() +
-                " series=" +
-                series
+              sosource.val() +
+              " fprms=" +
+              fprms.val() +
+              " series=" +
+              series
             );
           }
         }
@@ -647,5 +673,26 @@ export function initializeUserInteractions() {
         batchTable.requestUpdate();
       }
     }
+  });
+
+  // Update tab click handlers to set active tab
+  const tabButtons = document.querySelectorAll('[data-bs-toggle="tab"]');
+  tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      paginationManager.setActiveTab(button.id);
+    });
+  });
+
+  // Global pagination controls
+  document.getElementById('firstPage').addEventListener('click', () => {
+    paginationManager.first();
+  });
+
+  document.getElementById('prevPage').addEventListener('click', () => {
+    paginationManager.paginate(-1);
+  });
+
+  document.getElementById('nextPage').addEventListener('click', () => {
+    paginationManager.paginate(1);
   });
 }

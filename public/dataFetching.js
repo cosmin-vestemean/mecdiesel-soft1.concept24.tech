@@ -4,22 +4,24 @@ import { shared } from './shared.js';
 
 function getItemsFromService(dbtable, htmltable, q) {
     $("#messages").html("Loading items from CDB table " + dbtable + "...");
-    client
-      .service(dbtable)
-      .find({
-        query: q,
-      })
-      .then((res) => {
-        renderData(res.data, htmltable);
-        $("#messages").html("");
-      })
-      .catch((err) => {
-        console.error(err);
-        $("#messages").html("Error loading items from CDB table " + dbtable);
-      });
-  }
-  
-  function connectToS1(next) {
+    // Return the Promise
+    return client
+        .service(dbtable)
+        .find({
+            query: q,
+        })
+        .then((res) => {
+            $("#messages").html("");
+            return res.data; // Return the data array
+        })
+        .catch((err) => {
+            console.error(err);
+            $("#messages").html("Error loading items from CDB table " + dbtable);
+            throw err; // Re-throw to be caught by caller
+        });
+}
+
+function connectToS1(next) {
     new Promise((resolve, reject) => {
       client
         .service("s1")
@@ -96,7 +98,7 @@ function getItemsFromService(dbtable, htmltable, q) {
         fetch_next_rows: shared.htmlLimit,
       })
       .then((res) => {
-        //console.log(res);
+        shared.totalRecords = res.total || 0;
         next(res.rows);
       });
   }
@@ -226,13 +228,30 @@ function getItemsFromService(dbtable, htmltable, q) {
       });
   }
 
-  function getS1Data(message, htmlElementId, next) {
-    $("#messages").html(message);
+  function getS1Data(message, tableId, next) {
+    if (message) {
+      $("#messages").html(message);
+    }
+    
+    // Calculate current skip value based on tableId
+    const skipValue = tableId === '#errors' ? shared.skipErr : 
+                      tableId === '#mappings' ? shared.skipMappings :
+                      tableId === '#convAuto' ? shared.skipConvAuto :
+                      tableId === '#stockChanges' ? shared.skipStock : shared.skip;
+    
     connectToS1((token) => {
       next(token, (data) => {
-        $(htmlElementId).html("");
-        renderData(data, htmlElementId);
-        $("#messages").html("");
+        // Pass the skip value to renderData
+        renderData(data, tableId, skipValue);
+        
+        // Update pagination status when data is rendered
+        if (typeof window.paginationManager !== 'undefined') {
+          window.paginationManager.updatePaginationStatus();
+        }
+        
+        if (message) {
+          $("#messages").html("");
+        }
       });
     });
   }
@@ -250,5 +269,5 @@ function getItemsFromService(dbtable, htmltable, q) {
     getPrintTemplates,
     getAllPrintTemplatesForSoSource,
     getSqlDataset,
-    getS1Data // Add this export
+    getS1Data
   };
