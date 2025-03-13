@@ -1,5 +1,5 @@
 import { shared } from './shared.js';
-import { renderTable } from './renderTable.js';
+import { renderTable, renderData } from './renderTable.js';
 import { 
   getS1Data,
   getSchimbareStoc, 
