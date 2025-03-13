@@ -6,5 +6,4 @@ export const shared = {
   skipMappings: 0,
   skipStock: 0,
   table: "mec_item",
-  codes: []
 };

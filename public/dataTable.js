@@ -34,7 +34,7 @@ class DataTable extends LitElement {
     return html`${content}`;
   }
 
-  showToast(message, type = 'info') {
+  showToast(message, type = 'info', delay = 3000) {
     const toastId = `toast-${Date.now()}`;
     const toastHtml = `
       <div id="${toastId}" class="toast align-items-center text-white bg-${type}" role="alert" aria-live="assertive" aria-atomic="true">
@@ -55,7 +55,7 @@ class DataTable extends LitElement {
     
     document.getElementById('toast-container').insertAdjacentHTML('beforeend', toastHtml);
     const toastElement = document.getElementById(toastId);
-    const toast = new bootstrap.Toast(toastElement);
+    const toast = new bootstrap.Toast(toastElement, { delay: delay });
     toast.show();
   }
 

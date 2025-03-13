@@ -16,6 +16,8 @@ import {
 } from './dataFetching.js';
 import { paginate, paginateErr, paginateConvAuto, paginateMappings, paginateStock } from './pagination.js';
 
+let codes = [];
+
 export function initializeUserInteractions() {
   //show #mainContent, hidden by default with d-none class
   $("#mainContent").removeClass("d-none");
@@ -488,7 +490,7 @@ export function initializeUserInteractions() {
   document.getElementById("items100").onclick = () => {
     shared.htmlLimit = 100;
     renderTable(shared.table, "#items");
-    getS1Data("", "#mappings", getMappings);
+    getS1Data("", "#mappings", getMappings);6
     getS1Data("", "#errors", getErrors);
     getS1Data("", "#convAuto", getMesagerieConvAuto);
     getS1Data("", "#stockChanges", getSchimbareStoc);
