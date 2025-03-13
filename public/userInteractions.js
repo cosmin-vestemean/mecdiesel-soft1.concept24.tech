@@ -317,47 +317,51 @@ export function initializeUserInteractions() {
 
   document.getElementById("upload").onchange = () => {
     $("#batchStatus").html("Loading codes...");
-    var files = document.getElementById("upload").files;
-    if (files.length <= 0) {
-      $("#batchStatus").html("No file selected");
-      console.log("No file selected");
-      return false;
-    } else if (
-      files[0].type !==
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    ) {
-      $("#batchStatus").html("Only xlsx files allowed");
-      console.log("Only xlsx files allowed");
-      return false;
-    } else if (files[0].size > 1000000) {
-      $("#batchStatus").html("File size must be less than 1MB");
-      console.log("File size must be less than 1MB");
-      return false;
-    } else {
-      $("#batchFileName").html(files[0].name);
-      console.log("File name: " + files[0].name);
-      $("#batchStatus").html("");
-    }
-
-    var fr = new FileReader();
-
+    const files = document.getElementById("upload").files;
+    
+    if (!validateUploadFile(files)) return;
+  
+    const fr = new FileReader();
     fr.onload = function (e) {
-      var data = new Uint8Array(e.target.result);
-      var workbook = XLSX.read(data, { type: "array" });
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: "array" });
+      
       workbook.SheetNames.forEach(function (sheetName) {
-        var roa = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+        const roa = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
         if (roa.length > 0) {
           codes = roa;
         }
       });
-
-      renderData(codes, "#batchTable");
+  
+      // Update to use Lit data-table component
+      const batchTable = document.querySelector('#batchTable');
+      if (batchTable) {
+        batchTable.items = codes;
+      }
     };
-
+  
     fr.readAsArrayBuffer(files.item(0));
-
     $("#batchStatus").html("");
   };
+  
+  // Helper function to validate upload file
+  function validateUploadFile(files) {
+    if (files.length <= 0) {
+      $("#batchStatus").html("No file selected");
+      return false;
+    }
+    if (files[0].type !== "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
+      $("#batchStatus").html("Only xlsx files allowed");
+      return false;
+    }
+    if (files[0].size > 1000000) {
+      $("#batchStatus").html("File size must be less than 1MB");
+      return false;
+    }
+    
+    $("#batchFileName").html(files[0].name);
+    return true;
+  }
 
   document.getElementById("process").onclick = () => {
     var checked = false;
