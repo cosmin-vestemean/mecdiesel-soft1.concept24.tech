@@ -273,15 +273,6 @@ export function initializeUserInteractions() {
     );
   });
 
-  $("#showLightLines").change(() => {
-    const isChecked = $("#showLightLines").is(":checked");
-    if (isChecked) {
-      $("#stockChanges .table-light").show();
-    } else {
-      $("#stockChanges .table-light").hide();
-    }
-  });
-
   $("#printConfigButton").click(() => {
     hideAllButArray(["print_config"]);
     connectToS1((token) => {
