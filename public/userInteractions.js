@@ -333,10 +333,14 @@ export function initializeUserInteractions() {
         }
       });
   
-      // Update to use Lit data-table component
       const batchTable = document.querySelector('#batchTable');
       if (batchTable) {
         batchTable.items = codes;
+        // Force layout recalculation
+        setTimeout(() => {
+          batchTable.requestUpdate();
+          document.getElementById('batchApp').dispatchEvent(new Event('resize'));
+        }, 100);
       }
     };
   
@@ -616,5 +620,15 @@ export function initializeUserInteractions() {
         }
       );
     });
+  });
+
+  window.addEventListener('resize', () => {
+    const batchApp = document.getElementById('batchApp');
+    if (batchApp) {
+      const batchTable = document.querySelector('#batchTable');
+      if (batchTable) {
+        batchTable.requestUpdate();
+      }
+    }
   });
 }

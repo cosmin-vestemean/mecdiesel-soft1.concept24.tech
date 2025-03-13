@@ -142,11 +142,11 @@ h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
 #batchApp {
   height: auto;
   max-height: 85vh;
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
-  background-color: #fff;
+  overflow: auto;
   padding: 15px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
 }
 
 #batchControlPanel {
@@ -161,6 +161,23 @@ h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
   border-radius: 6px;
   padding: 10px;
   height: 500px;
+}
+
+#batchApp .table-responsive {
+  max-height: calc(85vh - 200px);
+  overflow-y: auto;
+}
+
+#batchTable {
+  margin-bottom: 0;
+  width: 100%;
+}
+
+#batchTable thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background-color: #009879;
 }
 
 /* Messages */
