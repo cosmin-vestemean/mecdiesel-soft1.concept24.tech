@@ -1,10 +1,10 @@
 import { shared } from './shared.js';
 import { renderTable, renderData } from './renderTable.js';
-import {
+import { 
   getS1Data,
-  getSchimbareStoc,
-  getErrors,
-  getMesagerieConvAuto,
+  getSchimbareStoc, 
+  getErrors, 
+  getMesagerieConvAuto, 
   getMappings,
   connectToS1,
   getAllSoSourceObjectsRo,
@@ -262,8 +262,8 @@ export function initializeUserInteractions() {
 
   $("#stockChangesCheckbox").change(() => {
     getS1Data(
-      "Loading stock changes, please wait...",
-      "#stockChanges",
+      "Loading stock changes, please wait...", 
+      "#stockChanges", 
       getSchimbareStoc
     );
   });
@@ -335,21 +335,21 @@ export function initializeUserInteractions() {
   document.getElementById("upload").onchange = () => {
     $("#batchStatus").html("Loading codes...");
     const files = document.getElementById("upload").files;
-
+    
     if (!validateUploadFile(files)) return;
-
+  
     const fr = new FileReader();
     fr.onload = function (e) {
       const data = new Uint8Array(e.target.result);
       const workbook = XLSX.read(data, { type: "array" });
-
+      
       workbook.SheetNames.forEach(function (sheetName) {
         const roa = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
         if (roa.length > 0) {
           codes = roa;
         }
       });
-
+  
       const batchTable = document.querySelector('#batchTable');
       if (batchTable) {
         batchTable.items = codes;
@@ -360,11 +360,11 @@ export function initializeUserInteractions() {
         }, 100);
       }
     };
-
+  
     fr.readAsArrayBuffer(files.item(0));
     $("#batchStatus").html("");
   };
-
+  
   // Helper function to validate upload file
   function validateUploadFile(files) {
     if (files.length <= 0) {
@@ -379,7 +379,7 @@ export function initializeUserInteractions() {
       $("#batchStatus").html("File size must be less than 1MB");
       return false;
     }
-
+    
     $("#batchFileName").html(files[0].name);
     return true;
   }
@@ -441,7 +441,7 @@ export function initializeUserInteractions() {
           } else {
             $("#batchStatus").html(
               "Batch process finished, last file processed: " +
-              $("#upload").val().split("\\").pop()
+                $("#upload").val().split("\\").pop()
             );
             $("#process").prop("disabled", false);
             $("#upload").prop("disabled", false);
@@ -453,7 +453,7 @@ export function initializeUserInteractions() {
       console.log(err);
       $("#batchStatus").html(
         "Batch process failed, last file processed: " +
-        $("#upload").val().split("\\").pop()
+          $("#upload").val().split("\\").pop()
       );
       $("#process").prop("disabled", false);
       $("#upload").prop("disabled", false);
@@ -464,60 +464,40 @@ export function initializeUserInteractions() {
   document.getElementById("searchItems").oninput = () => {
     if ($("#searchItems").val().length > 4) {
       var query = {};
-      
       switch (shared.table) {
         case "mec_item":
           query = {
-            ...query,
-            Item: {
-              $like: `%${$("#searchItems").val()}%`
-            }
+            Item: $("#searchItems").val(),
           };
           break;
         case "mec_item_producer_relation":
           query = {
-            ...query,
-            Item: {
-              $like: `%${$("#searchItems").val()}%`
-            }
+            Item: $("#searchItems").val(),
           };
           break;
         case "site_product_changes_history":
           query = {
-            ...query,
-            mec_code: {
-              $like: `%${$("#searchItems").val()}%`
-            }
+            mec_code: $("#searchItems").val(),
           };
           break;
         case "site_product_frequent_changes":
           query = {
-            ...query,
-            mec_code: {
-              $like: `%${$("#searchItems").val()}%`
-            }
+            mec_code: $("#searchItems").val(),
           };
           break;
         case "mec_item_altref":
           query = {
-            ...query,
-            Item: {
-              $like: `%${$("#searchItems").val()}%`
-            }
+            Item: $("#searchItems").val(),
           };
           break;
         case "mec_ro_item_rel_supplier":
           query = {
-            ...query,
-            Item: {
-              $like: `%${$("#searchItems").val()}%`
-            }
+            mec_code: $("#searchItems").val(),
           };
           break;
       }
       getItemsFromService(shared.table, "#items", query);
     }
-
     if ($("#searchItems").val().length == 0) {
       renderTable(shared.table, "#items");
     }
@@ -535,7 +515,7 @@ export function initializeUserInteractions() {
   document.getElementById("items100").onclick = () => {
     shared.htmlLimit = 100;
     renderTable(shared.table, "#items");
-    getS1Data("", "#mappings", getMappings); 6
+    getS1Data("", "#mappings", getMappings);6
     getS1Data("", "#errors", getErrors);
     getS1Data("", "#convAuto", getMesagerieConvAuto);
     getS1Data("", "#stockChanges", getSchimbareStoc);
@@ -578,10 +558,10 @@ export function initializeUserInteractions() {
         for (var i = 0; i < frpms.length; i++) {
           fprms.append(
             '<option value="' +
-            frpms[i].fprms +
-            '">' +
-            frpms[i].name +
-            "</option>"
+              frpms[i].fprms +
+              '">' +
+              frpms[i].name +
+              "</option>"
           );
         }
       });
@@ -603,10 +583,10 @@ export function initializeUserInteractions() {
         for (var i = 0; i < series.length; i++) {
           seriesCell.append(
             '<option value="' +
-            series[i].series +
-            '">' +
-            series[i].name +
-            "</option>"
+              series[i].series +
+              '">' +
+              series[i].name +
+              "</option>"
           );
         }
       });
@@ -617,10 +597,10 @@ export function initializeUserInteractions() {
         for (var i = 0; i < templates.length; i++) {
           printTemplate.append(
             '<option value="' +
-            templates[i].templates +
-            '">' +
-            templates[i].name +
-            "</option>"
+              templates[i].templates +
+              '">' +
+              templates[i].name +
+              "</option>"
           );
         }
       });
@@ -647,11 +627,11 @@ export function initializeUserInteractions() {
           if (!templates || templates.length == 0) {
             console.log(
               "no template found for sosource=" +
-              sosource.val() +
-              " fprms=" +
-              fprms.val() +
-              " series=" +
-              series
+                sosource.val() +
+                " fprms=" +
+                fprms.val() +
+                " series=" +
+                series
             );
           }
         }

@@ -12,6 +12,10 @@ function getItemsFromService(dbtable, htmltable, q) {
       .then((res) => {
         renderData(res.data, htmltable);
         $("#messages").html("");
+      })
+      .catch((err) => {
+        console.error(err);
+        $("#messages").html("Error loading items from CDB table " + dbtable);
       });
   }
   
