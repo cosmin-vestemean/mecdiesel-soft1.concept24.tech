@@ -437,3 +437,35 @@ branch-replenishment button:hover {
 #branchReplenishContent.active {
   display: block;
 }
+
+.compact-input {
+  height: 16px !important;
+  padding: 1px 3px !important;
+  width: 50px !important;
+  margin: 0 !important;
+  min-height: unset !important;
+  line-height: 1 !important;
+  border: 0 !important;
+  color: #446e9b !important;
+}
+
+/* Ultra compact table styling */
+.modern-table.compact-table {
+  border-collapse: collapse !important;
+  margin-bottom: 0 !important;
+}
+
+.modern-table.compact-table th,
+.modern-table.compact-table td {
+  padding: 2px 4px !important;
+  line-height: 1.2 !important;
+  vertical-align: middle !important;
+}
+
+.modern-table.compact-table tr {
+  height: 22px !important;
+}
+
+.modern-table.compact-table tbody tr:hover {
+  background-color: rgba(0, 152, 121, 0.1) !important;
+}

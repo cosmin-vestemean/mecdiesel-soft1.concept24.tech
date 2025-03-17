@@ -12,7 +12,8 @@ export class BranchReplenishment extends LitElement {
             token: { type: String },
             loading: { type: Boolean },
             error: { type: String },
-            searchTerm: { type: String }
+            searchTerm: { type: String },
+            setConditionForNecesar: { type: Boolean } // Add this property
         };
     }
 
@@ -31,6 +32,7 @@ export class BranchReplenishment extends LitElement {
         this.loading = false;
         this.error = '';
         this.searchTerm = '';
+        this.setConditionForNecesar = true; // Default value
     }
 
     async loadData() {
@@ -56,7 +58,7 @@ export class BranchReplenishment extends LitElement {
                 branchesDest: this.branchesDest,
                 fiscalYear: this.fiscalYear,
                 company: 1000,
-                setConditionForNecesar: true
+                setConditionForNecesar: this.setConditionForNecesar
             });
     
             // Process response
@@ -82,7 +84,7 @@ export class BranchReplenishment extends LitElement {
         const row = parseInt(cell.dataset.rowIndex);
         const col = parseInt(cell.dataset.colIndex);
         // Use document.querySelectorAll since we disabled shadow DOM
-        const tableCells = document.querySelectorAll('.form-control-sm[data-row-index]');
+        const tableCells = document.querySelectorAll('.compact-input[data-row-index]');
         
         switch (e.key) {
             case 'ArrowUp':
@@ -90,7 +92,7 @@ export class BranchReplenishment extends LitElement {
                 e.preventDefault();
                 const nextRow = e.key === 'ArrowUp' ? row - 1 : row + 1;
                 if (nextRow >= 0 && nextRow < this.data.length) {
-                    const nextCell = document.querySelector(`.form-control-sm[data-row-index="${nextRow}"]`);
+                    const nextCell = document.querySelector(`.compact-input[data-row-index="${nextRow}"][data-col-index="${col}"]`);
                     if (nextCell) {
                         nextCell.focus();
                         nextCell.select(); // Select the text when focusing
@@ -102,7 +104,7 @@ export class BranchReplenishment extends LitElement {
                 e.preventDefault();
                 const nextRow = row + 1;
                 if (nextRow < this.data.length) {
-                    const nextCell = document.querySelector(`.form-control-sm[data-row-index="${nextRow}"]`);
+                    const nextCell = document.querySelector(`.compact-input[data-row-index="${nextRow}"][data-col-index="${col}"]`);
                     if (nextCell) {
                         nextCell.focus();
                         nextCell.select();
@@ -123,6 +125,51 @@ export class BranchReplenishment extends LitElement {
         // Implement actual save as desired
     }
 
+    exportToExcel() {
+        if (!this.data.length) {
+            console.warn('No data to export');
+            return;
+        }
+
+        // Prepare data for export
+        const exportData = this.filterData().map(item => ({
+            'Code': item.Cod,
+            'Description': item.Descriere,
+            'Destination': item.Destinatie,
+            'Stock Emit': item.stoc_emit,
+            'Min Emit': item.min_emit,
+            'Max Emit': item.max_emit,
+            'Disp Min': item.disp_min_emit,
+            'Disp Max': item.disp_max_emit,
+            'Stock Dest': item.stoc_dest,
+            'Min Dest': item.min_dest,
+            'Max Dest': item.max_dest,
+            'Orders': item.comenzi,
+            'In Transfer': item.transf_nerec,
+            'Nec Min': item.nec_min,
+            'Nec Max': item.nec_max,
+            'Nec Min Comp': item.nec_min_comp,
+            'Nec Max Comp': item.nec_max_comp,
+            'Qty Min': item.cant_min,
+            'Qty Max': item.cant_max,
+            'Transfer': item.transfer || 0
+        }));
+
+        // Create worksheet
+        const ws = XLSX.utils.json_to_sheet(exportData);
+
+        // Create workbook
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Branch Replenishment');
+
+        // Generate filename with current date
+        const date = new Date().toISOString().split('T')[0];
+        const filename = `branch_replenishment_${date}.xlsx`;
+
+        // Save file
+        XLSX.writeFile(wb, filename);
+    }
+
     filterData() {
         if (!this.searchTerm || !this.data.length) return this.data;
         
@@ -133,6 +180,7 @@ export class BranchReplenishment extends LitElement {
         );
     }
 
+    // Update the renderRow method to include row numbers
     renderRow(item, index) {
         const descriere = (item.Descriere || '').substring(0, 50);
         const getValueClass = (value) => {
@@ -142,45 +190,50 @@ export class BranchReplenishment extends LitElement {
 
         return html`
           <tr class="${item.Blacklisted === '-' ? '' : 'table-danger'}">
-        <td style="display:none">${item.keyField}</td>
-        <td style="display:none">${item.mtrl}</td>
-        <td>${item.Cod}</td>
-        <td class="text-truncate" style="max-width: 200px;" title="${item.Descriere}">${descriere}</td>
-        <td style="display:none">${item.branchD}</td>
-        <td>${item.Destinatie}</td>
-        <td class="${getValueClass(item.stoc_emit)}">${item.stoc_emit}</td>
-        <td class="${getValueClass(item.min_emit)}">${item.min_emit}</td>
-        <td class="${getValueClass(item.max_emit)}">${item.max_emit}</td>
-        <td class="${getValueClass(item.disp_min_emit)}">${item.disp_min_emit}</td>
-        <td class="${getValueClass(item.disp_max_emit)}">${item.disp_max_emit}</td>
-        <td class="${getValueClass(item.stoc_dest)}">${item.stoc_dest}</td>
-        <td class="${getValueClass(item.min_dest)}">${item.min_dest}</td>
-        <td class="${getValueClass(item.max_dest)}">${item.max_dest}</td>
-        <td class="${getValueClass(item.comenzi)}">${item.comenzi}</td>
-        <td class="${getValueClass(item.transf_nerec)}">${item.transf_nerec}</td>
-        <td class="${getValueClass(item.nec_min)}">${item.nec_min}</td>
-        <td class="${getValueClass(item.nec_max)}">${item.nec_max}</td>
-        <td class="${getValueClass(item.nec_min_comp)}">${item.nec_min_comp}</td>
-        <td class="${getValueClass(item.nec_max_comp)}">${item.nec_max_comp}</td>
-        <td class="${getValueClass(item.cant_min)}">${item.cant_min}</td>
-        <td class="${getValueClass(item.cant_max)}">${item.cant_max}</td>
-        <td>
-          <input
-            class="form-control form-control-sm ${getValueClass(item.transfer)}"
-            data-row-index="${index}"
-            data-col-index="0"
-            type="number"
-            min="0"
-            .value="${item.transfer || 0}"
-            @keydown="${this.handleKeyNav}"
-            @change="${(e) => this.onTransferChange(e, item)}"
-          />
-        </td>
+            <td class="text-center">${index + 1}</td>
+            <td style="display:none">${item.keyField}</td>
+            <td style="display:none">${item.mtrl}</td>
+            <td>${item.Cod}</td>
+            <td class="text-truncate" style="max-width: 200px;" title="${item.Descriere}">${descriere}</td>
+            <td style="display:none">${item.branchD}</td>
+            <td>${item.Destinatie}</td>
+            <td class="${getValueClass(item.stoc_emit)}">${item.stoc_emit}</td>
+            <td class="${getValueClass(item.min_emit)}">${item.min_emit}</td>
+            <td class="${getValueClass(item.max_emit)}">${item.max_emit}</td>
+            <td class="${getValueClass(item.disp_min_emit)}">${item.disp_min_emit}</td>
+            <td class="${getValueClass(item.disp_max_emit)}">${item.disp_max_emit}</td>
+            <td class="${getValueClass(item.stoc_dest)}">${item.stoc_dest}</td>
+            <td class="${getValueClass(item.min_dest)}">${item.min_dest}</td>
+            <td class="${getValueClass(item.max_dest)}">${item.max_dest}</td>
+            <td class="${getValueClass(item.comenzi)}">${item.comenzi}</td>
+            <td class="${getValueClass(item.transf_nerec)}">${item.transf_nerec}</td>
+            <td class="${getValueClass(item.nec_min)}">${item.nec_min}</td>
+            <td class="${getValueClass(item.nec_max)}">${item.nec_max}</td>
+            <td class="${getValueClass(item.nec_min_comp)}">${item.nec_min_comp}</td>
+            <td class="${getValueClass(item.nec_max_comp)}">${item.nec_max_comp}</td>
+            <td class="${getValueClass(item.cant_min)}">${item.cant_min}</td>
+            <td class="${getValueClass(item.cant_max)}">${item.cant_max}</td>
+            <td>
+              <input
+                class="compact-input ${getValueClass(item.transfer)}"
+                data-row-index="${index}"
+                data-col-index="0"
+                type="number"
+                min="0"
+                .value="${item.transfer || 0}"
+                @keydown="${this.handleKeyNav}"
+                @change="${(e) => this.onTransferChange(e, item)}"
+              />
+            </td>
           </tr>
         `;
     }
 
     render() {
+        const filteredData = this.filterData();
+        const totalCount = this.data.length;
+        const filteredCount = filteredData.length;
+        
         return html`
       <div class="container-fluid">
         ${this.error ? html`<div class="alert alert-danger">${this.error}</div>` : ''}
@@ -224,17 +277,44 @@ export class BranchReplenishment extends LitElement {
                 </button>` : ''}
             </div>
           </div>
+          <div class="col">
+            <div class="form-check form-switch" data-bs-toggle="tooltip" data-bs-placement="top" 
+                 title="The filter is essentially asking: 'Does this branch have defined inventory limits?' AND Either: 'Are we ignoring necessity checks?' (when unchecked) OR 'Is there a genuine need for more stock?' (when stock + pending + transfers < required limits)">
+                <input class="form-check-input" type="checkbox"
+                       id="setConditionForNecesar"
+                       .checked="${this.setConditionForNecesar}"
+                       @change="${e => this.setConditionForNecesar = e.target.checked}"
+                       ?disabled="${this.loading}">
+                <label class="form-check-label" for="setConditionForNecesar">
+                    Conditie Necesar Dest
+                </label>
+            </div>
+          </div>
           <div class="col-auto">
             <button class="btn btn-sm btn-primary" @click="${this.loadData}" ?disabled="${this.loading}">
               ${this.loading ? html`<span class="spinner-border spinner-border-sm"></span> Loading...` : 'Load Data'}
             </button>
             <button class="btn btn-sm btn-success ms-2" @click="${this.saveData}" ?disabled="${this.loading}">Save</button>
+            <button class="btn btn-sm btn-secondary ms-2" @click="${this.exportToExcel}" ?disabled="${this.loading}">Export to Excel</button>
           </div>
         </div>
+        
+        <!-- Add count information row -->
+        <div class="row mb-2">
+          <div class="col">
+            <small class="text-muted">
+              ${filteredCount === totalCount 
+                ? html`Showing all <strong>${totalCount}</strong> items` 
+                : html`Showing <strong>${filteredCount}</strong> of <strong>${totalCount}</strong> items`}
+            </small>
+          </div>
+        </div>
+        
         <div class="table-responsive">
-          <table class="table table-sm table-responsive modern-table">
+          <table class="table table-sm table-responsive modern-table compact-table">
             <thead>
               <tr>
+                <th>#</th>
                 <th style="display:none;">keyField</th>
                 <th style="display:none;">mtrl</th>
                 <th>Cod</th>
