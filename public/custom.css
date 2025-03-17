@@ -267,7 +267,7 @@ pre {
 }
 
 /* Responsive table */
-@media screen and (max-width: 600px) {
+@media screen and (max-width: 768px) {
   .table-responsive {
     overflow-x: auto;
   }

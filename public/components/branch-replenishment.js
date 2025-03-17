@@ -141,13 +141,13 @@ export class BranchReplenishment extends LitElement {
         };
 
         return html`
+          <tr class="${item.Blacklisted === '-' ? '' : 'table-danger'}">
         <td style="display:none">${item.keyField}</td>
         <td style="display:none">${item.mtrl}</td>
         <td>${item.Cod}</td>
         <td class="text-truncate" style="max-width: 200px;" title="${item.Descriere}">${descriere}</td>
         <td style="display:none">${item.branchD}</td>
         <td>${item.Destinatie}</td>
-        <td ${item.Blacklisted ? 'class="text-danger fw-bold"' : ''}>${item.Blacklisted}</td>
         <td class="${getValueClass(item.stoc_emit)}">${item.stoc_emit}</td>
         <td class="${getValueClass(item.min_emit)}">${item.min_emit}</td>
         <td class="${getValueClass(item.max_emit)}">${item.max_emit}</td>
@@ -241,7 +241,6 @@ export class BranchReplenishment extends LitElement {
                 <th>Descriere</th>
                 <th style="display:none">Branch</th>
                 <th>Dest.</th>
-                <th>Blacklisted</th>
                 <th>Stoc Emit</th>
                 <th>Min Emit</th>
                 <th>Max Emit</th>
