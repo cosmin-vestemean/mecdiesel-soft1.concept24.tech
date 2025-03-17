@@ -23,6 +23,7 @@ client.use("s1", socketClient.service("s1"), {
       "getAllPrintTemplatesForSoSource",
       "processListOfStocks",
       "getSqlDataset",
+      "getAnalyticsForBranchReplenishment",
     ],
   });
 

@@ -132,13 +132,14 @@ export function initializeUserInteractions() {
     "batchApp",
     "batchSize",
     "print_config",
+    "branchReplenishContent", // Make sure this is included
     "searchErrors",
     "searchStockChanges",
     "stockChangesSelect",
     "stockChangesCheckbox",
     "stockChangesLabel",
     "stockChangesCheckboxVerbose",
-    "stockChangesLabelVerbose",
+    "stockChangesLabelVerbose"
   ];
 
   function hideAllButArray(arr) {
@@ -280,6 +281,12 @@ export function initializeUserInteractions() {
         addOptions(sosourceOptions, ".sosource", "sosource");
       });
     });
+  });
+
+  $("#branchReplenishButton").click(() => {
+    hideAllButArray(["branchReplenishContent"]);
+    // Update active tab in pagination manager
+    paginationManager.setActiveTab("branchReplenishButton");
   });
 
   $("#mappingsButton").click();

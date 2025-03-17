@@ -409,3 +409,31 @@ data-table.modern-table .text-danger {
 data-table.modern-table .text-success {
   color: #28a745 !important;
 }
+
+/* Branch Replenishment Styling */
+branch-replenishment {
+  display: block;
+  padding: 1rem;
+}
+
+branch-replenishment button {
+  margin: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #446e9b;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+branch-replenishment button:hover {
+  background: #385a7f;
+}
+
+#branchReplenishContent {
+  display: none; /* Hidden by default */
+}
+
+#branchReplenishContent.active {
+  display: block;
+}

@@ -261,6 +261,24 @@ class s1Service {
       gzip: true,
     });
   }
+
+  async getAnalyticsForBranchReplenishment(data, params) {
+    return request({
+      method: "POST",
+      uri: "/JS/ReumplereSucursale/getAnalytics",
+      body: {
+        clientID: data.token,
+        appId: "2002",
+        branchesEmit: data.branchesEmit,
+        branchesDest: data.branchesDest,
+        setConditionForNecesar: data.setConditionForNecesar || true,
+        fiscalYear: data.fiscalYear || new Date().getFullYear(),
+        company: data.company
+      },
+      json: true,
+      gzip: true,
+    });
+  }
 }
 
 //create a new custom service to connect to the external API
@@ -294,7 +312,8 @@ app.use("/s1", new s1Service(), {
     "getPrintTemplates",
     "getAllPrintTemplatesForSoSource",
     "processListOfStocks",
-    "getSqlDataset"
+    "getSqlDataset",
+    "getAnalyticsForBranchReplenishment",
   ],
 });
 

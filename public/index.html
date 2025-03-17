@@ -77,6 +77,11 @@
                 Print config
               </button>
             </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="branchReplenishButton" data-bs-toggle="tab" type="button" role="tab">
+                Branch Replenishment</i>
+              </button>
+            </li>
           </ul>
           <div class="d-flex align-items-center mt-2 gap-2">
             <select id="tables" class="form-select w-auto">
@@ -208,11 +213,13 @@
         </div>
         <div id="print_config">
           <script>
-            //jQuery" include here content of print_config.html
             $(function () {
               $('#print_config').load('print_config.html')
             })
           </script>
+        </div>
+        <div id="branchReplenishContent">
+          <branch-replenishment></branch-replenishment>
         </div>
       </div>
       <!--footer-->
@@ -320,6 +327,7 @@
     <script type="module" src="dataFetching.js"></script>
     <script type="module" src="userInteractions.js"></script>
     <script type="module" src="client.js"></script>
+    <script type="module" src="components/branch-replenishment.js"></script>
     
     <!-- Load print_config content via JavaScript instead of inline script -->
     <script>
