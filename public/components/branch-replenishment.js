@@ -13,12 +13,12 @@ export class BranchReplenishment extends LitElement {
             loading: { type: Boolean },
             error: { type: String },
             searchTerm: { type: String },
-            setConditionForNecesar: { type: Boolean } // Add this property
+            setConditionForNecesar: { type: Boolean },
+            selectedReplenishmentStrategy: { type: String }
         };
     }
 
     createRenderRoot() {
-        // Disable shadow DOM to allow global styles to affect this component
         return this;
     }
 
@@ -26,13 +26,14 @@ export class BranchReplenishment extends LitElement {
         super();
         this.branchesEmit = '';
         this.branchesDest = '';
-        this.fiscalYear = new Date().getFullYear();
+        this.fiscalYear = new Date().getFullYear(); // Keep for internal use but remove from UI
         this.data = [];
-        this.token = ''; // Set this after authentication if needed
+        this.token = '';
         this.loading = false;
         this.error = '';
         this.searchTerm = '';
-        this.setConditionForNecesar = true; // Default value
+        this.setConditionForNecesar = true;
+        this.selectedReplenishmentStrategy = 'none';
     }
 
     async loadData() {
@@ -40,7 +41,6 @@ export class BranchReplenishment extends LitElement {
         this.error = '';
         
         try {
-            // Wrap connectToS1 callback in a Promise
             const token = await new Promise((resolve, reject) => {
                 connectToS1((token) => {
                     if (!token) {
@@ -51,7 +51,6 @@ export class BranchReplenishment extends LitElement {
                 });
             });
     
-            // Make the API call using the token
             const response = await client.service('s1').getAnalyticsForBranchReplenishment({
                 clientID: token,
                 branchesEmit: this.branchesEmit,
@@ -61,7 +60,6 @@ export class BranchReplenishment extends LitElement {
                 setConditionForNecesar: this.setConditionForNecesar
             });
     
-            // Process response
             this.data = Array.isArray(response) ? response : [];
             
         } catch (error) {
@@ -83,7 +81,6 @@ export class BranchReplenishment extends LitElement {
         const cell = e.target;
         const row = parseInt(cell.dataset.rowIndex);
         const col = parseInt(cell.dataset.colIndex);
-        // Use document.querySelectorAll since we disabled shadow DOM
         const tableCells = document.querySelectorAll('.compact-input[data-row-index]');
         
         switch (e.key) {
@@ -95,7 +92,7 @@ export class BranchReplenishment extends LitElement {
                     const nextCell = document.querySelector(`.compact-input[data-row-index="${nextRow}"][data-col-index="${col}"]`);
                     if (nextCell) {
                         nextCell.focus();
-                        nextCell.select(); // Select the text when focusing
+                        nextCell.select();
                     }
                 }
                 break;
@@ -115,14 +112,12 @@ export class BranchReplenishment extends LitElement {
                 cell.blur();
                 break;
             case 'Tab':
-                // Let default tab behavior work
                 break;
         }
     }
 
     saveData() {
         console.log('Transfers to process:', this.data.map(item => item.transfer));
-        // Implement actual save as desired
     }
 
     exportToExcel() {
@@ -131,7 +126,6 @@ export class BranchReplenishment extends LitElement {
             return;
         }
 
-        // Prepare data for export
         const exportData = this.filterData().map(item => ({
             'Code': item.Cod,
             'Description': item.Descriere,
@@ -155,19 +149,65 @@ export class BranchReplenishment extends LitElement {
             'Transfer': item.transfer || 0
         }));
 
-        // Create worksheet
         const ws = XLSX.utils.json_to_sheet(exportData);
-
-        // Create workbook
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Branch Replenishment');
-
-        // Generate filename with current date
         const date = new Date().toISOString().split('T')[0];
         const filename = `branch_replenishment_${date}.xlsx`;
-
-        // Save file
         XLSX.writeFile(wb, filename);
+    }
+
+    applyReplenishmentStrategy() {
+        if (!this.data.length) return;
+        
+        switch(this.selectedReplenishmentStrategy) {
+            case 'min':
+                this.applyMinQuantities();
+                break;
+            case 'max':
+                this.applyMaxQuantities();
+                break;
+            case 'skip_blacklisted':
+                this.skipBlacklisted();
+                break;
+            case 'clear':
+                this.clearTransfers();
+                break;
+        }
+        
+        this.requestUpdate();
+    }
+
+    applyMinQuantities() {
+        this.filterData().forEach(item => {
+            if (item.Blacklisted === '-') {
+                const minQty = parseFloat(item.cant_min);
+                item.transfer = minQty > 0 ? minQty : 0;
+            }
+        });
+    }
+
+    applyMaxQuantities() {
+        this.filterData().forEach(item => {
+            if (item.Blacklisted === '-') {
+                const maxQty = parseFloat(item.cant_max);
+                item.transfer = maxQty > 0 ? maxQty : 0;
+            }
+        });
+    }
+
+    skipBlacklisted() {
+        this.data.forEach(item => {
+            if (item.Blacklisted !== '-') {
+                item.transfer = 0;
+            }
+        });
+    }
+
+    clearTransfers() {
+        this.filterData().forEach(item => {
+            item.transfer = 0;
+        });
     }
 
     filterData() {
@@ -180,7 +220,6 @@ export class BranchReplenishment extends LitElement {
         );
     }
 
-    // Update the renderRow method to include row numbers
     renderRow(item, index) {
         const descriere = (item.Descriere || '').substring(0, 50);
         const getValueClass = (value) => {
@@ -238,36 +277,80 @@ export class BranchReplenishment extends LitElement {
       <div class="container-fluid">
         ${this.error ? html`<div class="alert alert-danger">${this.error}</div>` : ''}
         <div class="row mb-3">
-          <div class="col">
-            <div class="input-group input-group-sm">
-              <span class="input-group-text">Source Branches</span>
-              <input type="text" class="form-control form-control-sm" 
-                     .value="${this.branchesEmit}" 
-                     @change="${e => this.branchesEmit = e.target.value}"
-                     ?disabled="${this.loading}" />
+          <div class="col-md-6">
+            <div class="card">
+              <div class="card-header bg-light p-2">
+                <strong><i class="bi bi-building"></i> Branch Configuration</strong>
+              </div>
+              <div class="card-body p-2">
+                <div class="input-group input-group-sm mb-2">
+                  <span class="input-group-text">Source Branches</span>
+                  <input type="text" class="form-control form-control-sm" 
+                         .value="${this.branchesEmit}" 
+                         @change="${e => this.branchesEmit = e.target.value}"
+                         ?disabled="${this.loading}" />
+                </div>
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text">Destination Branches</span>
+                  <input type="text" class="form-control form-control-sm" 
+                         .value="${this.branchesDest}" 
+                         @change="${e => this.branchesDest = e.target.value}"
+                         ?disabled="${this.loading}" />
+                </div>
+                <div class="form-check form-switch mt-2" data-bs-toggle="tooltip" data-bs-placement="top" 
+                     title="The filter is essentially asking: 'Does this branch have defined inventory limits?' AND Either: 'Are we ignoring necessity checks?' (when unchecked) OR 'Is there a genuine need for more stock?' (when stock + pending + transfers < required limits)">
+                  <input class="form-check-input" type="checkbox"
+                         id="setConditionForNecesar"
+                         .checked="${this.setConditionForNecesar}"
+                         @change="${e => this.setConditionForNecesar = e.target.checked}"
+                         ?disabled="${this.loading}">
+                  <label class="form-check-label" for="setConditionForNecesar">
+                      Conditie Necesar Dest
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="col">
-            <div class="input-group input-group-sm">
-              <span class="input-group-text">Destination Branches</span>
-              <input type="text" class="form-control form-control-sm" 
-                     .value="${this.branchesDest}" 
-                     @change="${e => this.branchesDest = e.target.value}"
-                     ?disabled="${this.loading}" />
+          
+          <div class="col-md-6">
+            <div class="card">
+              <div class="card-header bg-light p-2">
+                <strong><i class="bi bi-gear"></i> Actions</strong>
+              </div>
+              <div class="card-body p-2">
+                <div class="d-flex gap-2 mb-2">
+                  <button class="btn btn-sm btn-primary flex-grow-1" @click="${this.loadData}" ?disabled="${this.loading}">
+                    ${this.loading ? html`<span class="spinner-border spinner-border-sm"></span> Loading...` : 'Load Data'}
+                  </button>
+                  <button class="btn btn-sm btn-success" @click="${this.saveData}" ?disabled="${this.loading}">Save</button>
+                  <button class="btn btn-sm btn-secondary" @click="${this.exportToExcel}" ?disabled="${this.loading}">Export to Excel</button>
+                </div>
+                
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text">Auto Replenishment</span>
+                  <select class="form-select form-select-sm" 
+                          .value="${this.selectedReplenishmentStrategy}"
+                          @change="${e => this.selectedReplenishmentStrategy = e.target.value}"
+                          ?disabled="${this.loading}">
+                    <option value="none">Select Strategy</option>
+                    <option value="min">Apply Min Quantities</option>
+                    <option value="max">Apply Max Quantities</option>
+                    <option value="skip_blacklisted">Skip Blacklisted Items</option>
+                    <option value="clear">Clear All Transfers</option>
+                  </select>
+                  <button class="btn btn-sm btn-outline-secondary" 
+                          @click="${this.applyReplenishmentStrategy}"
+                          ?disabled="${this.loading || this.selectedReplenishmentStrategy === 'none'}">
+                    Apply
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="col">
-            <div class="input-group input-group-sm">
-              <span class="input-group-text">Fiscal Year</span>
-              <input type="number" class="form-control form-control-sm" 
-                     .value="${this.fiscalYear}" 
-                     @change="${e => this.fiscalYear = parseInt(e.target.value)}"
-                     ?disabled="${this.loading}" />
-            </div>
-          </div>
+          
           <div class="col-12 mt-3">
             <div class="input-group input-group-sm">
-              <span class="input-group-text">Search</span>
+              <span class="input-group-text"><i class="bi bi-search"></i> Search</span>
               <input type="text" class="form-control form-control-sm" placeholder="Filter by Code or Description"
                      .value="${this.searchTerm}" 
                      @input="${e => {this.searchTerm = e.target.value; this.requestUpdate();}}" />
@@ -277,29 +360,8 @@ export class BranchReplenishment extends LitElement {
                 </button>` : ''}
             </div>
           </div>
-          <div class="col">
-            <div class="form-check form-switch" data-bs-toggle="tooltip" data-bs-placement="top" 
-                 title="The filter is essentially asking: 'Does this branch have defined inventory limits?' AND Either: 'Are we ignoring necessity checks?' (when unchecked) OR 'Is there a genuine need for more stock?' (when stock + pending + transfers < required limits)">
-                <input class="form-check-input" type="checkbox"
-                       id="setConditionForNecesar"
-                       .checked="${this.setConditionForNecesar}"
-                       @change="${e => this.setConditionForNecesar = e.target.checked}"
-                       ?disabled="${this.loading}">
-                <label class="form-check-label" for="setConditionForNecesar">
-                    Conditie Necesar Dest
-                </label>
-            </div>
-          </div>
-          <div class="col-auto">
-            <button class="btn btn-sm btn-primary" @click="${this.loadData}" ?disabled="${this.loading}">
-              ${this.loading ? html`<span class="spinner-border spinner-border-sm"></span> Loading...` : 'Load Data'}
-            </button>
-            <button class="btn btn-sm btn-success ms-2" @click="${this.saveData}" ?disabled="${this.loading}">Save</button>
-            <button class="btn btn-sm btn-secondary ms-2" @click="${this.exportToExcel}" ?disabled="${this.loading}">Export to Excel</button>
-          </div>
         </div>
         
-        <!-- Add count information row -->
         <div class="row mb-2">
           <div class="col">
             <small class="text-muted">
@@ -312,7 +374,7 @@ export class BranchReplenishment extends LitElement {
         
         <div class="table-responsive">
           <table class="table table-sm table-responsive modern-table compact-table">
-            <thead>
+            <thead class="sticky-top bg-light">
               <tr>
                 <th>#</th>
                 <th style="display:none;">keyField</th>
