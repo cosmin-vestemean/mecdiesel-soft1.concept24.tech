@@ -14,7 +14,8 @@ export class BranchReplenishment extends LitElement {
             error: { type: String },
             searchTerm: { type: String },
             setConditionForNecesar: { type: Boolean },
-            selectedReplenishmentStrategy: { type: String }
+            selectedReplenishmentStrategy: { type: String },
+            transferFilter: { type: String }
         };
     }
 
@@ -34,6 +35,7 @@ export class BranchReplenishment extends LitElement {
         this.searchTerm = '';
         this.setConditionForNecesar = true;
         this.selectedReplenishmentStrategy = 'none';
+        this.transferFilter = 'all';
     }
 
     async loadData() {
@@ -211,13 +213,24 @@ export class BranchReplenishment extends LitElement {
     }
 
     filterData() {
-        if (!this.searchTerm || !this.data.length) return this.data;
+        let filtered = this.data;
         
-        const term = this.searchTerm.toLowerCase();
-        return this.data.filter(item => 
-            (item.Cod && item.Cod.toLowerCase().includes(term)) || 
-            (item.Descriere && item.Descriere.toLowerCase().includes(term))
-        );
+        if (this.searchTerm) {
+            const term = this.searchTerm.toLowerCase();
+            filtered = filtered.filter(item => 
+                (item.Cod && item.Cod.toLowerCase().includes(term)) || 
+                (item.Descriere && item.Descriere.toLowerCase().includes(term))
+            );
+        }
+
+        if (this.transferFilter !== 'all') {
+            filtered = filtered.filter(item => {
+                const transfer = parseFloat(item.transfer || 0);
+                return this.transferFilter === 'positive' ? transfer > 0 : transfer === 0;
+            });
+        }
+
+        return filtered;
     }
 
     renderRow(item, index) {
@@ -349,15 +362,37 @@ export class BranchReplenishment extends LitElement {
           </div>
           
           <div class="col-12 mt-3">
-            <div class="input-group input-group-sm">
-              <span class="input-group-text"><i class="bi bi-search"></i> Search</span>
-              <input type="text" class="form-control form-control-sm" placeholder="Filter by Code or Description"
-                     .value="${this.searchTerm}" 
-                     @input="${e => {this.searchTerm = e.target.value; this.requestUpdate();}}" />
-              ${this.searchTerm ? html`
-                <button class="btn btn-outline-secondary" @click="${() => {this.searchTerm = ''; this.requestUpdate();}}">
-                  <i class="bi bi-x"></i>
-                </button>` : ''}
+            <div class="d-flex gap-2">
+              <div class="input-group input-group-sm">
+                <span class="input-group-text"><i class="bi bi-search"></i> Search</span>
+                <input type="text" class="form-control form-control-sm" placeholder="Filter by Code or Description"
+                       .value="${this.searchTerm}" 
+                       @input="${e => {this.searchTerm = e.target.value; this.requestUpdate();}}" />
+                ${this.searchTerm ? html`
+                  <button class="btn btn-outline-secondary" @click="${() => {this.searchTerm = ''; this.requestUpdate();}}">
+                    <i class="bi bi-x"></i>
+                  </button>` : ''}
+              </div>
+              
+              <div class="btn-group btn-group-sm" role="group">
+                <input type="radio" class="btn-check" name="transferFilter" id="all"
+                       .checked="${this.transferFilter === 'all'}"
+                       @change="${() => {this.transferFilter = 'all'; this.requestUpdate();}}"
+                       autocomplete="off">
+                <label class="btn btn-outline-primary" for="all">All</label>
+
+                <input type="radio" class="btn-check" name="transferFilter" id="positive"
+                       .checked="${this.transferFilter === 'positive'}"
+                       @change="${() => {this.transferFilter = 'positive'; this.requestUpdate();}}"
+                       autocomplete="off">
+                <label class="btn btn-outline-primary" for="positive">&gt; 0</label>
+
+                <input type="radio" class="btn-check" name="transferFilter" id="zero"
+                       .checked="${this.transferFilter === 'zero'}"
+                       @change="${() => {this.transferFilter = 'zero'; this.requestUpdate();}}"
+                       autocomplete="off">
+                <label class="btn btn-outline-primary" for="zero">= 0</label>
+              </div>
             </div>
           </div>
         </div>
