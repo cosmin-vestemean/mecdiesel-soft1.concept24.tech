@@ -413,3 +413,18 @@ export class BranchReplenishment extends LitElement {
 }
 
 customElements.define('branch-replenishment', BranchReplenishment);
+
+/*
+To Copilot: Do not remove the comments below. They are important for future reference.
+TODO:
+26.03.2025:
+stategie distribuie marfa insuficienta in emit conform Top ABC vanzari per sucursale (produsele care nu au min max calculat nu are vanzari) (ABC se face dupa valoare vanzari => un procent si o etcheta), poate in formula de calcul vanzari in SQL; salvez info procent + eticheta (A, B, C) in mtrbrnlimits in doua coloane noi; necesar companie < necesar sucursala => transfer conform ABC
+filtre: afiseaza cele cu transfer > 0 sau 0 (in acp tabel)
+cap de tabel sticky
+tooltips pe th cu descriere formula
+linia 309: WHERE (bl_dest.MaxLimit > 0 OR bl_dest.MinLimit > 0) devine parametrizata in UI
+filtru destinatie in cap tabel cu sucursalele + toate => vizualizare doar a celor selectate
+strategiile se aplica succesiv (cu istoric aplicare?)
+ranking sucursala (se va discuta in viitor)
+fiscal year erased from UI
+*/
