@@ -17,6 +17,7 @@ export class BranchReplenishment extends LitElement {
             destSearchTerm: { type: String },
             showDestDropdown: { type: Boolean },
             setConditionForNecesar: { type: Boolean },
+            setConditionForLimits: { type: Boolean },
             selectedReplenishmentStrategy: { type: String },
             transferFilter: { type: String },
             destinationFilter: { type: String },
@@ -43,6 +44,7 @@ export class BranchReplenishment extends LitElement {
         this.destSearchTerm = '';
         this.showDestDropdown = false;
         this.setConditionForNecesar = true;
+        this.setConditionForLimits = true;
         this.selectedReplenishmentStrategy = 'none';
         this.transferFilter = 'all';
         this.destinationFilter = 'all';
@@ -159,7 +161,8 @@ export class BranchReplenishment extends LitElement {
                 branchesDest: branchesDest,
                 fiscalYear: this.fiscalYear,
                 company: 1000,
-                setConditionForNecesar: this.setConditionForNecesar
+                setConditionForNecesar: this.setConditionForNecesar,
+                setConditionForLimits: this.setConditionForLimits
             });
     
             this.data = Array.isArray(response) ? response : [];
@@ -560,6 +563,18 @@ export class BranchReplenishment extends LitElement {
                              ?disabled="${this.loading}">
                       <label class="form-check-label" for="setConditionForNecesar">
                           Conditie Necesar
+                      </label>
+                    </div>
+                    
+                    <div class="form-check form-switch me-3" data-bs-toggle="tooltip" data-bs-placement="top" 
+                         title="Affects data loading: only shows items with min/max limits defined">
+                      <input class="form-check-input" type="checkbox"
+                             id="setConditionForLimits"
+                             .checked="${this.setConditionForLimits}"
+                             @change="${e => this.setConditionForLimits = e.target.checked}"
+                             ?disabled="${this.loading}">
+                      <label class="form-check-label" for="setConditionForLimits">
+                          Limite Min/Max
                       </label>
                     </div>
                     

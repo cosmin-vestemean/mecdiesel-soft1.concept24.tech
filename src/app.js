@@ -272,6 +272,7 @@ class s1Service {
         branchesEmit: data.branchesEmit,
         branchesDest: data.branchesDest,
         setConditionForNecesar: data.setConditionForNecesar || true,
+        setConditionForLimits: data.setConditionForLimits || true, // Forward setConditionForLimits
         fiscalYear: data.fiscalYear || new Date().getFullYear(),
         company: data.company
       },

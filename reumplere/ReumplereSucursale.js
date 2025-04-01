@@ -4,7 +4,9 @@
 function getAnalytics(apiObj) {
   var branchesEmit = apiObj.branchesEmit;
   var branchesDest = apiObj.branchesDest;
-  var setConditionForNecesar = apiObj.setConditionForNecesar || true;
+  // Use hasOwnProperty to check if the UI explicitly passed a value; else default to true
+  var setConditionForNecesar = apiObj.hasOwnProperty('setConditionForNecesar') ? apiObj.setConditionForNecesar : true;
+  var setConditionForLimits = apiObj.hasOwnProperty('setConditionForLimits') ? apiObj.setConditionForLimits : true;
   var fiscalYear = apiObj.fiscalYear || new Date().getFullYear();
   var company = apiObj.company || X.SYS.COMPANY;
 
@@ -24,6 +26,9 @@ function getAnalytics(apiObj) {
     ", " +
     "@setConditionForNecesar = " +
     (setConditionForNecesar ? "1" : "0") +
+    ", " +
+    "@setConditionForLimits = " +
+    (setConditionForLimits ? "1" : "0") +
     ", " +
     "@fiscalYear = " +
     fiscalYear;

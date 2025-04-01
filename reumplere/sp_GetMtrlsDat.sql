@@ -5,6 +5,7 @@ CREATE OR ALTER PROCEDURE sp_GetMtrlsData
     @branchesDest VARCHAR(100),
     @company INT = 1000,
     @setConditionForNecesar BIT = 1,
+    @setConditionForLimits BIT = 1,  -- New parameter
     @fiscalYear INT = NULL
 AS
 BEGIN
@@ -196,12 +197,12 @@ BEGIN
         ISNULL(ut.qty, 0) transf_nerec,
         -- Calculate necessity based on min limit
         ISNULL(bl_dest.MinLimit, 0) - 
-            CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END -
+            CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
             ISNULL(po.qty, 0) - 
             ISNULL(ut.qty, 0) AS nec_min,
         -- Calculate necessity based on max limit
         ISNULL(bl_dest.MaxLimit, 0) - 
-            CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END -
+            CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
             ISNULL(po.qty, 0) - 
             ISNULL(ut.qty, 0) AS nec_max,
         -- Total company necessity for min limit
@@ -212,28 +213,28 @@ BEGIN
         CASE 
             WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0)) - 
                 (ISNULL(bl_dest.MinLimit, 0) - 
-                CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END -
+                CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
                 ISNULL(po.qty, 0) - ISNULL(ut.qty, 0)) < 0 
             THEN 0 
             ELSE 
                 CASE 
                     WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0)) > 
                         (ISNULL(bl_dest.MinLimit, 0) - 
-                        CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END -
+                        CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
                         ISNULL(po.qty, 0) - ISNULL(ut.qty, 0)) 
                     THEN 
                         CASE 
                             WHEN (ISNULL(bl_dest.MinLimit, 0) - 
-                                CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END -
+                                CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
                                 ISNULL(po.qty, 0) - ISNULL(ut.qty, 0)) > 0 
                             THEN (ISNULL(bl_dest.MinLimit, 0) - 
-                                CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END -
+                                CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
                                 ISNULL(po.qty, 0) - ISNULL(ut.qty, 0))
                             ELSE 0 
                         END
                     ELSE (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0)) - 
                         (ISNULL(bl_dest.MinLimit, 0) - 
-                        CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END -
+                        CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
                         ISNULL(po.qty, 0) - ISNULL(ut.qty, 0))
                 END
         END AS cant_min,
@@ -241,28 +242,28 @@ BEGIN
         CASE 
             WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0)) - 
                 (ISNULL(bl_dest.MaxLimit, 0) - 
-                CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END -
+                CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
                 ISNULL(po.qty, 0) - ISNULL(ut.qty, 0)) < 0 
             THEN 0 
             ELSE 
                 CASE 
                     WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0)) > 
                         (ISNULL(bl_dest.MaxLimit, 0) - 
-                        CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END -
+                        CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
                         ISNULL(po.qty, 0) - ISNULL(ut.qty, 0)) 
                     THEN 
                         CASE 
                             WHEN (ISNULL(bl_dest.MaxLimit, 0) - 
-                                CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END -
+                                CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
                                 ISNULL(po.qty, 0) - ISNULL(ut.qty, 0)) > 0 
                             THEN (ISNULL(bl_dest.MaxLimit, 0) - 
-                                CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END -
+                                CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
                                 ISNULL(po.qty, 0) - ISNULL(ut.qty, 0))
                             ELSE 0 
                         END
                     ELSE (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0)) - 
                         (ISNULL(bl_dest.MaxLimit, 0) - 
-                        CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END -
+                        CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
                         ISNULL(po.qty, 0) - ISNULL(ut.qty, 0))
                 END
         END AS cant_max,
@@ -308,7 +309,7 @@ BEGIN
         FROM #UnreceivedTransfers
         GROUP BY mtrl, branchFrom, branchTo
     ) ut ON (ut.mtrl = dm.mtrl AND ut.branchFrom = dm.branchE AND ut.branchTo = br.branch)
-    WHERE (bl_dest.MaxLimit > 0 OR bl_dest.MinLimit > 0)
+    WHERE (@setConditionForLimits = 0 OR (bl_dest.MaxLimit > 0 OR bl_dest.MinLimit > 0))
     AND (
         @setConditionForNecesar = 0
         OR (
