@@ -271,8 +271,8 @@ class s1Service {
         appId: "2002",
         branchesEmit: data.branchesEmit,
         branchesDest: data.branchesDest,
-        setConditionForNecesar: data.setConditionForNecesar || true,
-        setConditionForLimits: data.setConditionForLimits || true, // Forward setConditionForLimits
+        setConditionForNecesar: data.setConditionForNecesar !== undefined ? data.setConditionForNecesar : true,
+        setConditionForLimits: data.setConditionForLimits !== undefined ? data.setConditionForLimits : true,
         fiscalYear: data.fiscalYear || new Date().getFullYear(),
         company: data.company
       },
