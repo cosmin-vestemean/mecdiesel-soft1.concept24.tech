@@ -6,8 +6,7 @@ CREATE OR ALTER PROCEDURE sp_GetMtrlsData
     @company INT = 1000,
     @setConditionForNecesar BIT = 1,
     @setConditionForLimits BIT = 1,  -- New parameter
-    @fiscalYear INT = NULL,
-    @productCode VARCHAR(50) = NULL  -- New parameter for product code search
+    @fiscalYear INT = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -54,7 +53,6 @@ BEGIN
         AND c.sosource = 1151
         AND c.FPRMS = 3130
         AND B.BRANCHSEC IN (SELECT branch FROM #DestBranches) -- Use temp table instead of STRING_SPLIT
-        AND (@productCode IS NULL OR A.mtrl IN (SELECT mtrl FROM mtrl WHERE Code LIKE '%' + @productCode + '%')) -- Filter by product code with LIKE
     GROUP BY A.mtrl, C.BRANCH, B.BRANCHSEC;
 
     -- Create index on the pending orders temp table
@@ -89,7 +87,6 @@ BEGIN
         AND A.FISCPRD = @fiscalYear
         AND A.iscancel = 0
         AND B.BRANCHSEC IN (SELECT branch FROM #DestBranches) -- Use temp table instead of STRING_SPLIT
-        AND (@productCode IS NULL OR C.mtrl IN (SELECT mtrl FROM mtrl WHERE Code LIKE '%' + @productCode + '%')) -- Filter by product code with LIKE
     GROUP BY C.mtrl, A.BRANCH, B.BRANCHSEC;
 
     -- Create indexes on the unreceived transfers temp table
@@ -120,8 +117,7 @@ BEGIN
         CASE WHEN ISNULL(RemainLimMin, 0) > ISNULL(cccminauto, 0) THEN ISNULL(RemainLimMin, 0) ELSE ISNULL(cccminauto, 0) END AS MinLimit,
         CASE WHEN ISNULL(RemainLimMax, 0) > ISNULL(cccmaxauto, 0) THEN ISNULL(RemainLimMax, 0) ELSE ISNULL(cccmaxauto, 0) END AS MaxLimit
     FROM MTRBRNLIMITS 
-    WHERE company = @company
-    AND (@productCode IS NULL OR mtrl IN (SELECT mtrl FROM mtrl WHERE Code LIKE '%' + @productCode + '%')); -- Filter by product code with LIKE
+    WHERE company = @company;
 
     -- Create index on the branch limits temp table
     CREATE NONCLUSTERED INDEX IX_BranchLimits_MTRL_BRANCH 
@@ -147,7 +143,6 @@ BEGIN
         WHERE 
             a.company = @company
             AND a.FISCPRD = @fiscalYear
-            AND (@productCode IS NULL OR a.mtrl IN (SELECT mtrl FROM mtrl WHERE Code LIKE '%' + @productCode + '%')) -- Filter by product code with LIKE
         GROUP BY c.branch, a.mtrl
     ) stock ON (bl.mtrl = stock.mtrl AND bl.branch = stock.branch);
 
@@ -232,7 +227,6 @@ BEGIN
                     AND a.FISCPRD = @fiscalYear
                     AND d.sodtype = 51
                     AND c.branch IN (SELECT branch FROM #EmitBranches)
-                    AND (@productCode IS NULL OR a.mtrl IN (SELECT mtrl FROM mtrl WHERE Code LIKE '%' + @productCode + '%')) -- Filter by product code with LIKE
                 GROUP BY 
                     c.BRANCH,
                     a.MTRL, 
@@ -259,7 +253,6 @@ BEGIN
                     AND a.FISCPRD = @fiscalYear
                     AND d.sodtype = 51
                     AND c.branch IN (SELECT branch FROM #DestBranches)
-                    AND (@productCode IS NULL OR a.mtrl IN (SELECT mtrl FROM mtrl WHERE Code LIKE '%' + @productCode + '%')) -- Filter by product code with LIKE
                 GROUP BY 
                     c.BRANCH,
                     a.MTRL

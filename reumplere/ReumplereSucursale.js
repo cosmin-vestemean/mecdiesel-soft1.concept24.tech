@@ -9,8 +9,6 @@ function getAnalytics(apiObj) {
   var setConditionForLimits = apiObj.hasOwnProperty('setConditionForLimits') ? apiObj.setConditionForLimits : true;
   var fiscalYear = apiObj.fiscalYear || new Date().getFullYear();
   var company = apiObj.company || X.SYS.COMPANY;
-  // Get product code parameter (optional)
-  var productCode = apiObj.productCode || null;
 
   const startT = new Date().getTime();
 
@@ -33,10 +31,7 @@ function getAnalytics(apiObj) {
     (setConditionForLimits ? "1" : "0") +
     ", " +
     "@fiscalYear = " +
-    fiscalYear +
-    ", " +
-    "@productCode = " +
-    (productCode ? "'" + productCode + "'" : "NULL");
+    fiscalYear;
 
   var ds = X.GETSQLDATASET(qry, null);
 

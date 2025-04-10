@@ -22,8 +22,7 @@ export class BranchReplenishment extends LitElement {
       transferFilter: { type: String },
       destinationFilter: { type: String },
       isSuccessiveStrategy: { type: Boolean },
-      branches: { type: Object },
-      productCodeSearch: { type: String } // Add new property for product code search
+      branches: { type: Object }
     };
   }
 
@@ -50,7 +49,6 @@ export class BranchReplenishment extends LitElement {
     this.transferFilter = 'all';
     this.destinationFilter = 'all';
     this.isSuccessiveStrategy = true;
-    this.productCodeSearch = ''; // Initialize the product code search
     this.branches = {
       '1000': 'HQ',
       '1200': 'CLUJ',
@@ -164,8 +162,7 @@ export class BranchReplenishment extends LitElement {
         fiscalYear: this.fiscalYear,
         company: 1000,
         setConditionForNecesar: this.setConditionForNecesar,
-        setConditionForLimits: this.setConditionForLimits,
-        productCode: this.productCodeSearch || null // Pass the product code search
+        setConditionForLimits: this.setConditionForLimits
       });
 
       this.data = Array.isArray(response) ? response : [];
@@ -529,7 +526,7 @@ export class BranchReplenishment extends LitElement {
             <div class="row">
               <div class="col-md-9">
                 <div class="row align-items-center">
-                  <div class="col-md-3">
+                  <div class="col-md-4">
                     <div class="input-group input-group-sm">
                       <span class="input-group-text">Source</span>
                       <select class="form-select" 
@@ -544,7 +541,7 @@ export class BranchReplenishment extends LitElement {
                     </div>
                   </div>
                   
-                  <div class="col-md-3">
+                  <div class="col-md-4">
                     <div class="input-group input-group-sm fancy-dropdown">
                       <span class="input-group-text">Destination</span>
                       <button class="form-select fancy-dropdown-toggle text-start" 
@@ -553,21 +550,6 @@ export class BranchReplenishment extends LitElement {
                         ${this.getDestBranchesDisplayText()}
                       </button>
                       ${this.showDestDropdown ? this.renderDestinationDropdown() : ''}
-                    </div>
-                  </div>
-
-                  <!-- New product code search field -->
-                  <div class="col-md-2">
-                    <div class="input-group input-group-sm">
-                      <span class="input-group-text">Code</span>
-                      <input 
-                        type="text" 
-                        class="form-control" 
-                        placeholder="Search by code" 
-                        .value="${this.productCodeSearch}"
-                        @input="${e => this.productCodeSearch = e.target.value}"
-                        ?disabled="${this.loading}"
-                      />
                     </div>
                   </div>
                   

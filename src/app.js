@@ -274,8 +274,7 @@ class s1Service {
         setConditionForNecesar: data.setConditionForNecesar !== undefined ? data.setConditionForNecesar : true,
         setConditionForLimits: data.setConditionForLimits !== undefined ? data.setConditionForLimits : true,
         fiscalYear: data.fiscalYear || new Date().getFullYear(),
-        company: data.company,
-        productCode: data.productCode || null
+        company: data.company
       },
       json: true,
       gzip: true,
