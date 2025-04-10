@@ -372,9 +372,44 @@ export class BranchReplenishment extends LitElement {
 
   renderRow(item, index) {
     const descriere = (item.Descriere || '').substring(0, 50);
+    
     const getValueClass = (value) => {
       const num = parseFloat(value);
-      return num < 0 ? 'text-danger fw-bold' : '';
+      if (isNaN(num)) return '';
+      return num < 0 ? 'text-danger' : (num > 0 ? 'text-success' : 'text-muted');
+    };
+    
+    // Improved function to get proper CSS classes for stock levels relative to min/max limits
+    const getStockClass = (value, minLimit, maxLimit) => {
+      const stock = parseFloat(value);
+      const min = parseFloat(minLimit);
+      const max = parseFloat(maxLimit);
+      
+      // Handle NaN cases
+      if (isNaN(stock)) return '';
+      
+      // Critical under-stock situation (below minimum)
+      if (!isNaN(min) && stock < min) {
+        return 'text-danger stock-critical';
+      }
+      
+      // Optimal stock level (between min and max)
+      if (!isNaN(min) && !isNaN(max) && stock >= min && stock <= max) {
+        return 'text-dark stock-optimal';
+      }
+      
+      // Over-stock situation (above maximum)
+      if (!isNaN(max) && stock > max) {
+        return 'text-success stock-high';
+      }
+      
+      // If min/max not defined but stock exists
+      if (stock > 0) {
+        return 'text-secondary';
+      }
+      
+      // No stock
+      return 'text-muted';
     };
 
     return html`
@@ -386,23 +421,23 @@ export class BranchReplenishment extends LitElement {
             <td class="text-truncate" style="max-width: 200px;" title="${item.Descriere}">${descriere}</td>
             <td style="display:none">${item.branchD}</td>
             <td>${item.Destinatie}</td>
-            <td class="${getValueClass(item.stoc_emit)}">${item.stoc_emit}</td>
-            <td class="${getValueClass(item.min_emit)}">${item.min_emit}</td>
-            <td class="${getValueClass(item.max_emit)}">${item.max_emit}</td>
-            <td class="${getValueClass(item.disp_min_emit)}">${item.disp_min_emit}</td>
-            <td class="${getValueClass(item.disp_max_emit)}">${item.disp_max_emit}</td>
-            <td class="${getValueClass(item.stoc_dest)}">${item.stoc_dest}</td>
-            <td class="${getValueClass(item.min_dest)}">${item.min_dest}</td>
-            <td class="${getValueClass(item.max_dest)}">${item.max_dest}</td>
-            <td class="${getValueClass(item.comenzi)}">${item.comenzi}</td>
-            <td class="${getValueClass(item.transf_nerec)}">${item.transf_nerec}</td>
-            <td class="${getValueClass(item.nec_min)}">${item.nec_min}</td>
-            <td class="${getValueClass(item.nec_max)}">${item.nec_max}</td>
-            <td class="${getValueClass(item.nec_min_comp)}">${item.nec_min_comp}</td>
-            <td class="${getValueClass(item.nec_max_comp)}">${item.nec_max_comp}</td>
-            <td class="${getValueClass(item.cant_min)}">${item.cant_min}</td>
-            <td class="${getValueClass(item.cant_max)}">${item.cant_max}</td>
-            <td>
+            <td class="group-source ${getStockClass(item.stoc_emit, item.min_emit, item.max_emit)}">${item.stoc_emit}</td>
+            <td class="group-source ${getValueClass(item.min_emit)}">${item.min_emit}</td>
+            <td class="group-source ${getValueClass(item.max_emit)}">${item.max_emit}</td>
+            <td class="group-source vertical-divider ${getValueClass(item.disp_min_emit)}">${item.disp_min_emit}</td>
+            <td class="group-source ${getValueClass(item.disp_max_emit)}">${item.disp_max_emit}</td>
+            <td class="group-destination vertical-divider ${getStockClass(item.stoc_dest, item.min_dest, item.max_dest)}">${item.stoc_dest}</td>
+            <td class="group-destination ${getValueClass(item.min_dest)}">${item.min_dest}</td>
+            <td class="group-destination ${getValueClass(item.max_dest)}">${item.max_dest}</td>
+            <td class="group-destination vertical-divider ${getValueClass(item.comenzi)}">${item.comenzi}</td>
+            <td class="group-destination ${getValueClass(item.transf_nerec)}">${item.transf_nerec}</td>
+            <td class="group-necessity vertical-divider ${getValueClass(item.nec_min)}">${item.nec_min}</td>
+            <td class="group-necessity ${getValueClass(item.nec_max)}">${item.nec_max}</td>
+            <td class="group-necessity ${getValueClass(item.nec_min_comp)}">${item.nec_min_comp}</td>
+            <td class="group-necessity ${getValueClass(item.nec_max_comp)}">${item.nec_max_comp}</td>
+            <td class="group-action vertical-divider ${getValueClass(item.cant_min)}">${item.cant_min}</td>
+            <td class="group-action ${getValueClass(item.cant_max)}">${item.cant_max}</td>
+            <td class="group-action">
               <input
                 class="compact-input ${getValueClass(item.transfer)}"
                 data-row-index="${index}"
@@ -516,6 +551,121 @@ export class BranchReplenishment extends LitElement {
           border-right: 0.3em solid transparent;
           border-left: 0.3em solid transparent;
           margin-left: 8px;
+        }
+        
+        /* Add vertical dividers between logical column groups */
+        .vertical-divider {
+          border-left: 1px solid #dee2e6;
+        }
+        
+        /* Add subtle background color to group columns visually */
+        .group-source {
+          background-color: rgba(240, 249, 255, 0.5);
+        }
+        
+        .group-destination {
+          background-color: rgba(240, 255, 240, 0.5);
+        }
+        
+        .group-necessity {
+          background-color: rgba(255, 248, 240, 0.5);
+        }
+        
+        .group-action {
+          background-color: rgba(249, 240, 255, 0.5);
+        }
+        
+        /* Status indicator legend */
+        .status-legend {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 15px;
+          padding: 10px;
+          background-color: #f8f9fa;
+          border-radius: 5px;
+          margin-bottom: 10px;
+          border: 1px solid #dee2e6;
+        }
+        
+        .legend-item {
+          display: flex;
+          align-items: center;
+          font-size: 0.85rem;
+        }
+        
+        .legend-indicator {
+          width: 22px;
+          height: 22px;
+          margin-right: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid #dee2e6;
+          background-color: white;
+        }
+        
+        .legend-indicator.critical::before {
+          content: "▼";
+          color: #dc3545;
+          font-size: 10px;
+          position: relative;
+          top: -2px;
+        }
+        
+        .legend-indicator.optimal {
+          background-color: rgba(25, 135, 84, 0.2);
+          border-radius: 3px;
+          position: relative;
+        }
+        
+        .legend-indicator.optimal::after {
+          content: "✓";
+          position: absolute;
+          color: #198754;
+          font-size: 14px;
+          font-weight: bold;
+        }
+        
+        .legend-indicator.high::before {
+          content: "▲";
+          color: #198754;
+          font-size: 10px;
+          position: relative;
+          top: -1px;
+        }
+        
+        /* New improved stock status indicator styles */
+        .stock-critical {
+          position: relative;
+        }
+        .stock-critical::before {
+          content: "▼";
+          position: absolute;
+          top: -2px;
+          right: 2px;
+          color: #dc3545;
+          font-size: 10px;
+        }
+        
+        .stock-optimal {
+          position: relative;
+          background-color: rgba(25, 135, 84, 0.2);
+          border-radius: 3px;
+          font-weight: 500;
+          color: #0f5132 !important;
+          box-shadow: inset 0 0 0 1px rgba(25, 135, 84, 0.4);
+        }
+        
+        .stock-high {
+          position: relative;
+        }
+        .stock-high::before {
+          content: "▲";
+          position: absolute;
+          top: -1px;
+          right: 2px;
+          color: #198754;
+          font-size: 10px;
         }
       </style>
       <div class="container-fluid">
@@ -662,10 +812,8 @@ export class BranchReplenishment extends LitElement {
                 </select>
               </div>
               <div class="col-auto">
-                <button class="btn btn-sm btn-outline-primary" 
-                        @click="${this.applyReplenishmentStrategy}"
-                        ?disabled="${this.loading || this.selectedReplenishmentStrategy === 'none'}">
-                  Apply Strategy
+                <button class="btn btn-sm btn-primary" @click="${this.applyReplenishmentStrategy}" ?disabled="${this.loading}">
+                  Apply
                 </button>
               </div>
               <div class="col-auto ms-2">
@@ -685,8 +833,28 @@ export class BranchReplenishment extends LitElement {
           </div>
         </div>
         
+        <!-- Status Legend -->
+        <div class="status-legend mb-3">
+          <div class="legend-item">
+            <div class="legend-indicator critical"></div>
+            <span>Under Min Stock</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-indicator optimal"></div>
+            <span>Optimal Stock (Min-Max)</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-indicator high"></div>
+            <span>Over Max Stock</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-indicator"></div>
+            <span>No Min/Max Defined</span>
+          </div>
+        </div>
+        
         <div class="table-responsive">
-          <table class="table table-sm table-responsive modern-table compact-table">
+          <table class="table table-sm table-hover table-responsive modern-table compact-table">
             <thead class="sticky-top bg-light">
               <tr>
                 <th>#</th>
@@ -710,23 +878,23 @@ export class BranchReplenishment extends LitElement {
                     </select>
                   </div>
                 </th>
-                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Current stock at source branch">Stoc Emit</th>
-                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Minimum stock limit at source branch">Min Emit</th>
-                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Maximum stock limit at source branch">Max Emit</th>
-                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Stock at source - Min limit at source">Disp Min</th>
-                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Stock at source - Max limit at source">Disp Max</th>
-                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Current stock at destination branch">Stoc Dest</th>
-                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Minimum stock limit at destination branch">Min Dest</th>
-                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Maximum stock limit at destination branch">Max Dest</th>
-                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Pending orders for destination branch">Com.</th>
-                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Quantities in transfer not yet received">In transf.</th>
-                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Min limit at destination - Stock at destination - Pending orders - Quantities in transfer">Nec Min</th>
-                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Max limit at destination - Stock at destination - Pending orders - Quantities in transfer">Nec Max</th>
-                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Sum of all minimum limits across all branches">Nec Min Comp</th>
-                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Sum of all maximum limits across all branches">Nec Max Comp</th>
-                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Calculated minimum quantity that can be transferred based on stock availability at source and necessity at destination">Cant Min</th>
-                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Calculated maximum quantity that can be transferred based on stock availability at source and necessity at destination">Cant Max</th>
-                <th>Transf.</th>
+                <th class="group-source">Stoc Emit</th>
+                <th class="group-source">Min Emit</th>
+                <th class="group-source">Max Emit</th>
+                <th class="group-source vertical-divider">Disp Min</th>
+                <th class="group-source">Disp Max</th>
+                <th class="group-destination vertical-divider">Stoc Dest</th>
+                <th class="group-destination">Min Dest</th>
+                <th class="group-destination">Max Dest</th>
+                <th class="group-destination vertical-divider">Com.</th>
+                <th class="group-destination">In transf.</th>
+                <th class="group-necessity vertical-divider">Nec Min</th>
+                <th class="group-necessity">Nec Max</th>
+                <th class="group-necessity">Nec Min Comp</th>
+                <th class="group-necessity">Nec Max Comp</th>
+                <th class="group-action vertical-divider">Cant Min</th>
+                <th class="group-action">Cant Max</th>
+                <th class="group-action">Transf.</th>
               </tr>
             </thead>
             <tbody>
