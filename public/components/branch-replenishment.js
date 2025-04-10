@@ -3,381 +3,384 @@ import { connectToS1 } from '../dataFetching.js';
 import { client } from '../socketConfig.js';
 
 export class BranchReplenishment extends LitElement {
-    static get properties() {
-        return {
-            branchesEmit: { type: String },
-            branchesDest: { type: String },
-            selectedDestBranches: { type: Array },
-            fiscalYear: { type: Number },
-            data: { type: Array },
-            token: { type: String },
-            loading: { type: Boolean },
-            error: { type: String },
-            searchTerm: { type: String },
-            destSearchTerm: { type: String },
-            showDestDropdown: { type: Boolean },
-            setConditionForNecesar: { type: Boolean },
-            setConditionForLimits: { type: Boolean },
-            selectedReplenishmentStrategy: { type: String },
-            transferFilter: { type: String },
-            destinationFilter: { type: String },
-            isSuccessiveStrategy: { type: Boolean },
-            branches: { type: Object }
-        };
-    }
+  static get properties() {
+    return {
+      branchesEmit: { type: String },
+      branchesDest: { type: String },
+      selectedDestBranches: { type: Array },
+      fiscalYear: { type: Number },
+      data: { type: Array },
+      token: { type: String },
+      loading: { type: Boolean },
+      error: { type: String },
+      searchTerm: { type: String },
+      destSearchTerm: { type: String },
+      showDestDropdown: { type: Boolean },
+      setConditionForNecesar: { type: Boolean },
+      setConditionForLimits: { type: Boolean },
+      selectedReplenishmentStrategy: { type: String },
+      transferFilter: { type: String },
+      destinationFilter: { type: String },
+      isSuccessiveStrategy: { type: Boolean },
+      branches: { type: Object },
+      productCodeSearch: { type: String } // Add new property for product code search
+    };
+  }
 
-    createRenderRoot() {
-        return this;
-    }
+  createRenderRoot() {
+    return this;
+  }
 
-    constructor() {
-        super();
-        this.branchesEmit = '';
-        this.branchesDest = '';
-        this.selectedDestBranches = [];
-        this.fiscalYear = new Date().getFullYear();
-        this.data = [];
-        this.token = '';
-        this.loading = false;
-        this.error = '';
-        this.searchTerm = '';
-        this.destSearchTerm = '';
-        this.showDestDropdown = false;
-        this.setConditionForNecesar = true;
-        this.setConditionForLimits = true;
-        this.selectedReplenishmentStrategy = 'none';
-        this.transferFilter = 'all';
-        this.destinationFilter = 'all';
-        this.isSuccessiveStrategy = true;
-        this.branches = {
-            '1000': 'HQ',
-            '1200': 'CLUJ',
-            '1300': 'CONSTANTA',
-            '1400': 'GALATI',
-            '1500': 'PLOIESTI',
-            '1600': 'IASI',
-            '1700': 'SIBIU',
-            '1800': 'CRAIOVA',
-            '1900': 'ORADEA',
-            '2000': 'PITESTI',
-            '2100': 'BRASOV',
-            '2200': 'BUCURESTI',
-            '2300': 'ARAD',
-            '2400': 'VOLUNTARI',
-            '2600': 'MIHAILESTI',
-            '2700': 'TG. MURES',
-            '2800': 'TIMISOARA',
-            '2900': 'RAMNICU VALCEA'
-        };
-    }
+  constructor() {
+    super();
+    this.branchesEmit = '';
+    this.branchesDest = '';
+    this.selectedDestBranches = [];
+    this.fiscalYear = new Date().getFullYear();
+    this.data = [];
+    this.token = '';
+    this.loading = false;
+    this.error = '';
+    this.searchTerm = '';
+    this.destSearchTerm = '';
+    this.showDestDropdown = false;
+    this.setConditionForNecesar = true;
+    this.setConditionForLimits = true;
+    this.selectedReplenishmentStrategy = 'none';
+    this.transferFilter = 'all';
+    this.destinationFilter = 'all';
+    this.isSuccessiveStrategy = true;
+    this.productCodeSearch = ''; // Initialize the product code search
+    this.branches = {
+      '1000': 'HQ',
+      '1200': 'CLUJ',
+      '1300': 'CONSTANTA',
+      '1400': 'GALATI',
+      '1500': 'PLOIESTI',
+      '1600': 'IASI',
+      '1700': 'SIBIU',
+      '1800': 'CRAIOVA',
+      '1900': 'ORADEA',
+      '2000': 'PITESTI',
+      '2100': 'BRASOV',
+      '2200': 'BUCURESTI',
+      '2300': 'ARAD',
+      '2400': 'VOLUNTARI',
+      '2600': 'MIHAILESTI',
+      '2700': 'TG. MURES',
+      '2800': 'TIMISOARA',
+      '2900': 'RAMNICU VALCEA'
+    };
+  }
 
-    getDestBranchesString() {
-        return this.selectedDestBranches.join(',');
-    }
+  getDestBranchesString() {
+    return this.selectedDestBranches.join(',');
+  }
 
-    getDestBranchesDisplayText() {
-        if (this.selectedDestBranches.length === 0) return 'Select branches';
-        if (this.selectedDestBranches.length === 1) {
-            const code = this.selectedDestBranches[0];
-            return `${code} - ${this.branches[code] || ''}`;
-        }
-        return `${this.selectedDestBranches.length} branches selected`;
+  getDestBranchesDisplayText() {
+    if (this.selectedDestBranches.length === 0) return 'Select branches';
+    if (this.selectedDestBranches.length === 1) {
+      const code = this.selectedDestBranches[0];
+      return `${code} - ${this.branches[code] || ''}`;
     }
+    return `${this.selectedDestBranches.length} branches selected`;
+  }
 
-    toggleDestinationDropdown(e) {
-        this.showDestDropdown = !this.showDestDropdown;
-        e.stopPropagation();
-        
-        if (this.showDestDropdown) {
-            // Add click event listener to close dropdown when clicking outside
-            setTimeout(() => {
-                document.addEventListener('click', this.closeDestDropdown);
-            }, 0);
-        }
+  toggleDestinationDropdown(e) {
+    this.showDestDropdown = !this.showDestDropdown;
+    e.stopPropagation();
+
+    if (this.showDestDropdown) {
+      // Add click event listener to close dropdown when clicking outside
+      setTimeout(() => {
+        document.addEventListener('click', this.closeDestDropdown);
+      }, 0);
     }
+  }
 
-    closeDestDropdown = () => {
-        this.showDestDropdown = false;
-        document.removeEventListener('click', this.closeDestDropdown);
+  closeDestDropdown = () => {
+    this.showDestDropdown = false;
+    document.removeEventListener('click', this.closeDestDropdown);
+  }
+
+  toggleDestBranch(branch, e) {
+    e.stopPropagation(); // Prevent dropdown from closing
+
+    const index = this.selectedDestBranches.indexOf(branch);
+    if (index > -1) {
+      this.selectedDestBranches = [
+        ...this.selectedDestBranches.slice(0, index),
+        ...this.selectedDestBranches.slice(index + 1)
+      ];
+    } else {
+      this.selectedDestBranches = [...this.selectedDestBranches, branch];
     }
+  }
 
-    toggleDestBranch(branch, e) {
-        e.stopPropagation(); // Prevent dropdown from closing
-        
-        const index = this.selectedDestBranches.indexOf(branch);
-        if (index > -1) {
-            this.selectedDestBranches = [
-                ...this.selectedDestBranches.slice(0, index),
-                ...this.selectedDestBranches.slice(index + 1)
-            ];
-        } else {
-            this.selectedDestBranches = [...this.selectedDestBranches, branch];
-        }
-    }
+  selectAllDestBranches(e) {
+    e.stopPropagation();
+    const allBranchCodes = Object.keys(this.branches);
+    this.selectedDestBranches = [...allBranchCodes];
+  }
 
-    selectAllDestBranches(e) {
-        e.stopPropagation();
-        const allBranchCodes = Object.keys(this.branches);
-        this.selectedDestBranches = [...allBranchCodes];
-    }
+  clearDestBranches(e) {
+    e.stopPropagation();
+    this.selectedDestBranches = [];
+  }
 
-    clearDestBranches(e) {
-        e.stopPropagation();
-        this.selectedDestBranches = [];
-    }
+  handleDropdownClick(e) {
+    e.stopPropagation(); // Keep dropdown open when clicking inside
+  }
 
-    handleDropdownClick(e) {
-        e.stopPropagation(); // Keep dropdown open when clicking inside
-    }
+  async loadData() {
+    this.loading = true;
+    this.error = '';
 
-    async loadData() {
-        this.loading = true;
-        this.error = '';
-        
-        try {
-            if (!this.branchesEmit) {
-                throw new Error('Please select a source branch');
-            }
-            
-            if (this.selectedDestBranches.length === 0) {
-                throw new Error('Please select at least one destination branch');
-            }
-            
-            const branchesDest = this.getDestBranchesString();
-            
-            const token = await new Promise((resolve, reject) => {
-                connectToS1((token) => {
-                    if (!token) {
-                        reject(new Error('Failed to get token'));
-                        return;
-                    }
-                    resolve(token);
-                });
-            });
-    
-            const response = await client.service('s1').getAnalyticsForBranchReplenishment({
-                clientID: token,
-                branchesEmit: this.branchesEmit,
-                branchesDest: branchesDest,
-                fiscalYear: this.fiscalYear,
-                company: 1000,
-                setConditionForNecesar: this.setConditionForNecesar,
-                setConditionForLimits: this.setConditionForLimits
-            });
-    
-            this.data = Array.isArray(response) ? response : [];
-            
-        } catch (error) {
-            console.error('Error loading branch replenishment data:', error);
-            this.error = `Error loading data: ${error.message}`;
-            this.data = [];
-        } finally {
-            this.loading = false;
-            this.requestUpdate();
-        }
-    }
+    try {
+      if (!this.branchesEmit) {
+        throw new Error('Please select a source branch');
+      }
 
-    onTransferChange(e, item) {
-        item.transfer = parseFloat(e.target.value || 0);
-        this.requestUpdate();
-    }
+      if (this.selectedDestBranches.length === 0) {
+        throw new Error('Please select at least one destination branch');
+      }
 
-    handleKeyNav(e) {
-        const cell = e.target;
-        const row = parseInt(cell.dataset.rowIndex);
-        const col = parseInt(cell.dataset.colIndex);
-        const tableCells = document.querySelectorAll('.compact-input[data-row-index]');
-        
-        switch (e.key) {
-            case 'ArrowUp':
-            case 'ArrowDown': {
-                e.preventDefault();
-                const nextRow = e.key === 'ArrowUp' ? row - 1 : row + 1;
-                if (nextRow >= 0 && nextRow < this.data.length) {
-                    const nextCell = document.querySelector(`.compact-input[data-row-index="${nextRow}"][data-col-index="${col}"]`);
-                    if (nextCell) {
-                        nextCell.focus();
-                        nextCell.select();
-                    }
-                }
-                break;
-            }
-            case 'Enter':
-                e.preventDefault();
-                const nextRow = row + 1;
-                if (nextRow < this.data.length) {
-                    const nextCell = document.querySelector(`.compact-input[data-row-index="${nextRow}"][data-col-index="${col}"]`);
-                    if (nextCell) {
-                        nextCell.focus();
-                        nextCell.select();
-                    }
-                }
-                break;
-            case 'Escape':
-                cell.blur();
-                break;
-            case 'Tab':
-                break;
-        }
-    }
+      const branchesDest = this.getDestBranchesString();
 
-    saveData() {
-        console.log('Transfers to process:', this.data.map(item => item.transfer));
-    }
-
-    exportToExcel() {
-        if (!this.data.length) {
-            console.warn('No data to export');
+      const token = await new Promise((resolve, reject) => {
+        connectToS1((token) => {
+          if (!token) {
+            reject(new Error('Failed to get token'));
             return;
-        }
-
-        const exportData = this.filterData().map(item => ({
-            'Code': item.Cod,
-            'Description': item.Descriere,
-            'Destination': item.Destinatie,
-            'Stock Emit': item.stoc_emit,
-            'Min Emit': item.min_emit,
-            'Max Emit': item.max_emit,
-            'Disp Min': item.disp_min_emit,
-            'Disp Max': item.disp_max_emit,
-            'Stock Dest': item.stoc_dest,
-            'Min Dest': item.min_dest,
-            'Max Dest': item.max_dest,
-            'Orders': item.comenzi,
-            'In Transfer': item.transf_nerec,
-            'Nec Min': item.nec_min,
-            'Nec Max': item.nec_max,
-            'Nec Min Comp': item.nec_min_comp,
-            'Nec Max Comp': item.nec_max_comp,
-            'Qty Min': item.cant_min,
-            'Qty Max': item.cant_max,
-            'Transfer': item.transfer || 0
-        }));
-
-        const ws = XLSX.utils.json_to_sheet(exportData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Branch Replenishment');
-        const date = new Date().toISOString().split('T')[0];
-        const filename = `branch_replenishment_${date}.xlsx`;
-        XLSX.writeFile(wb, filename);
-    }
-
-    applyReplenishmentStrategy() {
-        if (!this.data.length) return;
-        
-        switch(this.selectedReplenishmentStrategy) {
-            case 'min':
-                this.applyMinQuantities();
-                break;
-            case 'max':
-                this.applyMaxQuantities();
-                break;
-            case 'skip_blacklisted':
-                this.skipBlacklisted();
-                break;
-            case 'clear':
-                this.clearTransfers();
-                break;
-        }
-        
-        this.requestUpdate();
-    }
-
-    applyMinQuantities() {
-        const targetItems = this.isSuccessiveStrategy 
-            ? this.filterData().filter(item => parseFloat(item.transfer || 0) === 0)
-            : this.filterData();
-        
-        targetItems.forEach(item => {
-            if (item.Blacklisted === '-') {
-                const minQty = parseFloat(item.cant_min);
-                item.transfer = minQty > 0 ? minQty : 0;
-            }
+          }
+          resolve(token);
         });
-    }
+      });
 
-    applyMaxQuantities() {
-        const targetItems = this.isSuccessiveStrategy 
-            ? this.filterData().filter(item => parseFloat(item.transfer || 0) === 0)
-            : this.filterData();
-        
-        targetItems.forEach(item => {
-            if (item.Blacklisted === '-') {
-                const maxQty = parseFloat(item.cant_max);
-                item.transfer = maxQty > 0 ? maxQty : 0;
-            }
-        });
-    }
+      const response = await client.service('s1').getAnalyticsForBranchReplenishment({
+        clientID: token,
+        branchesEmit: this.branchesEmit,
+        branchesDest: branchesDest,
+        fiscalYear: this.fiscalYear,
+        company: 1000,
+        setConditionForNecesar: this.setConditionForNecesar,
+        setConditionForLimits: this.setConditionForLimits,
+        productCode: this.productCodeSearch || null // Pass the product code search
+      });
 
-    skipBlacklisted() {
-        const targetItems = this.isSuccessiveStrategy 
-            ? this.data.filter(item => parseFloat(item.transfer || 0) === 0)
-            : this.data;
-        
-        targetItems.forEach(item => {
-            if (item.Blacklisted !== '-') {
-                item.transfer = 0;
-            }
-        });
-    }
+      this.data = Array.isArray(response) ? response : [];
 
-    clearTransfers() {
-        this.filterData().forEach(item => {
-            item.transfer = 0;
-        });
+    } catch (error) {
+      console.error('Error loading branch replenishment data:', error);
+      this.error = `Error loading data: ${error.message}`;
+      this.data = [];
+    } finally {
+      this.loading = false;
+      this.requestUpdate();
     }
+  }
 
-    filterData() {
-        let filtered = this.data;
-        
-        if (this.searchTerm) {
-            const term = this.searchTerm.toLowerCase();
-            filtered = filtered.filter(item => 
-                (item.Cod && item.Cod.toLowerCase().includes(term)) || 
-                (item.Descriere && item.Descriere.toLowerCase().includes(term))
-            );
+  onTransferChange(e, item) {
+    item.transfer = parseFloat(e.target.value || 0);
+    this.requestUpdate();
+  }
+
+  handleKeyNav(e) {
+    const cell = e.target;
+    const row = parseInt(cell.dataset.rowIndex);
+    const col = parseInt(cell.dataset.colIndex);
+    const tableCells = document.querySelectorAll('.compact-input[data-row-index]');
+
+    switch (e.key) {
+      case 'ArrowUp':
+      case 'ArrowDown': {
+        e.preventDefault();
+        const nextRow = e.key === 'ArrowUp' ? row - 1 : row + 1;
+        if (nextRow >= 0 && nextRow < this.data.length) {
+          const nextCell = document.querySelector(`.compact-input[data-row-index="${nextRow}"][data-col-index="${col}"]`);
+          if (nextCell) {
+            nextCell.focus();
+            nextCell.select();
+          }
         }
-
-        if (this.transferFilter !== 'all') {
-            filtered = filtered.filter(item => {
-                const transfer = parseFloat(item.transfer || 0);
-                return this.transferFilter === 'positive' ? transfer > 0 : transfer === 0;
-            });
+        break;
+      }
+      case 'Enter':
+        e.preventDefault();
+        const nextRow = row + 1;
+        if (nextRow < this.data.length) {
+          const nextCell = document.querySelector(`.compact-input[data-row-index="${nextRow}"][data-col-index="${col}"]`);
+          if (nextCell) {
+            nextCell.focus();
+            nextCell.select();
+          }
         }
-        
-        if (this.destinationFilter !== 'all') {
-            filtered = filtered.filter(item => 
-                item.Destinatie === this.destinationFilter
-            );
-        }
+        break;
+      case 'Escape':
+        cell.blur();
+        break;
+      case 'Tab':
+        break;
+    }
+  }
 
-        return filtered;
+  saveData() {
+    console.log('Transfers to process:', this.data.map(item => item.transfer));
+  }
+
+  exportToExcel() {
+    if (!this.data.length) {
+      console.warn('No data to export');
+      return;
     }
 
-    getUniqueDestinations() {
-        if (!this.data || this.data.length === 0) {
-            return [];
-        }
-        
-        const destinations = [...new Set(this.data.map(item => item.Destinatie))];
-        return destinations.sort();
+    const exportData = this.filterData().map(item => ({
+      'Code': item.Cod,
+      'Description': item.Descriere,
+      'Destination': item.Destinatie,
+      'Stock Emit': parseFloat(item.stoc_emit) || 0,
+      'Min Emit': parseFloat(item.min_emit) || 0,
+      'Max Emit': parseFloat(item.max_emit) || 0,
+      'Disp Min': parseFloat(item.disp_min_emit) || 0,
+      'Disp Max': parseFloat(item.disp_max_emit) || 0,
+      'Stock Dest': parseFloat(item.stoc_dest) || 0,
+      'Min Dest': parseFloat(item.min_dest) || 0,
+      'Max Dest': parseFloat(item.max_dest) || 0,
+      'Orders': parseFloat(item.comenzi) || 0,
+      'In Transfer': parseFloat(item.transf_nerec) || 0,
+      'Nec Min': parseFloat(item.nec_min) || 0,
+      'Nec Max': parseFloat(item.nec_max) || 0,
+      'Nec Min Comp': parseFloat(item.nec_min_comp) || 0,
+      'Nec Max Comp': parseFloat(item.nec_max_comp) || 0,
+      'Qty Min': parseFloat(item.cant_min) || 0,
+      'Qty Max': parseFloat(item.cant_max) || 0,
+      'Transfer': parseFloat(item.transfer) || 0
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Branch Replenishment');
+    const date = new Date().toISOString().split('T')[0];
+    const filename = `branch_replenishment_${date}.xlsx`;
+    XLSX.writeFile(wb, filename);
+  }
+
+  applyReplenishmentStrategy() {
+    if (!this.data.length) return;
+
+    switch (this.selectedReplenishmentStrategy) {
+      case 'min':
+        this.applyMinQuantities();
+        break;
+      case 'max':
+        this.applyMaxQuantities();
+        break;
+      case 'skip_blacklisted':
+        this.skipBlacklisted();
+        break;
+      case 'clear':
+        this.clearTransfers();
+        break;
     }
 
-    updated() {
-        const tooltipTriggerList = [].slice.call(this.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        tooltipTriggerList.forEach(tooltipTriggerEl => {
-            new bootstrap.Tooltip(tooltipTriggerEl);
-        });
+    this.requestUpdate();
+  }
+
+  applyMinQuantities() {
+    const targetItems = this.isSuccessiveStrategy
+      ? this.filterData().filter(item => parseFloat(item.transfer || 0) === 0)
+      : this.filterData();
+
+    targetItems.forEach(item => {
+      if (item.Blacklisted === '-') {
+        const minQty = parseFloat(item.cant_min);
+        item.transfer = minQty > 0 ? minQty : 0;
+      }
+    });
+  }
+
+  applyMaxQuantities() {
+    const targetItems = this.isSuccessiveStrategy
+      ? this.filterData().filter(item => parseFloat(item.transfer || 0) === 0)
+      : this.filterData();
+
+    targetItems.forEach(item => {
+      if (item.Blacklisted === '-') {
+        const maxQty = parseFloat(item.cant_max);
+        item.transfer = maxQty > 0 ? maxQty : 0;
+      }
+    });
+  }
+
+  skipBlacklisted() {
+    const targetItems = this.isSuccessiveStrategy
+      ? this.data.filter(item => parseFloat(item.transfer || 0) === 0)
+      : this.data;
+
+    targetItems.forEach(item => {
+      if (item.Blacklisted !== '-') {
+        item.transfer = 0;
+      }
+    });
+  }
+
+  clearTransfers() {
+    this.filterData().forEach(item => {
+      item.transfer = 0;
+    });
+  }
+
+  filterData() {
+    let filtered = this.data;
+
+    if (this.searchTerm) {
+      const term = this.searchTerm.toLowerCase();
+      filtered = filtered.filter(item =>
+        (item.Cod && item.Cod.toLowerCase().includes(term)) ||
+        (item.Descriere && item.Descriere.toLowerCase().includes(term))
+      );
     }
 
-    renderRow(item, index) {
-        const descriere = (item.Descriere || '').substring(0, 50);
-        const getValueClass = (value) => {
-            const num = parseFloat(value);
-            return num < 0 ? 'text-danger fw-bold' : '';
-        };
+    if (this.transferFilter !== 'all') {
+      filtered = filtered.filter(item => {
+        const transfer = parseFloat(item.transfer || 0);
+        return this.transferFilter === 'positive' ? transfer > 0 : transfer === 0;
+      });
+    }
 
-        return html`
+    if (this.destinationFilter !== 'all') {
+      filtered = filtered.filter(item =>
+        item.Destinatie === this.destinationFilter
+      );
+    }
+
+    return filtered;
+  }
+
+  getUniqueDestinations() {
+    if (!this.data || this.data.length === 0) {
+      return [];
+    }
+
+    const destinations = [...new Set(this.data.map(item => item.Destinatie))];
+    return destinations.sort();
+  }
+
+  updated() {
+    const tooltipTriggerList = [].slice.call(this.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.forEach(tooltipTriggerEl => {
+      new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+  }
+
+  renderRow(item, index) {
+    const descriere = (item.Descriere || '').substring(0, 50);
+    const getValueClass = (value) => {
+      const num = parseFloat(value);
+      return num < 0 ? 'text-danger fw-bold' : '';
+    };
+
+    return html`
           <tr class="${item.Blacklisted === '-' ? '' : 'table-danger'}">
             <td class="text-center">${index + 1}</td>
             <td style="display:none">${item.keyField}</td>
@@ -416,16 +419,16 @@ export class BranchReplenishment extends LitElement {
             </td>
           </tr>
         `;
-    }
+  }
 
-    renderDestinationDropdown() {
-        const filteredBranches = this.destSearchTerm 
-            ? Object.entries(this.branches).filter(([code, name]) => 
-                code.includes(this.destSearchTerm) || 
-                name.toLowerCase().includes(this.destSearchTerm.toLowerCase()))
-            : Object.entries(this.branches);
-            
-        return html`
+  renderDestinationDropdown() {
+    const filteredBranches = this.destSearchTerm
+      ? Object.entries(this.branches).filter(([code, name]) =>
+        code.includes(this.destSearchTerm) ||
+        name.toLowerCase().includes(this.destSearchTerm.toLowerCase()))
+      : Object.entries(this.branches);
+
+    return html`
           <div class="fancy-dropdown-menu" @click="${this.handleDropdownClick}">
             <div class="fancy-dropdown-header">
               <div class="input-group input-group-sm">
@@ -454,15 +457,15 @@ export class BranchReplenishment extends LitElement {
             </div>
           </div>
         `;
-    }
+  }
 
-    render() {
-        const filteredData = this.filterData();
-        const totalCount = this.data.length;
-        const filteredCount = filteredData.length;
-        const uniqueDestinations = this.getUniqueDestinations();
-        
-        return html`
+  render() {
+    const filteredData = this.filterData();
+    const totalCount = this.data.length;
+    const filteredCount = filteredData.length;
+    const uniqueDestinations = this.getUniqueDestinations();
+
+    return html`
       <style>
         .fancy-dropdown {
           position: relative;
@@ -526,7 +529,7 @@ export class BranchReplenishment extends LitElement {
             <div class="row">
               <div class="col-md-9">
                 <div class="row align-items-center">
-                  <div class="col-md-4">
+                  <div class="col-md-3">
                     <div class="input-group input-group-sm">
                       <span class="input-group-text">Source</span>
                       <select class="form-select" 
@@ -541,7 +544,7 @@ export class BranchReplenishment extends LitElement {
                     </div>
                   </div>
                   
-                  <div class="col-md-4">
+                  <div class="col-md-3">
                     <div class="input-group input-group-sm fancy-dropdown">
                       <span class="input-group-text">Destination</span>
                       <button class="form-select fancy-dropdown-toggle text-start" 
@@ -552,9 +555,25 @@ export class BranchReplenishment extends LitElement {
                       ${this.showDestDropdown ? this.renderDestinationDropdown() : ''}
                     </div>
                   </div>
+
+                  <!-- New product code search field -->
+                  <div class="col-md-2">
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text">Code</span>
+                      <input 
+                        type="text" 
+                        class="form-control" 
+                        placeholder="Search by code" 
+                        .value="${this.productCodeSearch}"
+                        @input="${e => this.productCodeSearch = e.target.value}"
+                        ?disabled="${this.loading}"
+                      />
+                    </div>
+                  </div>
                   
                   <div class="col-md-4 d-flex align-items-center">
                     <div class="form-check form-switch me-3" data-bs-toggle="tooltip" data-bs-placement="top" 
+                         data-bs-trigger="hover"
                          title="Affects data loading: filters items based on necessity conditions at destination">
                       <input class="form-check-input" type="checkbox"
                              id="setConditionForNecesar"
@@ -567,6 +586,7 @@ export class BranchReplenishment extends LitElement {
                     </div>
                     
                     <div class="form-check form-switch me-3" data-bs-toggle="tooltip" data-bs-placement="top" 
+                         data-bs-trigger="hover"
                          title="Affects data loading: only shows items with min/max limits defined">
                       <input class="form-check-input" type="checkbox"
                              id="setConditionForLimits"
@@ -579,9 +599,9 @@ export class BranchReplenishment extends LitElement {
                     </div>
                     
                     <button class="btn btn-sm btn-primary" @click="${this.loadData}" ?disabled="${this.loading}">
-                      ${this.loading ? 
-                        html`<span class="spinner-border spinner-border-sm me-1"></span> Loading...` : 
-                        html`<i class="bi bi-arrow-repeat me-1"></i> Load Data`}
+                      ${this.loading ?
+        html`<span class="spinner-border spinner-border-sm me-1"></span> Loading...` :
+        html`<i class="bi bi-arrow-repeat me-1"></i> Load Data`}
                     </button>
                   </div>
                 </div>
@@ -605,9 +625,9 @@ export class BranchReplenishment extends LitElement {
               <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
               <input type="text" class="form-control" placeholder="Search by code or description..."
                      .value="${this.searchTerm}" 
-                     @input="${e => {this.searchTerm = e.target.value; this.requestUpdate();}}" />
+                     @input="${e => { this.searchTerm = e.target.value; this.requestUpdate(); }}" />
               ${this.searchTerm ? html`
-                <button class="btn btn-outline-secondary" @click="${() => {this.searchTerm = ''; this.requestUpdate();}}">
+                <button class="btn btn-outline-secondary" @click="${() => { this.searchTerm = ''; this.requestUpdate(); }}">
                   <i class="bi bi-x"></i>
                 </button>` : ''}
             </div>
@@ -615,28 +635,28 @@ export class BranchReplenishment extends LitElement {
             <div class="btn-group btn-group-sm" role="group">
               <input type="radio" class="btn-check" name="transferFilter" id="all"
                      .checked="${this.transferFilter === 'all'}"
-                     @change="${() => {this.transferFilter = 'all'; this.requestUpdate();}}"
+                     @change="${() => { this.transferFilter = 'all'; this.requestUpdate(); }}"
                      autocomplete="off">
               <label class="btn btn-outline-secondary" for="all">All Items</label>
               
               <input type="radio" class="btn-check" name="transferFilter" id="positive"
                      .checked="${this.transferFilter === 'positive'}"
-                     @change="${() => {this.transferFilter = 'positive'; this.requestUpdate();}}"
+                     @change="${() => { this.transferFilter = 'positive'; this.requestUpdate(); }}"
                      autocomplete="off">
               <label class="btn btn-outline-secondary" for="positive">With Transfer</label>
               
               <input type="radio" class="btn-check" name="transferFilter" id="zero"
                      .checked="${this.transferFilter === 'zero'}"
-                     @change="${() => {this.transferFilter = 'zero'; this.requestUpdate();}}"
+                     @change="${() => { this.transferFilter = 'zero'; this.requestUpdate(); }}"
                      autocomplete="off">
               <label class="btn btn-outline-secondary" for="zero">No Transfer</label>
             </div>
           </div>
           
           <div class="text-muted small align-self-center">
-            ${filteredCount === totalCount 
-              ? html`Showing all <span class="fw-bold">${totalCount}</span> items` 
-              : html`Showing <span class="fw-bold">${filteredCount}</span> of <span class="fw-bold">${totalCount}</span> items`}
+            ${filteredCount === totalCount
+        ? html`Showing all <span class="fw-bold">${totalCount}</span> items`
+        : html`Showing <span class="fw-bold">${filteredCount}</span> of <span class="fw-bold">${totalCount}</span> items`}
           </div>
         </div>
         
@@ -698,9 +718,9 @@ export class BranchReplenishment extends LitElement {
                     <select class="form-select form-select-sm border-0 bg-light"
                             .value="${this.destinationFilter}"
                             @change="${e => {
-                                this.destinationFilter = e.target.value;
-                                this.requestUpdate();
-                            }}">
+        this.destinationFilter = e.target.value;
+        this.requestUpdate();
+      }}">
                       <option value="all">All Dest.</option>
                       ${uniqueDestinations.map(dest => html`
                         <option value="${dest}">${dest}</option>
@@ -734,7 +754,7 @@ export class BranchReplenishment extends LitElement {
         </div>
       </div>
     `;
-    }
+  }
 }
 
 customElements.define('branch-replenishment', BranchReplenishment);
@@ -792,4 +812,20 @@ Direct connection with ERP system (S1)
 Complex SQL calculations for stock availability
 Transfer necessity algorithms based on multiple parameters
 Real-time data updates using Lit Element framework
+
+02.04.2025:
+-export Excel coloanele de la D-T sa fie de tip numeric, acum este text
+-pending orders: tip: 3130 (stocuri) + toate comenzile transfer spre destinatiile alese in intefata (ignor emitentul) + foloseste branchsec drept destinatie (whousesec este null tot timpul)
+-la fel la transfer, nu tine cont de emitent, doar destinatii + ia in considerare branchsec nu whousesec care, si aici, poate fi null
+-sortare pe calup destinatii cu vizualizare in interfata calupuri destinatii
+-nec min max comp trebuie sa exclud emitent si NU este suma din mtrbrnlimits ci suma de Nec Min sau Nec Max calculat (indiferent de selectie destinatie, suma este per companie = total branches, excluzand branch emitere)
+-adauga in cautarea in baza de date un mtrl pentru teste
+---TOP ABC:
+70, 20, 10 parametrizabil per companie si sucursala
+-calculul TOP ABC va scrie rezultatele intr-o tabela dedicata, astfel incat daac un reper nu are min max in MTRBRNLIMITS, poate totusi avea ABC
+-ABC se va face pe baza de vanzari in perioada 1 an, 6 luni, 3 luni, 1 luna si custom
+-calcul top ABC genereaza atat rank (A,B,C) cat si procentul de vanzari
+-companie este HQ (1000)
+-se tine doar ultimul calcul (se sterg cele vechi)
+-selectia coduri ca si la algoritmul de min max (anume docs si reguli ca la min max)
 */

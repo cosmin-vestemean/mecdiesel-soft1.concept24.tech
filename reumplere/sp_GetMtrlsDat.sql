@@ -6,7 +6,8 @@ CREATE OR ALTER PROCEDURE sp_GetMtrlsData
     @company INT = 1000,
     @setConditionForNecesar BIT = 1,
     @setConditionForLimits BIT = 1,  -- New parameter
-    @fiscalYear INT = NULL
+    @fiscalYear INT = NULL,
+    @productCode VARCHAR(50) = NULL  -- New parameter for product code search
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -15,10 +16,21 @@ BEGIN
     IF @fiscalYear IS NULL
         SET @fiscalYear = YEAR(GETDATE());
 
+    -- Create temp tables for source and destination branches to avoid repeated STRING_SPLIT calls
+    CREATE TABLE #EmitBranches (branch INT PRIMARY KEY);
+    CREATE TABLE #DestBranches (branch INT PRIMARY KEY);
+
+    INSERT INTO #EmitBranches (branch)
+    SELECT CAST(value AS INT) FROM STRING_SPLIT(@branchesEmit, ',');
+
+    INSERT INTO #DestBranches (branch)
+    SELECT CAST(value AS INT) FROM STRING_SPLIT(@branchesDest, ',');
+
     -- Create temp table for pre-calculated pending orders
     CREATE TABLE #PendingOrders (
         mtrl INT,
-        whouse INT,
+        branchFrom INT,
+        branchTo INT,
         qty DECIMAL(18,4)
     );
 
@@ -27,17 +39,27 @@ BEGIN
     INSERT INTO #PendingOrders
     SELECT 
         A.mtrl, 
-        A.whouse, 
+        C.BRANCH,
+        B.BRANCHSEC,
         SUM((ISNULL(A.QTY1,0)) - (ISNULL(A.QTY1COV,0) + ISNULL(A.QTY1CANC,0)))
     FROM MTRLINES A 
     INNER JOIN findoc c ON (c.findoc=a.findoc AND c.company=a.company AND c.sosource=a.sosource)
+    INNER JOIN MTRDOC B ON (A.FINDOC = B.FINDOC AND A.COMPANY = B.COMPANY)
     WHERE 
         A.COMPANY = @company
         AND a.pending = 1
         AND a.restmode IN (1,2) 
         AND c.FISCPRD = @fiscalYear
         AND c.iscancel = 0
-    GROUP BY A.mtrl, A.whouse;
+        AND c.sosource = 1151
+        AND c.FPRMS = 3130
+        AND B.BRANCHSEC IN (SELECT branch FROM #DestBranches) -- Use temp table instead of STRING_SPLIT
+        AND (@productCode IS NULL OR A.mtrl IN (SELECT mtrl FROM mtrl WHERE Code LIKE '%' + @productCode + '%')) -- Filter by product code with LIKE
+    GROUP BY A.mtrl, C.BRANCH, B.BRANCHSEC;
+
+    -- Create index on the pending orders temp table
+    CREATE NONCLUSTERED INDEX IX_PendingOrders_MTRL_BRANCHTO 
+    ON #PendingOrders(mtrl, branchTo);
 
     -- Create temp table for pre-calculated unreceived transfers
     CREATE TABLE #UnreceivedTransfers (
@@ -66,28 +88,111 @@ BEGIN
         AND B.WHOUSESEC = 9999
         AND A.FISCPRD = @fiscalYear
         AND A.iscancel = 0
+        AND B.BRANCHSEC IN (SELECT branch FROM #DestBranches) -- Use temp table instead of STRING_SPLIT
+        AND (@productCode IS NULL OR C.mtrl IN (SELECT mtrl FROM mtrl WHERE Code LIKE '%' + @productCode + '%')) -- Filter by product code with LIKE
     GROUP BY C.mtrl, A.BRANCH, B.BRANCHSEC;
+
+    -- Create indexes on the unreceived transfers temp table
+    CREATE NONCLUSTERED INDEX IX_UnreceivedTransfers_MTRL_BRANCH 
+    ON #UnreceivedTransfers(mtrl, branchTo);
+    CREATE NONCLUSTERED INDEX IX_UnreceivedTransfers_MTRL_BRANCHFROM_BRANCHTO 
+    ON #UnreceivedTransfers(mtrl, branchFrom, branchTo);
 
     -- Create temp table for branch limits with calculated max values
     CREATE TABLE #BranchLimits (
         mtrl INT,
         branch INT,
         MinLimit DECIMAL(18,4),
-        MaxLimit DECIMAL(18,4)
+        MaxLimit DECIMAL(18,4),
+        -- Add columns to store precalculated values
+        StockQty DECIMAL(18,4) NULL,
+        PendingQty DECIMAL(18,4) NULL,
+        TransferQty DECIMAL(18,4) NULL,
+        MinNecessity DECIMAL(18,4) NULL,
+        MaxNecessity DECIMAL(18,4) NULL
     );
 
     -- Populate branch limits temp table
-    INSERT INTO #BranchLimits
+    INSERT INTO #BranchLimits (mtrl, branch, MinLimit, MaxLimit)
     SELECT 
         mtrl, 
         branch,
         CASE WHEN ISNULL(RemainLimMin, 0) > ISNULL(cccminauto, 0) THEN ISNULL(RemainLimMin, 0) ELSE ISNULL(cccminauto, 0) END AS MinLimit,
         CASE WHEN ISNULL(RemainLimMax, 0) > ISNULL(cccmaxauto, 0) THEN ISNULL(RemainLimMax, 0) ELSE ISNULL(cccmaxauto, 0) END AS MaxLimit
     FROM MTRBRNLIMITS 
-    WHERE company = @company;
+    WHERE company = @company
+    AND (@productCode IS NULL OR mtrl IN (SELECT mtrl FROM mtrl WHERE Code LIKE '%' + @productCode + '%')); -- Filter by product code with LIKE
+
+    -- Create index on the branch limits temp table
+    CREATE NONCLUSTERED INDEX IX_BranchLimits_MTRL_BRANCH 
+    ON #BranchLimits(mtrl, branch);
+
+    -- Update stock quantities in the branch limits table
+    UPDATE bl
+    SET StockQty = ISNULL(stock.qty, 0)
+    FROM #BranchLimits bl
+    LEFT JOIN (
+        SELECT 
+            c.branch,
+            a.mtrl,
+            ISNULL(SUM(ISNULL(a.qty1, 0)), 0) AS qty
+        FROM mtrfindata a
+        INNER JOIN whouse b ON (b.whouse = a.whouse)
+        INNER JOIN branch c ON (
+            c.branch = b.cccbranch
+            AND c.company = b.company
+            AND c.company = @company
+            AND c.isactive = 1
+        )
+        WHERE 
+            a.company = @company
+            AND a.FISCPRD = @fiscalYear
+            AND (@productCode IS NULL OR a.mtrl IN (SELECT mtrl FROM mtrl WHERE Code LIKE '%' + @productCode + '%')) -- Filter by product code with LIKE
+        GROUP BY c.branch, a.mtrl
+    ) stock ON (bl.mtrl = stock.mtrl AND bl.branch = stock.branch);
+
+    -- Update pending orders in the branch limits table
+    UPDATE bl
+    SET PendingQty = ISNULL(pending.qty, 0)
+    FROM #BranchLimits bl
+    LEFT JOIN (
+        SELECT mtrl, branchTo AS branch, SUM(qty) AS qty
+        FROM #PendingOrders
+        GROUP BY mtrl, branchTo
+    ) pending ON (bl.mtrl = pending.mtrl AND bl.branch = pending.branch);
+
+    -- Update transfers in the branch limits table
+    UPDATE bl
+    SET TransferQty = ISNULL(transfer.qty, 0)
+    FROM #BranchLimits bl
+    LEFT JOIN (
+        SELECT mtrl, branchTo AS branch, SUM(qty) AS qty
+        FROM #UnreceivedTransfers
+        GROUP BY mtrl, branchTo
+    ) transfer ON (bl.mtrl = transfer.mtrl AND bl.branch = transfer.branch);
+
+    -- Calculate necessity values
+    UPDATE #BranchLimits
+    SET 
+        MinNecessity = CASE WHEN (MinLimit - StockQty - PendingQty - TransferQty) > 0 
+                       THEN (MinLimit - StockQty - PendingQty - TransferQty)
+                       ELSE 0 END,
+        MaxNecessity = CASE WHEN (MaxLimit - StockQty - PendingQty - TransferQty) > 0 
+                       THEN (MaxLimit - StockQty - PendingQty - TransferQty)
+                       ELSE 0 END;
 
     -- Main query using WITH clause
-    WITH cte AS (
+    -- Create a CTE for branch necessity calculations
+    WITH BranchNecessities AS (
+        SELECT 
+            bl.mtrl,
+            bl.branch,
+            bl.MinNecessity,
+            bl.MaxNecessity
+        FROM #BranchLimits bl
+        WHERE bl.branch NOT IN (SELECT branch FROM #EmitBranches)
+    ),
+    cte AS (
         SELECT 
             mtrl,
             branchE,
@@ -126,7 +231,8 @@ BEGIN
                     a.company = @company
                     AND a.FISCPRD = @fiscalYear
                     AND d.sodtype = 51
-                    AND c.branch IN (SELECT value FROM STRING_SPLIT(@branchesEmit, ','))
+                    AND c.branch IN (SELECT branch FROM #EmitBranches)
+                    AND (@productCode IS NULL OR a.mtrl IN (SELECT mtrl FROM mtrl WHERE Code LIKE '%' + @productCode + '%')) -- Filter by product code with LIKE
                 GROUP BY 
                     c.BRANCH,
                     a.MTRL, 
@@ -152,7 +258,8 @@ BEGIN
                     a.company = @company
                     AND a.FISCPRD = @fiscalYear
                     AND d.sodtype = 51
-                    AND c.branch IN (SELECT value FROM STRING_SPLIT(@branchesDest, ','))
+                    AND c.branch IN (SELECT branch FROM #DestBranches)
+                    AND (@productCode IS NULL OR a.mtrl IN (SELECT mtrl FROM mtrl WHERE Code LIKE '%' + @productCode + '%')) -- Filter by product code with LIKE
                 GROUP BY 
                     c.BRANCH,
                     a.MTRL
@@ -171,7 +278,7 @@ BEGIN
             AND c.company = @company
             AND b.isactive = 1
         )
-        WHERE branch IN (SELECT value FROM STRING_SPLIT(@branchesDest, ','))
+        WHERE branch IN (SELECT branch FROM #DestBranches)
     )
     
     -- Final selection with filters
@@ -196,75 +303,49 @@ BEGIN
         ISNULL(po.qty, 0) comenzi,
         ISNULL(ut.qty, 0) transf_nerec,
         -- Calculate necessity based on min limit
-        ISNULL(bl_dest.MinLimit, 0) - 
-            CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
-            ISNULL(po.qty, 0) - 
-            ISNULL(ut.qty, 0) AS nec_min,
+        ISNULL(bl_dest.MinNecessity, 0) AS nec_min,
         -- Calculate necessity based on max limit
-        ISNULL(bl_dest.MaxLimit, 0) - 
-            CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
-            ISNULL(po.qty, 0) - 
-            ISNULL(ut.qty, 0) AS nec_max,
-        -- Total company necessity for min limit
-        (SELECT ISNULL(SUM(MinLimit), 0) FROM #BranchLimits WHERE mtrl = dm.mtrl) AS nec_min_comp,
-        -- Total company necessity for max limit
-        (SELECT ISNULL(SUM(MaxLimit), 0) FROM #BranchLimits WHERE mtrl = dm.mtrl) AS nec_max_comp,
+        ISNULL(bl_dest.MaxNecessity, 0) AS nec_max,
+        -- Calculate total company necessity based on min limit using the BranchNecessities CTE
+        (SELECT ISNULL(SUM(bn.MinNecessity), 0)
+         FROM BranchNecessities bn WHERE bn.mtrl = dm.mtrl) AS nec_min_comp,
+        -- Calculate total company necessity based on max limit using the BranchNecessities CTE
+        (SELECT ISNULL(SUM(bn.MaxNecessity), 0)
+         FROM BranchNecessities bn WHERE bn.mtrl = dm.mtrl) AS nec_max_comp,
         -- Calculate quantity that can be transferred (min)
         CASE 
             WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0)) - 
-                (ISNULL(bl_dest.MinLimit, 0) - 
-                CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
-                ISNULL(po.qty, 0) - ISNULL(ut.qty, 0)) < 0 
+                ISNULL(bl_dest.MinNecessity, 0) < 0 
             THEN 0 
             ELSE 
                 CASE 
                     WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0)) > 
-                        (ISNULL(bl_dest.MinLimit, 0) - 
-                        CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
-                        ISNULL(po.qty, 0) - ISNULL(ut.qty, 0)) 
+                        ISNULL(bl_dest.MinNecessity, 0)
                     THEN 
                         CASE 
-                            WHEN (ISNULL(bl_dest.MinLimit, 0) - 
-                                CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
-                                ISNULL(po.qty, 0) - ISNULL(ut.qty, 0)) > 0 
-                            THEN (ISNULL(bl_dest.MinLimit, 0) - 
-                                CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
-                                ISNULL(po.qty, 0) - ISNULL(ut.qty, 0))
+                            WHEN ISNULL(bl_dest.MinNecessity, 0) > 0 
+                            THEN ISNULL(bl_dest.MinNecessity, 0)
                             ELSE 0 
                         END
-                    ELSE (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0)) - 
-                        (ISNULL(bl_dest.MinLimit, 0) - 
-                        CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
-                        ISNULL(po.qty, 0) - ISNULL(ut.qty, 0))
+                    ELSE (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0))
                 END
         END AS cant_min,
         -- Calculate quantity that can be transferred (max)
         CASE 
             WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0)) - 
-                (ISNULL(bl_dest.MaxLimit, 0) - 
-                CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
-                ISNULL(po.qty, 0) - ISNULL(ut.qty, 0)) < 0 
+                ISNULL(bl_dest.MaxNecessity, 0) < 0 
             THEN 0 
             ELSE 
                 CASE 
                     WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0)) > 
-                        (ISNULL(bl_dest.MaxLimit, 0) - 
-                        CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
-                        ISNULL(po.qty, 0) - ISNULL(ut.qty, 0)) 
+                        ISNULL(bl_dest.MaxNecessity, 0)
                     THEN 
                         CASE 
-                            WHEN (ISNULL(bl_dest.MaxLimit, 0) - 
-                                CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
-                                ISNULL(po.qty, 0) - ISNULL(ut.qty, 0)) > 0 
-                            THEN (ISNULL(bl_dest.MaxLimit, 0) - 
-                                CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
-                                ISNULL(po.qty, 0) - ISNULL(ut.qty, 0))
+                            WHEN ISNULL(bl_dest.MaxNecessity, 0) > 0 
+                            THEN ISNULL(bl_dest.MaxNecessity, 0)
                             ELSE 0 
                         END
-                    ELSE (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0)) - 
-                        (ISNULL(bl_dest.MaxLimit, 0) - 
-                        CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END - 
-                        ISNULL(po.qty, 0) - ISNULL(ut.qty, 0))
+                    ELSE (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0))
                 END
         END AS cant_max,
         0 AS transfer
@@ -300,10 +381,10 @@ BEGIN
         AND bl_dest.branch = br.branch
     )
     LEFT JOIN (
-        SELECT mtrl, whouse, SUM(qty) AS qty
+        SELECT mtrl, branchTo, SUM(qty) AS qty
         FROM #PendingOrders
-        GROUP BY mtrl, whouse
-    ) po ON (po.mtrl = dm.mtrl AND po.whouse = br.branch)
+        GROUP BY mtrl, branchTo
+    ) po ON (po.mtrl = dm.mtrl AND po.branchTo = br.branch)
     LEFT JOIN (
         SELECT mtrl, branchFrom, branchTo, SUM(qty) AS qty
         FROM #UnreceivedTransfers
@@ -312,20 +393,15 @@ BEGIN
     WHERE (@setConditionForLimits = 0 OR (bl_dest.MaxLimit > 0 OR bl_dest.MinLimit > 0))
     AND (
         @setConditionForNecesar = 0
-        OR (
-            ISNULL(bl_dest.MinLimit, 0) - 
-            CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END -
-            ISNULL(po.qty, 0) - ISNULL(ut.qty, 0) > 0
-            OR
-            ISNULL(bl_dest.MaxLimit, 0) - 
-            CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END -
-            ISNULL(po.qty, 0) - ISNULL(ut.qty, 0) > 0
-        )
+        OR (bl_dest.MinNecessity > 0 OR bl_dest.MaxNecessity > 0)
     )
-    ORDER BY dm.mtrl, dm.branchE, br.branch;
+    ORDER BY dm.mtrl, dm.branchE, br.branch
+    OPTION (RECOMPILE);
 
     -- Clean up temp tables
     DROP TABLE #PendingOrders;
     DROP TABLE #UnreceivedTransfers;
     DROP TABLE #BranchLimits;
+    DROP TABLE #EmitBranches;
+    DROP TABLE #DestBranches;
 END
