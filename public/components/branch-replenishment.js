@@ -22,7 +22,8 @@ export class BranchReplenishment extends LitElement {
       transferFilter: { type: String },
       destinationFilter: { type: String },
       isSuccessiveStrategy: { type: Boolean },
-      branches: { type: Object }
+      branches: { type: Object },
+      stockStatusFilter: { type: String } // New property for stock status filtering
     };
   }
 
@@ -49,6 +50,7 @@ export class BranchReplenishment extends LitElement {
     this.transferFilter = 'all';
     this.destinationFilter = 'all';
     this.isSuccessiveStrategy = true;
+    this.stockStatusFilter = 'all'; // Initialize stock status filter to show all items
     this.branches = {
       '1000': 'HQ',
       '1200': 'CLUJ',
@@ -69,6 +71,45 @@ export class BranchReplenishment extends LitElement {
       '2800': 'TIMISOARA',
       '2900': 'RAMNICU VALCEA'
     };
+  }
+
+  // Moved to class level for reuse in filtering
+  getStockClass(value, minLimit, maxLimit) {
+    const stock = parseFloat(value);
+    const min = parseFloat(minLimit);
+    const max = parseFloat(maxLimit);
+    
+    // Handle NaN cases
+    if (isNaN(stock)) return '';
+    
+    // Critical under-stock situation (below minimum)
+    if (!isNaN(min) && stock < min) {
+      return 'text-danger stock-critical';
+    }
+    
+    // Optimal stock level (between min and max)
+    if (!isNaN(min) && !isNaN(max) && stock >= min && stock <= max) {
+      return 'text-dark stock-optimal';
+    }
+    
+    // Over-stock situation (above maximum)
+    if (!isNaN(max) && stock > max) {
+      return 'text-success stock-high';
+    }
+    
+    // If min/max not defined but stock exists - use text-warning
+    if (stock > 0) {
+      return 'text-warning stock-undefined';
+    }
+    
+    // No stock
+    return 'text-muted';
+  }
+
+  getValueClass(value) {
+    const num = parseFloat(value);
+    if (isNaN(num)) return '';
+    return num < 0 ? 'text-danger fw-bold' : (num > 0 ? 'text-success' : 'text-muted');
   }
 
   getDestBranchesString() {
@@ -232,9 +273,12 @@ export class BranchReplenishment extends LitElement {
     }
 
     const exportData = this.filterData().map(item => ({
+      'mtrl': item.mtrl,
       'Code': item.Cod,
       'Description': item.Descriere,
       'Destination': item.Destinatie,
+      'Blacklisted': item.Blacklisted,
+      'InLichidare': item.InLichidare,
       'Stock Emit': parseFloat(item.stoc_emit) || 0,
       'Min Emit': parseFloat(item.min_emit) || 0,
       'Max Emit': parseFloat(item.max_emit) || 0,
@@ -351,6 +395,24 @@ export class BranchReplenishment extends LitElement {
       );
     }
 
+    if (this.stockStatusFilter !== 'all') {
+      filtered = filtered.filter(item => {
+        const stockClass = this.getStockClass(item.stoc_dest, item.min_dest, item.max_dest);
+        switch (this.stockStatusFilter) {
+          case 'critical':
+            return stockClass.includes('stock-critical');
+          case 'optimal':
+            return stockClass.includes('stock-optimal');
+          case 'high':
+            return stockClass.includes('stock-high');
+          case 'undefined':
+            return stockClass.includes('stock-undefined');
+          default:
+            return true;
+        }
+      });
+    }
+
     return filtered;
   }
 
@@ -373,47 +435,17 @@ export class BranchReplenishment extends LitElement {
   renderRow(item, index) {
     const descriere = (item.Descriere || '').substring(0, 50);
     
-    const getValueClass = (value) => {
-      const num = parseFloat(value);
-      if (isNaN(num)) return '';
-      return num < 0 ? 'text-danger' : (num > 0 ? 'text-success' : 'text-muted');
-    };
-    
-    // Improved function to get proper CSS classes for stock levels relative to min/max limits
-    const getStockClass = (value, minLimit, maxLimit) => {
-      const stock = parseFloat(value);
-      const min = parseFloat(minLimit);
-      const max = parseFloat(maxLimit);
-      
-      // Handle NaN cases
-      if (isNaN(stock)) return '';
-      
-      // Critical under-stock situation (below minimum)
-      if (!isNaN(min) && stock < min) {
-        return 'text-danger stock-critical';
+    // Function to wrap stock values in span for optimal stock styling
+    const renderStockValue = (value, minLimit, maxLimit) => {
+      const stockClass = this.getStockClass(value, minLimit, maxLimit);
+      if (stockClass.includes('stock-optimal')) {
+        return html`<span>${value}</span>`;
       }
-      
-      // Optimal stock level (between min and max)
-      if (!isNaN(min) && !isNaN(max) && stock >= min && stock <= max) {
-        return 'text-dark stock-optimal';
-      }
-      
-      // Over-stock situation (above maximum)
-      if (!isNaN(max) && stock > max) {
-        return 'text-success stock-high';
-      }
-      
-      // If min/max not defined but stock exists
-      if (stock > 0) {
-        return 'text-secondary';
-      }
-      
-      // No stock
-      return 'text-muted';
+      return value;
     };
 
     return html`
-          <tr class="${item.Blacklisted === '-' ? '' : 'table-danger'}">
+          <tr>
             <td class="text-center">${index + 1}</td>
             <td style="display:none">${item.keyField}</td>
             <td style="display:none">${item.mtrl}</td>
@@ -421,25 +453,27 @@ export class BranchReplenishment extends LitElement {
             <td class="text-truncate" style="max-width: 200px;" title="${item.Descriere}">${descriere}</td>
             <td style="display:none">${item.branchD}</td>
             <td>${item.Destinatie}</td>
-            <td class="group-source ${getStockClass(item.stoc_emit, item.min_emit, item.max_emit)}">${item.stoc_emit}</td>
-            <td class="group-source ${getValueClass(item.min_emit)}">${item.min_emit}</td>
-            <td class="group-source ${getValueClass(item.max_emit)}">${item.max_emit}</td>
-            <td class="group-source vertical-divider ${getValueClass(item.disp_min_emit)}">${item.disp_min_emit}</td>
-            <td class="group-source ${getValueClass(item.disp_max_emit)}">${item.disp_max_emit}</td>
-            <td class="group-destination vertical-divider ${getStockClass(item.stoc_dest, item.min_dest, item.max_dest)}">${item.stoc_dest}</td>
-            <td class="group-destination ${getValueClass(item.min_dest)}">${item.min_dest}</td>
-            <td class="group-destination ${getValueClass(item.max_dest)}">${item.max_dest}</td>
-            <td class="group-destination vertical-divider ${getValueClass(item.comenzi)}">${item.comenzi}</td>
-            <td class="group-destination ${getValueClass(item.transf_nerec)}">${item.transf_nerec}</td>
-            <td class="group-necessity vertical-divider ${getValueClass(item.nec_min)}">${item.nec_min}</td>
-            <td class="group-necessity ${getValueClass(item.nec_max)}">${item.nec_max}</td>
-            <td class="group-necessity ${getValueClass(item.nec_min_comp)}">${item.nec_min_comp}</td>
-            <td class="group-necessity ${getValueClass(item.nec_max_comp)}">${item.nec_max_comp}</td>
-            <td class="group-action vertical-divider ${getValueClass(item.cant_min)}">${item.cant_min}</td>
-            <td class="group-action ${getValueClass(item.cant_max)}">${item.cant_max}</td>
+            <td class="${item.Blacklisted === 'Da' ? 'text-danger fw-bold' : ''}">${item.Blacklisted}</td>
+            <td class="${item.InLichidare === 'Da' ? 'text-warning fw-bold' : ''}">${item.InLichidare}</td>
+            <td class="group-source ${this.getStockClass(item.stoc_emit, item.min_emit, item.max_emit)}">${renderStockValue(item.stoc_emit, item.min_emit, item.max_emit)}</td>
+            <td class="group-source ${this.getValueClass(item.min_emit)}">${item.min_emit}</td>
+            <td class="group-source ${this.getValueClass(item.max_emit)}">${item.max_emit}</td>
+            <td class="group-source vertical-divider ${this.getValueClass(item.disp_min_emit)}">${item.disp_min_emit}</td>
+            <td class="group-source ${this.getValueClass(item.disp_max_emit)}">${item.disp_max_emit}</td>
+            <td class="group-destination vertical-divider ${this.getStockClass(item.stoc_dest, item.min_dest, item.max_dest)}">${renderStockValue(item.stoc_dest, item.min_dest, item.max_dest)}</td>
+            <td class="group-destination ${this.getValueClass(item.min_dest)}">${item.min_dest}</td>
+            <td class="group-destination ${this.getValueClass(item.max_dest)}">${item.max_dest}</td>
+            <td class="group-destination vertical-divider ${this.getValueClass(item.comenzi)}">${item.comenzi}</td>
+            <td class="group-destination ${this.getValueClass(item.transf_nerec)}">${item.transf_nerec}</td>
+            <td class="group-necessity vertical-divider ${this.getValueClass(item.nec_min)}">${item.nec_min}</td>
+            <td class="group-necessity ${this.getValueClass(item.nec_max)}">${item.nec_max}</td>
+            <td class="group-necessity ${this.getValueClass(item.nec_min_comp)}">${item.nec_min_comp}</td>
+            <td class="group-necessity ${this.getValueClass(item.nec_max_comp)}">${item.nec_max_comp}</td>
+            <td class="group-action vertical-divider ${this.getValueClass(item.cant_min)}">${item.cant_min}</td>
+            <td class="group-action ${this.getValueClass(item.cant_max)}">${item.cant_max}</td>
             <td class="group-action">
               <input
-                class="compact-input ${getValueClass(item.transfer)}"
+                class="compact-input ${this.getValueClass(item.transfer)}"
                 data-row-index="${index}"
                 data-col-index="0"
                 type="number"
@@ -591,6 +625,36 @@ export class BranchReplenishment extends LitElement {
           display: flex;
           align-items: center;
           font-size: 0.85rem;
+          cursor: pointer;
+          padding: 4px 10px;
+          border-radius: 4px;
+          transition: background-color 0.2s;
+        }
+        
+        .legend-item:hover {
+          background-color: rgba(0,0,0,0.05);
+        }
+        
+        .legend-item.active {
+          background-color: rgba(13, 110, 253, 0.1);
+          border: 1px solid rgba(13, 110, 253, 0.3);
+        }
+        
+        .legend-item:not(.active) {
+          opacity: 0.85;
+        }
+        
+        .legend-count {
+          margin-left: 5px;
+          background-color: rgba(0,0,0,0.1);
+          border-radius: 10px;
+          min-width: 20px;
+          height: 20px;
+          font-size: 0.75rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0 6px;
         }
         
         .legend-indicator {
@@ -602,6 +666,7 @@ export class BranchReplenishment extends LitElement {
           justify-content: center;
           border: 1px solid #dee2e6;
           background-color: white;
+          position: relative;
         }
         
         .legend-indicator.critical::before {
@@ -616,14 +681,16 @@ export class BranchReplenishment extends LitElement {
           background-color: rgba(25, 135, 84, 0.2);
           border-radius: 3px;
           position: relative;
+          border: 1px solid rgba(25, 135, 84, 0.4);
         }
         
         .legend-indicator.optimal::after {
           content: "✓";
           position: absolute;
-          color: #198754;
-          font-size: 14px;
+          color: #0f5132;
+          font-size: 12px;
           font-weight: bold;
+          z-index: 1;
         }
         
         .legend-indicator.high::before {
@@ -649,11 +716,18 @@ export class BranchReplenishment extends LitElement {
         
         .stock-optimal {
           position: relative;
-          background-color: rgba(25, 135, 84, 0.2);
-          border-radius: 3px;
           font-weight: 500;
           color: #0f5132 !important;
-          box-shadow: inset 0 0 0 1px rgba(25, 135, 84, 0.4);
+        }
+        
+        .stock-optimal::after {
+          content: "✓";
+          position: absolute;
+          top: 0;
+          right: 2px;
+          color: rgba(25, 135, 84, 0.7);
+          font-size: 10px;
+          font-weight: bold;
         }
         
         .stock-high {
@@ -835,21 +909,30 @@ export class BranchReplenishment extends LitElement {
         
         <!-- Status Legend -->
         <div class="status-legend mb-3">
-          <div class="legend-item">
+          <div class="legend-item ${this.stockStatusFilter === 'critical' ? 'active' : ''}" @click="${() => { this.stockStatusFilter = 'critical'; this.requestUpdate(); }}">
             <div class="legend-indicator critical"></div>
             <span>Under Min Stock</span>
+            <span class="legend-count">${this.filterData().filter(item => this.getStockClass(item.stoc_dest, item.min_dest, item.max_dest).includes('stock-critical')).length}</span>
           </div>
-          <div class="legend-item">
+          <div class="legend-item ${this.stockStatusFilter === 'optimal' ? 'active' : ''}" @click="${() => { this.stockStatusFilter = 'optimal'; this.requestUpdate(); }}">
             <div class="legend-indicator optimal"></div>
             <span>Optimal Stock (Min-Max)</span>
+            <span class="legend-count">${this.filterData().filter(item => this.getStockClass(item.stoc_dest, item.min_dest, item.max_dest).includes('stock-optimal')).length}</span>
           </div>
-          <div class="legend-item">
+          <div class="legend-item ${this.stockStatusFilter === 'high' ? 'active' : ''}" @click="${() => { this.stockStatusFilter = 'high'; this.requestUpdate(); }}">
             <div class="legend-indicator high"></div>
             <span>Over Max Stock</span>
+            <span class="legend-count">${this.filterData().filter(item => this.getStockClass(item.stoc_dest, item.min_dest, item.max_dest).includes('stock-high')).length}</span>
           </div>
-          <div class="legend-item">
+          <div class="legend-item ${this.stockStatusFilter === 'undefined' ? 'active' : ''}" @click="${() => { this.stockStatusFilter = 'undefined'; this.requestUpdate(); }}">
             <div class="legend-indicator"></div>
             <span>No Min/Max Defined</span>
+            <span class="legend-count">${this.filterData().filter(item => this.getStockClass(item.stoc_dest, item.min_dest, item.max_dest).includes('stock-undefined')).length}</span>
+          </div>
+          <div class="legend-item ${this.stockStatusFilter === 'all' ? 'active' : ''}" @click="${() => { this.stockStatusFilter = 'all'; this.requestUpdate(); }}">
+            <div class="legend-indicator"></div>
+            <span>All Items</span>
+            <span class="legend-count">${this.filterData().length}</span>
           </div>
         </div>
         
@@ -878,6 +961,8 @@ export class BranchReplenishment extends LitElement {
                     </select>
                   </div>
                 </th>
+                <th>Blacklisted</th>
+                <th>In Lichidare</th>
                 <th class="group-source">Stoc Emit</th>
                 <th class="group-source">Min Emit</th>
                 <th class="group-source">Max Emit</th>
@@ -964,12 +1049,11 @@ Transfer necessity algorithms based on multiple parameters
 Real-time data updates using Lit Element framework
 
 02.04.2025:
--export Excel coloanele de la D-T sa fie de tip numeric, acum este text
--pending orders: tip: 3130 (stocuri) + toate comenzile transfer spre destinatiile alese in intefata (ignor emitentul) + foloseste branchsec drept destinatie (whousesec este null tot timpul)
--la fel la transfer, nu tine cont de emitent, doar destinatii + ia in considerare branchsec nu whousesec care, si aici, poate fi null
--sortare pe calup destinatii cu vizualizare in interfata calupuri destinatii
--nec min max comp trebuie sa exclud emitent si NU este suma din mtrbrnlimits ci suma de Nec Min sau Nec Max calculat (indiferent de selectie destinatie, suma este per companie = total branches, excluzand branch emitere)
--adauga in cautarea in baza de date un mtrl pentru teste
+-export Excel coloanele de la D-T sa fie de tip numeric, acum este text OK
+-pending orders: tip: 3130 (stocuri) + toate comenzile transfer spre destinatiile alese in intefata (ignor emitentul) OK
+-la fel la transfer, nu tine cont de emitent, doar destinatii + ia in considerare branchsec drept destinatie (whousesec este null tot timpul) OK
+-nec min max comp trebuie sa exclud emitent si NU este suma din mtrbrnlimits ci suma de Nec Min sau Nec Max calculat (indiferent de selectie destinatie, suma este per companie = total branches, excluzand branch emitere) OK
+-adauga in cautarea in baza de date un mtrl pentru teste: nice to have
 ---TOP ABC:
 70, 20, 10 parametrizabil per companie si sucursala
 -calculul TOP ABC va scrie rezultatele intr-o tabela dedicata, astfel incat daac un reper nu are min max in MTRBRNLIMITS, poate totusi avea ABC
@@ -978,4 +1062,13 @@ Real-time data updates using Lit Element framework
 -companie este HQ (1000)
 -se tine doar ultimul calcul (se sterg cele vechi)
 -selectia coduri ca si la algoritmul de min max (anume docs si reguli ca la min max)
+
+11.04.2025:
+PRIORITAR:
+-daca disponibil > 0 && disponibil - necesar < 0 => disponibil in cantitate (min/max) OK
+-adauga mtrl inainte de cod in tabel si export OK
+-sortare pe calup destinatii cu vizualizare in interfata calupuri destinatii
+-filtre per coloanele numerice
+-freeze la capul de tabel
+-zen view
 */

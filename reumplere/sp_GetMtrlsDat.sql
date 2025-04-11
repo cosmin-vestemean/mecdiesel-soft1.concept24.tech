@@ -289,7 +289,8 @@ BEGIN
         ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0) disp_min_emit,
         ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0) disp_max_emit,
         brD.name Destinatie,
-        CASE WHEN ml.cccisblacklisted IS NULL THEN '-' ELSE CASE WHEN ml.cccisblacklisted = 0 THEN ' Nu' ELSE 'Da' END END Blacklisted,
+        CASE WHEN ml.cccisblacklisted IS NULL THEN '-' ELSE CASE WHEN ml.cccisblacklisted = 0 THEN 'Nu' ELSE 'Da' END END Blacklisted,
+        CASE WHEN m.cccitemoutlet IS NULL THEN '-' ELSE CASE WHEN m.cccitemoutlet = 0 THEN 'Nu' ELSE 'Da' END END InLichidare,
         CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END stoc_dest,
         bl_dest.MinLimit min_dest,
         bl_dest.MaxLimit max_dest,
@@ -307,9 +308,10 @@ BEGIN
          FROM BranchNecessities bn WHERE bn.mtrl = dm.mtrl) AS nec_max_comp,
         -- Calculate quantity that can be transferred (min)
         CASE 
-            WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0)) - 
-                ISNULL(bl_dest.MinNecessity, 0) < 0 
+            WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0)) <= 0 
             THEN 0 
+            WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0)) - ISNULL(bl_dest.MinNecessity, 0) < 0 
+            THEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0))  -- Return available if positive but not enough
             ELSE 
                 CASE 
                     WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0)) > 
@@ -325,9 +327,10 @@ BEGIN
         END AS cant_min,
         -- Calculate quantity that can be transferred (max)
         CASE 
-            WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0)) - 
-                ISNULL(bl_dest.MaxNecessity, 0) < 0 
+            WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0)) <= 0 
             THEN 0 
+            WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0)) - ISNULL(bl_dest.MaxNecessity, 0) < 0 
+            THEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0))  -- Return available if positive but not enough
             ELSE 
                 CASE 
                     WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0)) > 
