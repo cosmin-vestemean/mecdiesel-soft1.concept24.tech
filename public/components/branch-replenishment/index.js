@@ -13,15 +13,6 @@ import { BranchReplenishmentState } from './utils/state-management.js';
  * Provides interface for managing stock replenishment between branches
  */
 export class BranchReplenishment extends LitElement {
-  static get styles() {
-    return [branchReplenishmentStyles];
-  }
-
-  createRenderRoot() {
-    const root = super.createRenderRoot();
-    return root;
-  }
-
   static get properties() {
     return {
       branchesEmit: { type: String },
@@ -46,6 +37,10 @@ export class BranchReplenishment extends LitElement {
       viewMode: { type: String }, // 'normal' or 'zen' mode
       columnFilters: { type: Object } // Numerical column filters
     };
+  }
+
+  createRenderRoot() {
+    return this;
   }
 
   constructor() {
@@ -405,47 +400,28 @@ export class BranchReplenishment extends LitElement {
    * Filter data based on current filter settings
    */
   filterData() {
-    let filtered = this.data;
-
-    if (this.searchTerm) {
-      const term = this.searchTerm.toLowerCase();
-      filtered = filtered.filter(item =>
-        (item.Cod && item.Cod.toLowerCase().includes(term)) ||
-        (item.Descriere && item.Descriere.toLowerCase().includes(term))
-      );
-    }
-
-    if (this.transferFilter !== 'all') {
-      filtered = filtered.filter(item => {
-        const transfer = parseFloat(item.transfer || 0);
-        return this.transferFilter === 'positive' ? transfer > 0 : transfer === 0;
-      });
-    }
-
-    if (this.destinationFilter !== 'all') {
-      filtered = filtered.filter(item =>
-        item.Destinatie === this.destinationFilter
-      );
-    }
-
-    if (this.stockStatusFilter !== 'all') {
-      filtered = filtered.filter(item => {
-        const stockClass = getStockClass(item.stoc_dest, item.min_dest, item.max_dest);
-        switch (this.stockStatusFilter) {
-          case 'critical':
-            return stockClass.includes('stock-critical');
-          case 'optimal':
-            return stockClass.includes('stock-optimal');
-          case 'high':
-            return stockClass.includes('stock-high');
-          case 'undefined':
-            return stockClass.includes('stock-undefined');
-          default:
-            return true;
-        }
-      });
-    }
-
+    const filters = {
+      searchTerm: this.searchTerm,
+      transferFilter: this.transferFilter,
+      destinationFilter: this.destinationFilter,
+      stockStatusFilter: this.stockStatusFilter
+    };
+    
+    // Start with basic filtering
+    let filtered = filterData(this.data, filters, getStockClass);
+    
+    // Apply numerical column filters
+    Object.entries(this.columnFilters).forEach(([column, filter]) => {
+      if (filter.active) {
+        filtered = filtered.filter(item => {
+          const value = parseFloat(item[column]);
+          const min = filter.min !== null ? filter.min : -Infinity;
+          const max = filter.max !== null ? filter.max : Infinity;
+          return value >= min && value <= max;
+        });
+      }
+    });
+    
     return filtered;
   }
 
@@ -490,12 +466,12 @@ export class BranchReplenishment extends LitElement {
         <td>${item.Destinatie}</td>
         <td class="${item.Blacklisted === 'Da' ? 'text-danger fw-bold' : ''}">${item.Blacklisted}</td>
         <td class="${item.InLichidare === 'Da' ? 'text-warning fw-bold' : ''}">${item.InLichidare}</td>
-        <td class="group-source ${getStockClass(item.stoc_emit, item.min_emit, item.max_emit)}">${item.stoc_emit}</td>
+        <td class="group-source ${getStockClass(item.stoc_emit, item.min_emit, item.max_emit)}">${renderStockValue(item.stoc_emit, item.min_emit, item.max_emit, html)}</td>
         <td class="group-source ${getValueClass(item.min_emit)}">${item.min_emit}</td>
         <td class="group-source ${getValueClass(item.max_emit)}">${item.max_emit}</td>
         <td class="group-source vertical-divider ${getValueClass(item.disp_min_emit)}">${item.disp_min_emit}</td>
         <td class="group-source ${getValueClass(item.disp_max_emit)}">${item.disp_max_emit}</td>
-        <td class="group-destination vertical-divider ${getStockClass(item.stoc_dest, item.min_dest, item.max_dest)}">${item.stoc_dest}</td>
+        <td class="group-destination vertical-divider ${getStockClass(item.stoc_dest, item.min_dest, item.max_dest)}">${renderStockValue(item.stoc_dest, item.min_dest, item.max_dest, html)}</td>
         <td class="group-destination ${getValueClass(item.min_dest)}">${item.min_dest}</td>
         <td class="group-destination ${getValueClass(item.max_dest)}">${item.max_dest}</td>
         <td class="group-destination vertical-divider ${getValueClass(item.comenzi)}">${item.comenzi}</td>
