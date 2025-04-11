@@ -466,12 +466,12 @@ export class BranchReplenishment extends LitElement {
         <td>${item.Destinatie}</td>
         <td class="${item.Blacklisted === 'Da' ? 'text-danger fw-bold' : ''}">${item.Blacklisted}</td>
         <td class="${item.InLichidare === 'Da' ? 'text-warning fw-bold' : ''}">${item.InLichidare}</td>
-        <td class="group-source ${getStockClass(item.stoc_emit, item.min_emit, item.max_emit)}">${renderStockValue(item.stoc_emit, item.min_emit, item.max_emit, html)}</td>
+        <td class="group-source">${renderStockValue(item.stoc_emit, item.min_emit, item.max_emit, html)}</td>
         <td class="group-source ${getValueClass(item.min_emit)}">${item.min_emit}</td>
         <td class="group-source ${getValueClass(item.max_emit)}">${item.max_emit}</td>
         <td class="group-source vertical-divider ${getValueClass(item.disp_min_emit)}">${item.disp_min_emit}</td>
         <td class="group-source ${getValueClass(item.disp_max_emit)}">${item.disp_max_emit}</td>
-        <td class="group-destination vertical-divider ${getStockClass(item.stoc_dest, item.min_dest, item.max_dest)}">${renderStockValue(item.stoc_dest, item.min_dest, item.max_dest, html)}</td>
+        <td class="group-destination vertical-divider">${renderStockValue(item.stoc_dest, item.min_dest, item.max_dest, html)}</td>
         <td class="group-destination ${getValueClass(item.min_dest)}">${item.min_dest}</td>
         <td class="group-destination ${getValueClass(item.max_dest)}">${item.max_dest}</td>
         <td class="group-destination vertical-divider ${getValueClass(item.comenzi)}">${item.comenzi}</td>

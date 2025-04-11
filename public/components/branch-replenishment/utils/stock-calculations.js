@@ -6,6 +6,7 @@
  * @returns {string} CSS class name for styling
  */
 export function getStockClass(value, minLimit, maxLimit) {
+  // Convert inputs to numbers
   const stock = parseFloat(value);
   const min = parseFloat(minLimit);
   const max = parseFloat(maxLimit);
@@ -53,12 +54,11 @@ export function getValueClass(value) {
  * @param {string|number} value - The stock value
  * @param {string|number} minLimit - Minimum stock limit
  * @param {string|number} maxLimit - Maximum stock limit
+ * @param {Function} html - The lit-html template function
  * @returns {Function} Lit HTML template function for rendering the stock value
  */
 export function renderStockValue(value, minLimit, maxLimit, html) {
   const stockClass = getStockClass(value, minLimit, maxLimit);
-  if (stockClass.includes('stock-optimal')) {
-    return html`<span>${value}</span>`;
-  }
-  return value;
+  // Always wrap the value in a span with the appropriate class
+  return html`<span class="${stockClass}">${value}</span>`;
 }
