@@ -6,7 +6,6 @@
  * @returns {string} CSS class name for styling
  */
 export function getStockClass(value, minLimit, maxLimit) {
-  // Convert inputs to numbers
   const stock = parseFloat(value);
   const min = parseFloat(minLimit);
   const max = parseFloat(maxLimit);
@@ -21,17 +20,17 @@ export function getStockClass(value, minLimit, maxLimit) {
   
   // Optimal stock level (between min and max)
   if (!isNaN(min) && !isNaN(max) && stock >= min && stock <= max) {
-    return 'text-dark stock-optimal';
+    return 'stock-optimal';
   }
   
   // Over-stock situation (above maximum)
   if (!isNaN(max) && stock > max) {
-    return 'text-success stock-high';
+    return 'stock-high';
   }
   
   // If min/max not defined but stock exists - use text-warning
   if (stock > 0) {
-    return 'text-warning stock-undefined';
+    return 'stock-undefined';
   }
   
   // No stock
@@ -59,6 +58,5 @@ export function getValueClass(value) {
  */
 export function renderStockValue(value, minLimit, maxLimit, html) {
   const stockClass = getStockClass(value, minLimit, maxLimit);
-  // Always wrap the value in a span with the appropriate class
-  return html`<span class="${stockClass}">${value}</span>`;
+  return value;
 }
