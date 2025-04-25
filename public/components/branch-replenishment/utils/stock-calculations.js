@@ -50,15 +50,17 @@ export function getValueClass(value) {
 
 /**
  * Wraps a stock value in a styled span element based on stock status
+ * This now ensures the stock value is clearly visible and not obscured by indicators
+ * 
  * @param {string|number} value - The stock value
  * @param {string|number} minLimit - Minimum stock limit
  * @param {string|number} maxLimit - Maximum stock limit
- * @returns {Function} Lit HTML template function for rendering the stock value
+ * @param {function} html - Lit-html templating function
+ * @returns {*} Lit HTML template result for rendering the stock value
  */
 export function renderStockValue(value, minLimit, maxLimit, html) {
   const stockClass = getStockClass(value, minLimit, maxLimit);
-  if (stockClass.includes('stock-optimal')) {
-    return html`<span>${value}</span>`;
-  }
-  return value;
+  
+  // Return span with proper spacing to ensure value is not obscured by indicator
+  return html`<span class="${stockClass}">${value}</span>`;
 }

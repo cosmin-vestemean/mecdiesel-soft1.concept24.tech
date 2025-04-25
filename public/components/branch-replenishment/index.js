@@ -13,6 +13,10 @@ import { BranchReplenishmentState } from './utils/state-management.js';
  * Provides interface for managing stock replenishment between branches
  */
 export class BranchReplenishment extends LitElement {
+  static get styles() {
+    return branchReplenishmentStyles;
+  }
+
   static get properties() {
     return {
       branchesEmit: { type: String },
@@ -40,7 +44,18 @@ export class BranchReplenishment extends LitElement {
   }
 
   createRenderRoot() {
-    return this;
+    // Use light DOM, but ensure styles are properly applied
+    const root = this;
+    
+    // Apply component styles to document
+    if (!document.querySelector('#branch-replenishment-styles')) {
+      const styleElement = document.createElement('style');
+      styleElement.id = 'branch-replenishment-styles';
+      styleElement.textContent = branchReplenishmentStyles.cssText;
+      document.head.appendChild(styleElement);
+    }
+    
+    return root;
   }
 
   constructor() {
@@ -83,6 +98,59 @@ export class BranchReplenishment extends LitElement {
       'comenzi': { min: null, max: null, active: false },
       'transf_nerec': { min: null, max: null, active: false }
     };
+  }
+
+  /**
+   * First updated lifecycle callback
+   * Used to force apply styles to elements after first render
+   */
+  firstUpdated() {
+    // Force style application after first render
+    this.applyStockIndicatorStyles();
+  }
+
+  /**
+   * Updated lifecycle callback
+   * Used to reapply styles when data changes
+   */
+  updated(changedProperties) {
+    // Call parent method to setup tooltips
+    const tooltipTriggerList = [].slice.call(this.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.forEach(tooltipTriggerEl => {
+      new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Re-apply styles when data changes
+    if (changedProperties.has('data') || 
+        changedProperties.has('stockStatusFilter') || 
+        changedProperties.has('transferFilter') ||
+        changedProperties.has('destinationFilter')) {
+      this.applyStockIndicatorStyles();
+    }
+  }
+
+  /**
+   * Force browser to apply stock indicator styles
+   * This is needed because sometimes the CSS pseudo-elements don't get applied correctly in light DOM
+   */
+  applyStockIndicatorStyles() {
+    // Force DOM repaint for stock indicators
+    setTimeout(() => {
+      // Get all elements with stock indicator classes
+      const stockElements = this.querySelectorAll('.stock-critical, .stock-optimal, .stock-high');
+      
+      // Trigger browser reflow for each element
+      stockElements.forEach(element => {
+        // Reading offsetHeight triggers reflow
+        void element.offsetHeight;
+      });
+      
+      // Ensure legend indicators are styled
+      const legendIndicators = this.querySelectorAll('.legend-indicator');
+      legendIndicators.forEach(indicator => {
+        void indicator.offsetHeight;
+      });
+    }, 0);
   }
 
   /**
@@ -440,16 +508,6 @@ export class BranchReplenishment extends LitElement {
   }
 
   /**
-   * Setup tooltips after component update
-   */
-  updated() {
-    const tooltipTriggerList = [].slice.call(this.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.forEach(tooltipTriggerEl => {
-      new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-  }
-
-  /**
    * Render a single table row
    */
   renderRow(item, index) {
@@ -466,12 +524,16 @@ export class BranchReplenishment extends LitElement {
         <td>${item.Destinatie}</td>
         <td class="${item.Blacklisted === 'Da' ? 'text-danger fw-bold' : ''}">${item.Blacklisted}</td>
         <td class="${item.InLichidare === 'Da' ? 'text-warning fw-bold' : ''}">${item.InLichidare}</td>
-        <td class="group-source ${getStockClass(item.stoc_emit, item.min_emit, item.max_emit)}">${renderStockValue(item.stoc_emit, item.min_emit, item.max_emit, html)}</td>
+        <td class="group-source">
+          <span class="${getStockClass(item.stoc_emit, item.min_emit, item.max_emit)}">${item.stoc_emit}</span>
+        </td>
         <td class="group-source ${getValueClass(item.min_emit)}">${item.min_emit}</td>
         <td class="group-source ${getValueClass(item.max_emit)}">${item.max_emit}</td>
         <td class="group-source vertical-divider ${getValueClass(item.disp_min_emit)}">${item.disp_min_emit}</td>
         <td class="group-source ${getValueClass(item.disp_max_emit)}">${item.disp_max_emit}</td>
-        <td class="group-destination vertical-divider ${getStockClass(item.stoc_dest, item.min_dest, item.max_dest)}">${renderStockValue(item.stoc_dest, item.min_dest, item.max_dest, html)}</td>
+        <td class="group-destination vertical-divider">
+          <span class="${getStockClass(item.stoc_dest, item.min_dest, item.max_dest)}">${item.stoc_dest}</span>
+        </td>
         <td class="group-destination ${getValueClass(item.min_dest)}">${item.min_dest}</td>
         <td class="group-destination ${getValueClass(item.max_dest)}">${item.max_dest}</td>
         <td class="group-destination vertical-divider ${getValueClass(item.comenzi)}">${item.comenzi}</td>
@@ -499,7 +561,7 @@ export class BranchReplenishment extends LitElement {
   }
 
   /**
-   * Render destination dropdown
+   * Render destination dropdown with improved UI
    */
   renderDestinationDropdown() {
     const filteredBranches = this.destSearchTerm
@@ -512,14 +574,21 @@ export class BranchReplenishment extends LitElement {
       <div class="fancy-dropdown-menu" @click="${this.handleDropdownClick}">
         <div class="fancy-dropdown-header">
           <div class="input-group input-group-sm">
-            <input type="text" class="form-control" placeholder="Search branches..." 
+            <span class="input-group-text bg-light border-end-0">
+              <i class="bi bi-search"></i>
+            </span>
+            <input type="text" class="form-control border-start-0" placeholder="Search branches..." 
                    .value="${this.destSearchTerm}" 
                    @input="${e => this.destSearchTerm = e.target.value}" />
           </div>
         </div>
         <div class="fancy-dropdown-actions">
-          <button class="btn btn-sm btn-link" @click="${this.selectAllDestBranches}">Select All</button>
-          <button class="btn btn-sm btn-link" @click="${this.clearDestBranches}">Clear All</button>
+          <button class="btn btn-link btn-sm" @click="${this.selectAllDestBranches}">
+            <i class="bi bi-check-all me-1"></i>Select All
+          </button>
+          <button class="btn btn-link btn-sm" @click="${this.clearDestBranches}">
+            <i class="bi bi-x-lg me-1"></i>Clear All
+          </button>
         </div>
         <div class="fancy-dropdown-items">
           ${filteredBranches.map(([code, name]) => html`
@@ -529,7 +598,7 @@ export class BranchReplenishment extends LitElement {
                        .checked="${this.selectedDestBranches.includes(code)}"
                        @click="${e => this.toggleDestBranch(code, e)}" />
                 <label class="form-check-label" for="dest-${code}">
-                  ${code} - ${name}
+                  <span class="fw-bold">${code}</span> - ${name}
                 </label>
               </div>
             </div>
@@ -593,221 +662,245 @@ export class BranchReplenishment extends LitElement {
 
     return html`
       <div class="container-fluid ${zenModeClass}">
-        ${this.error ? html`<div class="alert alert-danger">${this.error}</div>` : ''}
+        ${this.error ? html`<div class="alert alert-danger py-1 px-2 small">${this.error}</div>` : ''}
         
-        <div class="card mb-3 border-light shadow-sm">
-          <div class="card-body p-3">
-            <div class="row">
-              <div class="col-md-9">
-                <div class="row align-items-center">
-                  <div class="col-md-4">
-                    <div class="input-group input-group-sm">
-                      <span class="input-group-text">Source</span>
-                      <select class="form-select" 
-                             .value="${this.branchesEmit}"
-                             @change="${e => this.branchesEmit = e.target.value}"
-                             ?disabled="${this.loading}">
-                        <option value="">Select source branch</option>
-                        ${Object.entries(this.branches).map(([code, name]) => html`
-                          <option value="${code}">${code} - ${name}</option>
-                        `)}
-                      </select>
+        <!-- Control Area - Can be collapsed in Zen mode -->
+        <div class="control-area">
+          <div class="card mb-2 border-light shadow-sm">
+            <div class="card-body p-2">
+              <div class="row g-2 align-items-center">
+                <div class="col-md-9">
+                  <div class="row g-2 align-items-center">
+                    <div class="col-md-4">
+                      <div class="input-group input-group-sm">
+                        <span class="input-group-text">Source</span>
+                        <select class="form-select" 
+                               .value="${this.branchesEmit}"
+                               @change="${e => this.branchesEmit = e.target.value}"
+                               ?disabled="${this.loading}">
+                          <option value="">Select source branch</option>
+                          ${Object.entries(this.branches).map(([code, name]) => html`
+                            <option value="${code}">${code} - ${name}</option>
+                          `)}
+                        </select>
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div class="col-md-4">
-                    <div class="input-group input-group-sm fancy-dropdown">
-                      <span class="input-group-text">Destination</span>
-                      <button class="form-select fancy-dropdown-toggle text-start" 
-                              @click="${this.toggleDestinationDropdown}"
-                              ?disabled="${this.loading}">
-                        ${this.getDestBranchesDisplayText()}
+                    
+                    <div class="col-md-4">
+                      <div class="input-group input-group-sm fancy-dropdown">
+                        <span class="input-group-text">Destination</span>
+                        <button class="form-select fancy-dropdown-toggle text-start" 
+                                @click="${this.toggleDestinationDropdown}"
+                                ?disabled="${this.loading}">
+                          ${this.getDestBranchesDisplayText()}
+                        </button>
+                        ${this.showDestDropdown ? this.renderDestinationDropdown() : ''}
+                      </div>
+                    </div>
+                    
+                    <div class="col-md-4 d-flex gap-1 align-items-center">
+                      <div class="form-check form-switch" data-bs-toggle="tooltip" data-bs-placement="top" 
+                           data-bs-trigger="hover"
+                           title="Affects data loading: filters items based on necessity conditions at destination">
+                        <input class="form-check-input" type="checkbox"
+                               id="setConditionForNecesar"
+                               .checked="${this.setConditionForNecesar}"
+                               @change="${e => this.setConditionForNecesar = e.target.checked}"
+                               ?disabled="${this.loading}">
+                        <label class="form-check-label small" for="setConditionForNecesar">
+                            Necesar
+                        </label>
+                      </div>
+                      
+                      <div class="form-check form-switch" data-bs-toggle="tooltip" data-bs-placement="top" 
+                           data-bs-trigger="hover"
+                           title="Affects data loading: only shows items with min/max limits defined">
+                        <input class="form-check-input" type="checkbox"
+                               id="setConditionForLimits"
+                               .checked="${this.setConditionForLimits}"
+                               @change="${e => this.setConditionForLimits = e.target.checked}"
+                               ?disabled="${this.loading}">
+                        <label class="form-check-label small" for="setConditionForLimits">
+                            Min/Max
+                        </label>
+                      </div>
+                      
+                      <button class="btn btn-sm btn-primary" @click="${this.loadData}" ?disabled="${this.loading}">
+                        ${this.loading ?
+                          html`<span class="spinner-border spinner-border-sm me-1"></span> Loading...` :
+                          html`<i class="bi bi-arrow-repeat me-1"></i> Load`}
                       </button>
-                      ${this.showDestDropdown ? this.renderDestinationDropdown() : ''}
                     </div>
                   </div>
-                  
-                  <div class="col-md-4 d-flex align-items-center">
-                    <div class="form-check form-switch me-3" data-bs-toggle="tooltip" data-bs-placement="top" 
-                         data-bs-trigger="hover"
-                         title="Affects data loading: filters items based on necessity conditions at destination">
-                      <input class="form-check-input" type="checkbox"
-                             id="setConditionForNecesar"
-                             .checked="${this.setConditionForNecesar}"
-                             @change="${e => this.setConditionForNecesar = e.target.checked}"
-                             ?disabled="${this.loading}">
-                      <label class="form-check-label" for="setConditionForNecesar">
-                          Conditie Necesar
-                      </label>
-                    </div>
-                    
-                    <div class="form-check form-switch me-3" data-bs-toggle="tooltip" data-bs-placement="top" 
-                         data-bs-trigger="hover"
-                         title="Affects data loading: only shows items with min/max limits defined">
-                      <input class="form-check-input" type="checkbox"
-                             id="setConditionForLimits"
-                             .checked="${this.setConditionForLimits}"
-                             @change="${e => this.setConditionForLimits = e.target.checked}"
-                             ?disabled="${this.loading}">
-                      <label class="form-check-label" for="setConditionForLimits">
-                          Limite Min/Max
-                      </label>
-                    </div>
-                    
-                    <button class="btn btn-sm btn-primary" @click="${this.loadData}" ?disabled="${this.loading}">
-                      ${this.loading ?
-        html`<span class="spinner-border spinner-border-sm me-1"></span> Loading...` :
-        html`<i class="bi bi-arrow-repeat me-1"></i> Load Data`}
+                </div>
+                
+                <div class="col-md-3 text-end">
+                  <div class="btn-group btn-group-sm">
+                    <button class="btn btn-success" @click="${this.saveData}" ?disabled="${this.loading}">
+                      <i class="bi bi-save"></i> Save
+                    </button>
+                    <button class="btn btn-secondary" @click="${this.exportToExcel}" ?disabled="${this.loading}">
+                      <i class="bi bi-file-excel"></i> Export
+                    </button>
+                    <button class="btn btn-outline-secondary" @click="${this.toggleZenMode}" title="Toggle zen mode">
+                      <i class="bi ${this.viewMode === 'zen' ? 'bi-fullscreen-exit' : 'bi-fullscreen'}"></i>
                     </button>
                   </div>
                 </div>
               </div>
-              
-              <div class="col-md-3 text-end">
-                <button class="btn btn-sm btn-outline-secondary me-1" @click="${this.toggleZenMode}" ?disabled="${this.loading}">
-                  <i class="bi bi-fullscreen me-1"></i> ${this.viewMode === 'zen' ? 'Normal View' : 'Zen Mode'}
-                </button>
-                <button class="btn btn-sm btn-success me-1" @click="${this.saveData}" ?disabled="${this.loading}">
-                  <i class="bi bi-save me-1"></i> Save
-                </button>
-                <button class="btn btn-sm btn-secondary" @click="${this.exportToExcel}" ?disabled="${this.loading}">
-                  <i class="bi bi-file-excel me-1"></i> Export
-                </button>
-              </div>
             </div>
           </div>
         </div>
-        
-        <div class="d-flex justify-content-between mb-3">
-          <div class="d-flex gap-2 flex-grow-1">
-            <div class="input-group input-group-sm" style="max-width: 400px;">
-              <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-              <input type="text" class="form-control" placeholder="Search by code or description..."
+
+        <!-- Auto Replenishment Control -->
+        <div class="d-flex align-items-center gap-1 py-1">
+          <label class="col-form-label-sm fw-bold small mb-0">Auto Replenishment:</label>
+          <select class="form-select form-select-sm" 
+                  .value="${this.selectedReplenishmentStrategy}"
+                  @change="${e => this.selectedReplenishmentStrategy = e.target.value}"
+                  ?disabled="${this.loading}"
+                  style="width: auto;">
+            <option value="none">Select Strategy</option>
+            <option value="min">Apply Min Quantities</option>
+            <option value="max">Apply Max Quantities</option>
+            <option value="skip_blacklisted">Skip Blacklisted Items</option>
+            <option value="clear">Clear All Transfers</option>
+          </select>
+          <button class="btn btn-sm btn-primary" @click="${this.applyReplenishmentStrategy}" ?disabled="${this.loading}">
+            Apply
+          </button>
+          <div class="form-check form-switch ms-2">
+            <input class="form-check-input" type="checkbox" id="successiveStrategy"
+                   .checked="${this.isSuccessiveStrategy}"
+                   @change="${e => this.isSuccessiveStrategy = e.target.checked}">
+            <label class="form-check-label small" for="successiveStrategy">
+              Apply to zeros only
+            </label>
+          </div>
+          <div class="ms-auto d-flex align-items-center gap-2">
+            <div class="input-group input-group-sm" style="width: 220px;">
+              <span class="input-group-text bg-white py-0 px-2"><i class="bi bi-search"></i></span>
+              <input type="text" class="form-control form-control-sm py-0" placeholder="Search..."
                      .value="${this.searchTerm}" 
                      @input="${e => { this.searchTerm = e.target.value; this.requestUpdate(); }}" />
               ${this.searchTerm ? html`
-                <button class="btn btn-outline-secondary" @click="${() => { this.searchTerm = ''; this.requestUpdate(); }}">
+                <button class="btn btn-sm btn-outline-secondary py-0 px-2" @click="${() => { this.searchTerm = ''; this.requestUpdate(); }}">
                   <i class="bi bi-x"></i>
                 </button>` : ''}
             </div>
-            
-            <div class="btn-group btn-group-sm" role="group">
-              <input type="radio" class="btn-check" name="transferFilter" id="all"
-                     .checked="${this.transferFilter === 'all'}"
-                     @change="${() => { this.transferFilter = 'all'; this.requestUpdate(); }}"
-                     autocomplete="off">
-              <label class="btn btn-outline-secondary" for="all">All Items</label>
-              
-              <input type="radio" class="btn-check" name="transferFilter" id="positive"
-                     .checked="${this.transferFilter === 'positive'}"
-                     @change="${() => { this.transferFilter = 'positive'; this.requestUpdate(); }}"
-                     autocomplete="off">
-              <label class="btn btn-outline-secondary" for="positive">With Transfer</label>
-              
-              <input type="radio" class="btn-check" name="transferFilter" id="zero"
-                     .checked="${this.transferFilter === 'zero'}"
-                     @change="${() => { this.transferFilter = 'zero'; this.requestUpdate(); }}"
-                     autocomplete="off">
-              <label class="btn btn-outline-secondary" for="zero">No Transfer</label>
-            </div>
-          </div>
-          
-          <div class="text-muted small align-self-center">
-            ${filteredCount === totalCount
-        ? html`Showing all <span class="fw-bold">${totalCount}</span> items`
-        : html`Showing <span class="fw-bold">${filteredCount}</span> of <span class="fw-bold">${totalCount}</span> items`}
+            <span class="badge text-bg-secondary fs-6">
+              ${filteredCount === totalCount
+                ? html`${totalCount}`
+                : html`${filteredCount}/${totalCount}`}
+            </span>
           </div>
         </div>
         
-        <div class="card mb-3 bg-light border-light">
-          <div class="card-body p-2">
-            <div class="row align-items-center">
-              <div class="col-auto">
-                <label class="col-form-label-sm fw-bold">Auto Replenishment:</label>
-              </div>
-              <div class="col-auto">
-                <select class="form-select form-select-sm" 
-                        .value="${this.selectedReplenishmentStrategy}"
-                        @change="${e => this.selectedReplenishmentStrategy = e.target.value}"
-                        ?disabled="${this.loading}"
-                        style="width: auto;">
-                  <option value="none">Select Strategy</option>
-                  <option value="min">Apply Min Quantities</option>
-                  <option value="max">Apply Max Quantities</option>
-                  <option value="skip_blacklisted">Skip Blacklisted Items</option>
-                  <option value="clear">Clear All Transfers</option>
-                </select>
-              </div>
-              <div class="col-auto">
-                <button class="btn btn-sm btn-primary" @click="${this.applyReplenishmentStrategy}" ?disabled="${this.loading}">
-                  Apply
-                </button>
-              </div>
-              <div class="col-auto ms-2">
-                <div class="form-check form-switch">
-                  <input class="form-check-input" type="checkbox" id="successiveStrategy"
-                         .checked="${this.isSuccessiveStrategy}"
-                         @change="${e => this.isSuccessiveStrategy = e.target.checked}">
-                  <label class="form-check-label" for="successiveStrategy">
-                    Apply only to remaining zeros
-                  </label>
-                  <i class="bi bi-info-circle text-muted ms-1" 
-                     data-bs-toggle="tooltip" 
-                     title="When enabled, strategies are applied only to items with zero transfers, allowing successive strategy application"></i>
-                </div>
-              </div>
-            </div>
+        <!-- Compact Status Legend -->
+        <div class="status-legend">
+          <div class="legend-item ${this.stockStatusFilter === 'critical' ? 'active' : ''}" 
+               @click="${() => { this.stockStatusFilter = 'critical'; this.requestUpdate(); }}">
+            <div class="legend-indicator critical"></div>
+            <span>Under Min</span>
+            <span class="legend-count">${filteredData.filter(item => 
+              getStockClass(item.stoc_dest, item.min_dest, item.max_dest).includes('stock-critical')).length}</span>
+          </div>
+          <div class="legend-item ${this.stockStatusFilter === 'optimal' ? 'active' : ''}" 
+               @click="${() => { this.stockStatusFilter = 'optimal'; this.requestUpdate(); }}">
+            <div class="legend-indicator optimal"></div>
+            <span>Optimal</span>
+            <span class="legend-count">${filteredData.filter(item => 
+              getStockClass(item.stoc_dest, item.min_dest, item.max_dest).includes('stock-optimal')).length}</span>
+          </div>
+          <div class="legend-item ${this.stockStatusFilter === 'high' ? 'active' : ''}" 
+               @click="${() => { this.stockStatusFilter = 'high'; this.requestUpdate(); }}">
+            <div class="legend-indicator high"></div>
+            <span>Over Max</span>
+            <span class="legend-count">${filteredData.filter(item => 
+              getStockClass(item.stoc_dest, item.min_dest, item.max_dest).includes('stock-high')).length}</span>
+          </div>
+          <div class="legend-item ${this.stockStatusFilter === 'undefined' ? 'active' : ''}" 
+               @click="${() => { this.stockStatusFilter = 'undefined'; this.requestUpdate(); }}">
+            <div class="legend-indicator"></div>
+            <span>No Min/Max</span>
+            <span class="legend-count">${filteredData.filter(item => 
+              getStockClass(item.stoc_dest, item.min_dest, item.max_dest).includes('stock-undefined')).length}</span>
+          </div>
+          <div class="legend-item ${this.stockStatusFilter === 'all' ? 'active' : ''}" 
+               @click="${() => { this.stockStatusFilter = 'all'; this.requestUpdate(); }}">
+            <div class="legend-indicator"></div>
+            <span>All</span>
+            <span class="legend-count">${filteredData.length}</span>
           </div>
         </div>
         
-        <!-- Stock Status Legend -->
-        ${this.renderStockStatusLegend(filteredData)}
-        
-        <!-- Table Container with Sticky Header -->
-        <div class="table-container">
-          <table class="table table-sm table-hover table-responsive modern-table compact-table">
-            <thead class="sticky-top bg-light">
-              <tr>
-                <th>#</th>
+        <!-- Data Table -->
+        <div class="table-responsive">
+          <table class="table table-sm table-hover compact-table">
+            <thead class="sticky-top">
+              <tr class="table-row-compact">
+                <th class="text-center" style="width: 40px;">#</th>
                 <th style="display:none;">keyField</th>
-                <th style="display:none;">mtrl</th>
-                <th>Cod</th>
-                <th>Descriere</th>
+                <th style="width: 80px;">Cod</th>
+                <th style="width: 180px;">Descriere</th>
                 <th style="display:none">Branch</th>
-                <th>
-                  <div class="input-group input-group-sm">
-                    <select class="form-select form-select-sm border-0 bg-light"
-                            .value="${this.destinationFilter}"
-                            @change="${e => {
-        this.destinationFilter = e.target.value;
-        this.requestUpdate();
-      }}">
-                      <option value="all">All Dest.</option>
-                      ${uniqueDestinations.map(dest => html`
-                        <option value="${dest}">${dest}</option>
-                      `)}
-                    </select>
+                <th style="width: 70px;">
+                  <select class="form-select form-select-sm border-0 bg-transparent p-0" 
+                          style="height: 22px; font-size: 0.75rem;"
+                          .value="${this.destinationFilter}"
+                          @change="${e => {
+                            this.destinationFilter = e.target.value;
+                            this.requestUpdate();
+                          }}">
+                    <option value="all">Dest.</option>
+                    ${uniqueDestinations.map(dest => html`
+                      <option value="${dest}">${dest}</option>
+                    `)}
+                  </select>
+                </th>
+                <th style="width: 40px;" title="Blacklisted">BL</th>
+                <th style="width: 40px;" title="In Lichidare">IL</th>
+                <th class="group-source">SE</th>
+                <th class="group-source">MinE</th>
+                <th class="group-source">MaxE</th>
+                <th class="group-source vertical-divider">DMin</th>
+                <th class="group-source">DMax</th>
+                <th class="group-destination vertical-divider">SD</th>
+                <th class="group-destination">MinD</th>
+                <th class="group-destination">MaxD</th>
+                <th class="group-destination vertical-divider" title="Orders">Com</th>
+                <th class="group-destination" title="In Transit">TrIn</th>
+                <th class="group-necessity vertical-divider">NecM</th>
+                <th class="group-necessity">NecX</th>
+                <th class="group-necessity">NMC</th>
+                <th class="group-necessity">NXC</th>
+                <th class="group-action vertical-divider">CMin</th>
+                <th class="group-action">CMax</th>
+                <th class="group-action">Trf</th>
+              </tr>
+              <tr class="filter-row">
+                <th colspan="5">
+                  <div class="btn-group btn-group-sm">
+                    <input type="radio" class="btn-check" name="transferFilter" id="all"
+                           .checked="${this.transferFilter === 'all'}"
+                           @change="${() => { this.transferFilter = 'all'; this.requestUpdate(); }}"
+                           autocomplete="off">
+                    <label class="btn btn-outline-secondary btn-xxs py-0" for="all">All</label>
+                    
+                    <input type="radio" class="btn-check" name="transferFilter" id="positive"
+                           .checked="${this.transferFilter === 'positive'}"
+                           @change="${() => { this.transferFilter = 'positive'; this.requestUpdate(); }}"
+                           autocomplete="off">
+                    <label class="btn btn-outline-secondary btn-xxs py-0" for="positive">Trans</label>
+                    
+                    <input type="radio" class="btn-check" name="transferFilter" id="zero"
+                           .checked="${this.transferFilter === 'zero'}"
+                           @change="${() => { this.transferFilter = 'zero'; this.requestUpdate(); }}"
+                           autocomplete="off">
+                    <label class="btn btn-outline-secondary btn-xxs py-0" for="zero">Zero</label>
                   </div>
                 </th>
-                <th>Blacklisted</th>
-                <th>In Lichidare</th>
-                <th class="group-source">Stoc Emit</th>
-                <th class="group-source">Min Emit</th>
-                <th class="group-source">Max Emit</th>
-                <th class="group-source vertical-divider">Disp Min</th>
-                <th class="group-source">Disp Max</th>
-                <th class="group-destination vertical-divider">Stoc Dest</th>
-                <th class="group-destination">Min Dest</th>
-                <th class="group-destination">Max Dest</th>
-                <th class="group-destination vertical-divider">Com.</th>
-                <th class="group-destination">In transf.</th>
-                <th class="group-necessity vertical-divider">Nec Min</th>
-                <th class="group-necessity">Nec Max</th>
-                <th class="group-necessity">Nec Min Comp</th>
-                <th class="group-necessity">Nec Max Comp</th>
-                <th class="group-action vertical-divider">Cant Min</th>
-                <th class="group-action">Cant Max</th>
-                <th class="group-action">Transf.</th>
+                <th colspan="18"></th>
               </tr>
             </thead>
             <tbody>
