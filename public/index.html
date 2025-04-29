@@ -10,6 +10,13 @@
     <link rel="stylesheet" href="bootstrap.css" />
     <link rel="stylesheet" href="custom.css" />
     
+    <!-- Branch Replenishment Component CSS -->
+    <link rel="stylesheet" href="components/query-panel.css" />
+    <link rel="stylesheet" href="components/manipulation-panel.css" />
+    <link rel="stylesheet" href="components/strategy-panel.css" />
+    <link rel="stylesheet" href="components/status-legend.css" />
+    <link rel="stylesheet" href="components/data-table.css" />
+    
     <!-- Critical JS that needs to be in head -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     
@@ -219,7 +226,7 @@
           </script>
         </div>
         <div id="branchReplenishContent">
-          <branch-replenishment></branch-replenishment>
+          <branch-replenishment-container></branch-replenishment-container>
         </div>
       </div>
       <!--footer-->
@@ -327,8 +334,11 @@
     <script type="module" src="dataFetching.js"></script>
     <script type="module" src="userInteractions.js"></script>
     <script type="module" src="client.js"></script>
-    <!--<script type="module" src="components/branch-replenishment.js"></script>-->
-    <script type="module" src="components/branch-replenishment/index.js"></script>
+    
+    <!-- Branch Replenishment components -->
+    <script type="module" src="components/branch-replenishment-container.js"></script>
+    <!-- Original component kept for backward compatibility -->
+    <!-- <script type="module" src="components/branch-replenishment.js"></script> -->
     
     <!-- Load print_config content via JavaScript instead of inline script -->
     <script>

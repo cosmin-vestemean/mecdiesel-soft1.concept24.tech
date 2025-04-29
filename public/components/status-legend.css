@@ -1,0 +1,104 @@
+.status-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px; /* Reduced gap */
+  padding: 8px 10px; /* Adjusted padding */
+  background-color: #f8f9fa;
+  border-radius: 5px;
+  border: 1px solid #dee2e6;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.status-legend.disabled-panel {
+    opacity: 0.6;
+    pointer-events: none; /* Prevent interaction when disabled */
+}
+
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  font-size: 0.8rem; /* Slightly smaller font */
+  cursor: pointer;
+  padding: 3px 8px; /* Compact padding */
+  border-radius: 4px;
+  transition: background-color 0.2s, border-color 0.2s;
+  border: 1px solid transparent;
+  white-space: nowrap; /* Prevent wrapping */
+}
+
+.legend-item:hover {
+  background-color: rgba(0,0,0,0.05);
+}
+
+.legend-item.active {
+  background-color: rgba(13, 110, 253, 0.1);
+  border-color: rgba(13, 110, 253, 0.3);
+  font-weight: 500;
+}
+
+.legend-item:not(.active) {
+  opacity: 0.85;
+}
+
+.legend-label {
+    margin-right: 4px;
+}
+
+.legend-count {
+  background-color: rgba(0,0,0,0.08);
+  border-radius: 8px;
+  font-size: 0.7rem; /* Smaller count font */
+  padding: 1px 6px;
+  min-width: 18px; /* Ensure minimum width */
+  text-align: center;
+}
+
+.legend-indicator {
+  width: 18px; /* Smaller indicator */
+  height: 18px;
+  margin-right: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #ccc;
+  background-color: white;
+  position: relative;
+  font-size: 10px;
+  flex-shrink: 0; /* Prevent shrinking */
+  border-radius: 2px; /* Slight rounding */
+}
+
+/* Specific indicator styles */
+.legend-indicator.critical { border-color: #dc3545; }
+.legend-indicator.critical::before {
+  content: "▼";
+  color: #dc3545;
+  font-size: 10px;
+  position: relative;
+  top: -1px;
+}
+
+.legend-indicator.optimal {
+  background-color: rgba(25, 135, 84, 0.1);
+  border-color: rgba(25, 135, 84, 0.4);
+}
+.legend-indicator.optimal::after {
+  content: "✓";
+  color: #0f5132;
+  font-weight: bold;
+  font-size: 11px;
+}
+
+.legend-indicator.high { border-color: #198754; }
+.legend-indicator.high::before {
+  content: "▲";
+  color: #198754;
+  font-size: 10px;
+  position: relative;
+  top: -1px;
+}
+
+.legend-indicator.undefined { border-style: dashed; border-color: #ffc107; }
+/* No specific icon for undefined or all */
+.legend-indicator.all { border-style: dotted; }

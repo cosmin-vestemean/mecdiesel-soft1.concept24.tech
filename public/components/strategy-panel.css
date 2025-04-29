@@ -1,0 +1,31 @@
+.strategy-panel-card {
+    transition: opacity 0.3s ease-in-out;
+}
+
+.strategy-panel-card.disabled-panel {
+    opacity: 0.6;
+    pointer-events: none; /* Prevent interaction when disabled */
+}
+
+.strategy-panel-card .col-form-label-sm {
+    font-size: 0.85rem;
+}
+
+.strategy-panel-card .strategy-select {
+    width: auto;
+    min-width: 180px; /* Ensure dropdown has reasonable width */
+    font-size: 0.85rem;
+}
+
+.strategy-panel-card .apply-button {
+    font-size: 0.85rem;
+}
+
+.strategy-panel-card .successive-switch .form-check-label.small {
+    font-size: 0.8rem;
+    cursor: pointer; /* Indicate label is clickable */
+}
+
+.strategy-panel-card .successive-switch .form-check-input {
+    cursor: pointer;
+}

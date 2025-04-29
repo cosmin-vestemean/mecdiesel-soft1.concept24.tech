@@ -1,0 +1,35 @@
+.manipulation-panel .search-input-group {
+    max-width: 400px;
+}
+
+.manipulation-panel .input-group-text {
+    border-right: 0; /* Remove border between icon and input */
+}
+
+.manipulation-panel .form-control {
+    border-left: 0; /* Remove border between icon and input */
+}
+.manipulation-panel .form-control:focus {
+    box-shadow: none; /* Optional: remove focus shadow */
+    border-color: #ced4da; /* Keep border color consistent on focus */
+}
+
+
+.manipulation-panel .btn-clear-search {
+    border-left: 0; /* Remove border before clear button */
+    z-index: 5; /* Ensure button is clickable */
+}
+.manipulation-panel .btn-clear-search i {
+    vertical-align: middle;
+}
+
+
+.manipulation-panel .transfer-filter-group .btn {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+}
+
+.manipulation-panel .item-count-display {
+    white-space: nowrap; /* Prevent wrapping */
+    font-size: 0.85rem;
+}

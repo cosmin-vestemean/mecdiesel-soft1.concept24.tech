@@ -1,0 +1,142 @@
+.data-table-container {
+    position: relative; /* Needed for overlay */
+    max-height: 65vh; /* Adjust max height as needed */
+    overflow-y: auto; /* Enable vertical scroll */
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+}
+
+.table-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1030; /* Above sticky header */
+}
+
+
+.modern-table {
+    font-size: 0.85rem;
+    margin-bottom: 0; /* Remove default margin */
+}
+
+.modern-table th {
+    white-space: nowrap;
+    padding: 0.4rem 0.5rem; /* Adjust header padding */
+    vertical-align: middle;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+.modern-table td {
+    padding: 0.2rem 0.5rem; /* Adjust cell padding */
+    vertical-align: middle;
+    position: relative; /* For indicators */
+}
+
+.modern-table .text-truncate {
+    max-width: 200px; /* Adjust as needed */
+    display: inline-block; /* Needed for truncation */
+}
+
+
+/* Sticky Header */
+thead.sticky-top {
+  position: sticky;
+  top: 0;
+  z-index: 1020;
+  background-color: #f8f9fa !important; /* Ensure background */
+  box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Vertical Dividers */
+.vertical-divider {
+  border-left: 1px solid #d3d9df;
+}
+th.vertical-divider {
+    border-left: 1px solid #c1c9d1; /* Slightly darker for header */
+}
+
+
+/* Group Backgrounds */
+.group-info { background-color: rgba(230, 240, 255, 0.3); }
+.group-source { background-color: rgba(240, 249, 255, 0.4); }
+.group-destination { background-color: rgba(240, 255, 240, 0.4); }
+.group-necessity { background-color: rgba(255, 248, 240, 0.4); }
+.group-action { background-color: rgba(249, 240, 255, 0.4); }
+
+/* Alternating Row Colors */
+.odd-row { /* background-color: #ffffff; */ } /* Default white */
+.even-row { background-color: rgba(248, 249, 250, 0.5); } /* Very light gray */
+
+/* Hover effect */
+tbody tr:hover {
+    background-color: rgba(220, 235, 255, 0.5) !important; /* Light blue hover */
+}
+
+
+/* Compact Input for Transfer */
+.compact-input {
+  padding: 0.1rem 0.2rem;
+  height: calc(1.5em + 0.2rem + 2px);
+  font-size: 0.8rem;
+  text-align: right;
+  border-radius: 2px;
+  max-width: 70px; /* Adjust width */
+  -moz-appearance: textfield; /* Firefox */
+}
+.compact-input::-webkit-outer-spin-button,
+.compact-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Header Filter Select */
+.header-filter-select {
+    font-size: 0.8rem;
+    font-weight: normal; /* Override bold header */
+    padding: 0.1rem 0.2rem !important; /* Override default padding */
+    min-width: 100px;
+    max-width: 150px;
+    background-image: none; /* Remove default arrow if needed */
+}
+.header-filter-select:focus {
+    box-shadow: none;
+    border-color: transparent;
+}
+
+
+/* Text Color Classes (from utilityFunctions) */
+.text-danger { color: #dc3545 !important; }
+.text-success { color: #198754 !important; }
+.text-warning { color: #ffc107 !important; }
+.text-muted { color: #6c757d !important; }
+.text-dark { color: #212529 !important; }
+.fw-bold { font-weight: bold !important; }
+
+
+/* Stock Status Indicator Styles (applied via classFn or directly in renderCell) */
+.stock-indicator {
+    position: absolute;
+    top: 1px;
+    right: 3px;
+    font-size: 9px;
+    line-height: 1;
+    font-weight: bold;
+    padding: 1px;
+    border-radius: 2px;
+}
+.stock-indicator.critical { color: #dc3545; }
+.stock-indicator.optimal { color: #0f5132; }
+.stock-indicator.high { color: #198754; }
+
+/* Apply base styles from getStockClass */
+td.stock-critical { /* color: #dc3545; */ } /* Color applied by text-danger */
+td.stock-optimal { /* color: #0f5132; */ font-weight: 500; } /* Color applied by text-dark */
+td.stock-high { /* color: #198754; */ } /* Color applied by text-success */
+td.stock-undefined { /* color: #ffc107; */ } /* Color applied by text-warning */
