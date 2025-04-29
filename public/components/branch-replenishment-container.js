@@ -263,12 +263,18 @@ export class BranchReplenishmentContainer extends LitElement {
   get filteredData() {
     let filtered = this.data;
 
-    // Apply search term filter (Code or Description)
+    // Apply search term filter (only on Code and Description by default)
     if (this.searchTerm) {
       const term = this.searchTerm.toLowerCase();
-      const searchColumns = columnConfig.filter(c => c.filterable && c.type === 'string' && !c.isHeaderFilter).map(c => c.key);
+      // Hardcode the specific columns we want to search - Code and Description only
+      const searchColumns = ['Cod', 'Descriere'];
+      
       filtered = filtered.filter(item =>
-          searchColumns.some(key => item[key] && item[key].toLowerCase().includes(term))
+        searchColumns.some(key => {
+          return item[key] && 
+                 typeof item[key] === 'string' && 
+                 item[key].toLowerCase().includes(term);
+        })
       );
     }
 
@@ -365,13 +371,17 @@ export class BranchReplenishmentContainer extends LitElement {
     const { property, value } = e.detail;
     if (this.hasOwnProperty(property)) {
       this[property] = value;
+      console.log('Manipulation update:', property, value);
+      this.requestUpdate();
     }
   }
 
-   _handleStrategyUpdate(e) {
+  _handleStrategyUpdate(e) {
     const { property, value } = e.detail;
     if (this.hasOwnProperty(property)) {
       this[property] = value;
+      console.log('Strategy update:', property, value);
+      this.requestUpdate();
     }
   }
 
@@ -424,6 +434,7 @@ export class BranchReplenishmentContainer extends LitElement {
   }
 
   updated(changedProperties) {
+    console.log('Container updated. searchTerm:', this.searchTerm, 'transferFilter:', this.transferFilter, 'selectedReplenishmentStrategy:', this.selectedReplenishmentStrategy);
     // Initialize tooltips after rendering/updating
     const tooltipTriggerList = this.querySelectorAll('[data-bs-toggle="tooltip"]');
     tooltipTriggerList.forEach(tooltipTriggerEl => {
@@ -444,7 +455,7 @@ export class BranchReplenishmentContainer extends LitElement {
 
   // --- Rendering ---
   render() {
-    const currentFilteredData = this.filteredData; // Use the getter
+    const currentFilteredData = this.filteredData;
     const totalCount = this.data.length;
     const filteredCount = currentFilteredData.length;
 
@@ -484,7 +495,7 @@ export class BranchReplenishmentContainer extends LitElement {
           .transferFilter=${this.transferFilter}
           .totalCount=${totalCount}
           .filteredCount=${filteredCount}
-          @update-property=${this._handleManipulationUpdate}>
+          @update-property=${this._handleManipulationUpdate.bind(this)}>
         </manipulation-panel>
 
         <strategy-panel
@@ -493,7 +504,7 @@ export class BranchReplenishmentContainer extends LitElement {
           .loading=${this.loading}
           ?disabled=${!this.data || this.data.length === 0}
           @apply-strategy=${this._handleApplyStrategy}
-          @update-property=${this._handleStrategyUpdate}>
+          @update-property=${this._handleStrategyUpdate.bind(this)}>
         </strategy-panel>
 
         <status-legend
