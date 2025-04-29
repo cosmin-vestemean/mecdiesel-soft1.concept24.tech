@@ -1,11 +1,9 @@
-import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
+import { LitElement, html, css } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
+import { BranchReplenishmentState } from './utils/state-management.js'; // Corrected path
 import { branchReplenishmentStyles } from './styles.js';
-import { connectToS1 } from '../../dataFetching.js';
-import { client } from '../../socketConfig.js';
-import { getStockClass, getValueClass, renderStockValue } from './utils/stock-calculations.js';
-import { filterData, getUniqueDestinations, getStockStatusCounts } from './utils/filtering.js';
-import { exportToExcel } from './utils/export.js';
-import { BranchReplenishmentState } from './utils/state-management.js';
+import { filterData, getStockClass, getStockStatusCounts, getUniqueDestinations, getValueClass } from './utils/dataUtils.js'; // Assuming utils exist
+import { exportToExcel } from './utils/exportUtils.js'; // Assuming utils exist
+import { columnMask, getVisibleColumns } from './utils/columnConfig.js'; // Import the mask
 
 /**
  * Branch Replenishment Component
@@ -512,39 +510,49 @@ export class BranchReplenishment extends LitElement {
    */
   renderRow(item, index) {
     const descriere = (item.Descriere || '').substring(0, 50);
-    
+    const visibleColumns = getVisibleColumns(); // Get visible columns based on mask
+
+    // Helper to render a cell based on mask visibility
+    const renderCell = (columnKey, content, classes = '', title = '') => {
+      if (columnMask[columnKey]?.visible) {
+        return html`<td class="${classes}" title="${title}">${content}</td>`;
+      }
+      return ''; // Return empty string if column is not visible
+    };
+
     return html`
       <tr>
-        <td class="text-center">${index + 1}</td>
-        <td style="display:none">${item.keyField}</td>
-        <td style="display:none">${item.mtrl}</td>
-        <td>${item.Cod}</td>
-        <td class="text-truncate" style="max-width: 200px;" title="${item.Descriere}">${descriere}</td>
-        <td style="display:none">${item.branchD}</td>
-        <td>${item.Destinatie}</td>
-        <td class="${item.Blacklisted === 'Da' ? 'text-danger fw-bold' : ''}">${item.Blacklisted}</td>
-        <td class="${item.InLichidare === 'Da' ? 'text-warning fw-bold' : ''}">${item.InLichidare}</td>
-        <td class="group-source">
-          <span class="${getStockClass(item.stoc_emit, item.min_emit, item.max_emit)}">${item.stoc_emit}</span>
-        </td>
-        <td class="group-source ${getValueClass(item.min_emit)}">${item.min_emit}</td>
-        <td class="group-source ${getValueClass(item.max_emit)}">${item.max_emit}</td>
-        <td class="group-source vertical-divider ${getValueClass(item.disp_min_emit)}">${item.disp_min_emit}</td>
-        <td class="group-source ${getValueClass(item.disp_max_emit)}">${item.disp_max_emit}</td>
-        <td class="group-destination vertical-divider">
-          <span class="${getStockClass(item.stoc_dest, item.min_dest, item.max_dest)}">${item.stoc_dest}</span>
-        </td>
-        <td class="group-destination ${getValueClass(item.min_dest)}">${item.min_dest}</td>
-        <td class="group-destination ${getValueClass(item.max_dest)}">${item.max_dest}</td>
-        <td class="group-destination vertical-divider ${getValueClass(item.comenzi)}">${item.comenzi}</td>
-        <td class="group-destination ${getValueClass(item.transf_nerec)}">${item.transf_nerec}</td>
-        <td class="group-necessity vertical-divider ${getValueClass(item.nec_min)}">${item.nec_min}</td>
-        <td class="group-necessity ${getValueClass(item.nec_max)}">${item.nec_max}</td>
-        <td class="group-necessity ${getValueClass(item.nec_min_comp)}">${item.nec_min_comp}</td>
-        <td class="group-necessity ${getValueClass(item.nec_max_comp)}">${item.nec_max_comp}</td>
-        <td class="group-action vertical-divider ${getValueClass(item.cant_min)}">${item.cant_min}</td>
-        <td class="group-action ${getValueClass(item.cant_max)}">${item.cant_max}</td>
-        <td class="group-action">
+        ${renderCell('index', index + 1, 'text-center')} {/* Assuming index is always needed */}
+        ${renderCell('Cod', item.Cod)}
+        ${renderCell('Descriere', descriere, 'text-truncate', item.Descriere)}
+        ${renderCell('Destinatie', item.Destinatie)}
+        ${renderCell('Blacklisted', item.Blacklisted, item.Blacklisted === 'Da' ? 'text-danger fw-bold' : '')}
+        ${renderCell('InLichidare', item.InLichidare, item.InLichidare === 'Da' ? 'text-warning fw-bold' : '')}
+        
+        <!-- Source Group -->
+        ${renderCell('stoc_emit', html`<span class="${getStockClass(item.stoc_emit, item.min_emit, item.max_emit)}">${item.stoc_emit}</span>`, 'group-source')}
+        ${renderCell('min_emit', item.min_emit, `group-source ${getValueClass(item.min_emit)}`)}
+        ${renderCell('max_emit', item.max_emit, `group-source ${getValueClass(item.max_emit)}`)}
+        ${renderCell('disp_min_emit', item.disp_min_emit, `group-source vertical-divider ${getValueClass(item.disp_min_emit)}`)}
+        ${renderCell('disp_max_emit', item.disp_max_emit, `group-source ${getValueClass(item.disp_max_emit)}`)}
+
+        <!-- Destination Group -->
+        ${renderCell('stoc_dest', html`<span class="${getStockClass(item.stoc_dest, item.min_dest, item.max_dest)}">${item.stoc_dest}</span>`, 'group-destination vertical-divider')}
+        ${renderCell('min_dest', item.min_dest, `group-destination ${getValueClass(item.min_dest)}`)}
+        ${renderCell('max_dest', item.max_dest, `group-destination ${getValueClass(item.max_dest)}`)}
+        ${renderCell('comenzi', item.comenzi, `group-destination vertical-divider ${getValueClass(item.comenzi)}`)}
+        ${renderCell('transf_nerec', item.transf_nerec, `group-destination ${getValueClass(item.transf_nerec)}`)}
+
+        <!-- Necessity Group -->
+        ${renderCell('nec_min', item.nec_min, `group-necessity vertical-divider ${getValueClass(item.nec_min)}`)}
+        ${renderCell('nec_max', item.nec_max, `group-necessity ${getValueClass(item.nec_max)}`)}
+        ${renderCell('nec_min_comp', item.nec_min_comp, `group-necessity ${getValueClass(item.nec_min_comp)}`)}
+        ${renderCell('nec_max_comp', item.nec_max_comp, `group-necessity ${getValueClass(item.nec_max_comp)}`)}
+
+        <!-- Action Group -->
+        ${renderCell('cant_min', item.cant_min, `group-action vertical-divider ${getValueClass(item.cant_min)}`)}
+        ${renderCell('cant_max', item.cant_max, `group-action ${getValueClass(item.cant_max)}`)}
+        ${renderCell('transfer', html`
           <input
             class="compact-input ${getValueClass(item.transfer)}"
             data-row-index="${index}"
@@ -555,98 +563,8 @@ export class BranchReplenishment extends LitElement {
             @keydown="${this.handleKeyNav}"
             @change="${(e) => this.onTransferChange(e, item)}"
           />
-        </td>
+        `, 'group-action')}
       </tr>
-    `;
-  }
-
-  /**
-   * Render destination dropdown with improved UI
-   */
-  renderDestinationDropdown() {
-    const filteredBranches = this.destSearchTerm
-      ? Object.entries(this.branches).filter(([code, name]) =>
-        code.includes(this.destSearchTerm) ||
-        name.toLowerCase().includes(this.destSearchTerm.toLowerCase()))
-      : Object.entries(this.branches);
-
-    return html`
-      <div class="fancy-dropdown-menu" @click="${this.handleDropdownClick}">
-        <div class="fancy-dropdown-header">
-          <div class="input-group input-group-sm">
-            <span class="input-group-text bg-light border-end-0">
-              <i class="bi bi-search"></i>
-            </span>
-            <input type="text" class="form-control border-start-0" placeholder="Search branches..." 
-                   .value="${this.destSearchTerm}" 
-                   @input="${e => this.destSearchTerm = e.target.value}" />
-          </div>
-        </div>
-        <div class="fancy-dropdown-actions">
-          <button class="btn btn-link btn-sm" @click="${this.selectAllDestBranches}">
-            <i class="bi bi-check-all me-1"></i>Select All
-          </button>
-          <button class="btn btn-link btn-sm" @click="${this.clearDestBranches}">
-            <i class="bi bi-x-lg me-1"></i>Clear All
-          </button>
-        </div>
-        <div class="fancy-dropdown-items">
-          ${filteredBranches.map(([code, name]) => html`
-            <div class="fancy-dropdown-item">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="dest-${code}"
-                       .checked="${this.selectedDestBranches.includes(code)}"
-                       @click="${e => this.toggleDestBranch(code, e)}" />
-                <label class="form-check-label" for="dest-${code}">
-                  <span class="fw-bold">${code}</span> - ${name}
-                </label>
-              </div>
-            </div>
-          `)}
-        </div>
-      </div>
-    `;
-  }
-  
-  /**
-   * Render the stock status legend with clickable filters
-   */
-  renderStockStatusLegend(filteredData) {
-    const statusCounts = getStockStatusCounts(filteredData, getStockClass);
-    
-    return html`
-      <div class="status-legend mb-3">
-        <div class="legend-item ${this.stockStatusFilter === 'critical' ? 'active' : ''}" 
-             @click="${() => { this.stockStatusFilter = 'critical'; this.requestUpdate(); }}">
-          <div class="legend-indicator critical"></div>
-          <span>Under Min Stock</span>
-          <span class="legend-count">${statusCounts.critical}</span>
-        </div>
-        <div class="legend-item ${this.stockStatusFilter === 'optimal' ? 'active' : ''}" 
-             @click="${() => { this.stockStatusFilter = 'optimal'; this.requestUpdate(); }}">
-          <div class="legend-indicator optimal"></div>
-          <span>Optimal Stock (Min-Max)</span>
-          <span class="legend-count">${statusCounts.optimal}</span>
-        </div>
-        <div class="legend-item ${this.stockStatusFilter === 'high' ? 'active' : ''}" 
-             @click="${() => { this.stockStatusFilter = 'high'; this.requestUpdate(); }}">
-          <div class="legend-indicator high"></div>
-          <span>Over Max Stock</span>
-          <span class="legend-count">${statusCounts.high}</span>
-        </div>
-        <div class="legend-item ${this.stockStatusFilter === 'undefined' ? 'active' : ''}" 
-             @click="${() => { this.stockStatusFilter = 'undefined'; this.requestUpdate(); }}">
-          <div class="legend-indicator"></div>
-          <span>No Min/Max Defined</span>
-          <span class="legend-count">${statusCounts.undefined}</span>
-        </div>
-        <div class="legend-item ${this.stockStatusFilter === 'all' ? 'active' : ''}" 
-             @click="${() => { this.stockStatusFilter = 'all'; this.requestUpdate(); }}">
-          <div class="legend-indicator"></div>
-          <span>All Items</span>
-          <span class="legend-count">${statusCounts.all}</span>
-        </div>
-      </div>
     `;
   }
 
@@ -659,11 +577,73 @@ export class BranchReplenishment extends LitElement {
     const filteredCount = filteredData.length;
     const uniqueDestinations = this.getUniqueDestinations();
     const zenModeClass = this.viewMode === 'zen' ? 'zen-mode' : '';
+    const visibleColumns = getVisibleColumns(); // Get visible columns for header
+
+    // Helper to render table headers based on mask
+    const renderHeaders = () => {
+      // Group columns for multi-level headers (optional, but good for complex tables)
+      const groups = {
+        'Info': ['Cod', 'Descriere', 'Destinatie', 'Blacklisted', 'InLichidare'],
+        'Source': ['stoc_emit', 'min_emit', 'max_emit', 'disp_min_emit', 'disp_max_emit'],
+        'Destination': ['stoc_dest', 'min_dest', 'max_dest', 'comenzi', 'transf_nerec'],
+        'Necessity': ['nec_min', 'nec_max', 'nec_min_comp', 'nec_max_comp'],
+        'Action': ['cant_min', 'cant_max', 'transfer']
+      };
+
+      // Calculate colspan for each group based on visible columns
+      const groupColspans = Object.entries(groups).reduce((acc, [groupName, cols]) => {
+        acc[groupName] = cols.filter(colKey => columnMask[colKey]?.visible).length;
+        return acc;
+      }, {});
+
+      return html`
+        <thead>
+          {/* Optional: Group Headers */}
+          <tr>
+            <th rowspan="2" class="text-center">#</th> {/* Index column */}
+            ${Object.entries(groupColspans).map(([groupName, colspan]) => 
+              colspan > 0 ? html`<th colspan="${colspan}" class="text-center group-header">${groupName}</th>` : ''
+            )}
+          </tr>
+          {/* Individual Column Headers */}
+          <tr>
+            ${visibleColumns.map(col => html`
+              <th class="text-center ${col.group ? `group-${col.group.toLowerCase()}` : ''}">
+                ${col.label}
+                {/* Add filter inputs here if needed based on col.filterable and col.type */}
+              </th>
+            `)}
+          </tr>
+        </thead>
+      `;
+    };
 
     return html`
-      <div class="container-fluid ${zenModeClass}">
-        ${this.error ? html`<div class="alert alert-danger py-1 px-2 small">${this.error}</div>` : ''}
-        
+      <div class="branch-replenishment-container ${zenModeClass}">
+        ${this.loading ? html`<div class="text-center p-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>` : ''}
+        ${this.error ? html`<div class="alert alert-danger">${this.error}</div>` : ''}
+
+        ${!this.loading && !this.error && this.data.length > 0 ? html`
+          <div class="table-responsive">
+            <table class="table table-bordered table-hover table-sm data-table">
+              ${renderHeaders()}
+              <tbody>
+                ${filteredData.map((item, index) => this.renderRow(item, index))}
+              </tbody>
+            </table>
+          </div>
+          <div class="text-muted small mt-2">
+            Showing ${filteredCount} of ${totalCount} items.
+          </div>
+        ` : ''}
+
+        ${!this.loading && !this.error && this.data.length === 0 && !this.branchesEmit ? html`
+          <div class="alert alert-info">Please select source and destination branches and click Load Data.</div>
+        ` : ''}
+         ${!this.loading && !this.error && this.data.length === 0 && this.branchesEmit ? html`
+          <div class="alert alert-warning">No data found for the selected criteria.</div>
+        ` : ''}
+
         <!-- Control Area - Can be collapsed in Zen mode -->
         <div class="control-area">
           <div class="card mb-2 border-light shadow-sm">
@@ -750,163 +730,6 @@ export class BranchReplenishment extends LitElement {
               </div>
             </div>
           </div>
-        </div>
-
-        <!-- Auto Replenishment Control -->
-        <div class="d-flex align-items-center gap-1 py-1">
-          <label class="col-form-label-sm fw-bold small mb-0">Auto Replenishment:</label>
-          <select class="form-select form-select-sm" 
-                  .value="${this.selectedReplenishmentStrategy}"
-                  @change="${e => this.selectedReplenishmentStrategy = e.target.value}"
-                  ?disabled="${this.loading}"
-                  style="width: auto;">
-            <option value="none">Select Strategy</option>
-            <option value="min">Apply Min Quantities</option>
-            <option value="max">Apply Max Quantities</option>
-            <option value="skip_blacklisted">Skip Blacklisted Items</option>
-            <option value="clear">Clear All Transfers</option>
-          </select>
-          <button class="btn btn-sm btn-primary" @click="${this.applyReplenishmentStrategy}" ?disabled="${this.loading}">
-            Apply
-          </button>
-          <div class="form-check form-switch ms-2">
-            <input class="form-check-input" type="checkbox" id="successiveStrategy"
-                   .checked="${this.isSuccessiveStrategy}"
-                   @change="${e => this.isSuccessiveStrategy = e.target.checked}">
-            <label class="form-check-label small" for="successiveStrategy">
-              Apply to zeros only
-            </label>
-          </div>
-          <div class="ms-auto d-flex align-items-center gap-2">
-            <div class="input-group input-group-sm" style="width: 220px;">
-              <span class="input-group-text bg-white py-0 px-2"><i class="bi bi-search"></i></span>
-              <input type="text" class="form-control form-control-sm py-0" placeholder="Search..."
-                     .value="${this.searchTerm}" 
-                     @input="${e => { this.searchTerm = e.target.value; this.requestUpdate(); }}" />
-              ${this.searchTerm ? html`
-                <button class="btn btn-sm btn-outline-secondary py-0 px-2" @click="${() => { this.searchTerm = ''; this.requestUpdate(); }}">
-                  <i class="bi bi-x"></i>
-                </button>` : ''}
-            </div>
-            <span class="badge text-bg-secondary fs-6">
-              ${filteredCount === totalCount
-                ? html`${totalCount}`
-                : html`${filteredCount}/${totalCount}`}
-            </span>
-          </div>
-        </div>
-        
-        <!-- Compact Status Legend -->
-        <div class="status-legend">
-          <div class="legend-item ${this.stockStatusFilter === 'critical' ? 'active' : ''}" 
-               @click="${() => { this.stockStatusFilter = 'critical'; this.requestUpdate(); }}">
-            <div class="legend-indicator critical"></div>
-            <span>Under Min</span>
-            <span class="legend-count">${filteredData.filter(item => 
-              getStockClass(item.stoc_dest, item.min_dest, item.max_dest).includes('stock-critical')).length}</span>
-          </div>
-          <div class="legend-item ${this.stockStatusFilter === 'optimal' ? 'active' : ''}" 
-               @click="${() => { this.stockStatusFilter = 'optimal'; this.requestUpdate(); }}">
-            <div class="legend-indicator optimal"></div>
-            <span>Optimal</span>
-            <span class="legend-count">${filteredData.filter(item => 
-              getStockClass(item.stoc_dest, item.min_dest, item.max_dest).includes('stock-optimal')).length}</span>
-          </div>
-          <div class="legend-item ${this.stockStatusFilter === 'high' ? 'active' : ''}" 
-               @click="${() => { this.stockStatusFilter = 'high'; this.requestUpdate(); }}">
-            <div class="legend-indicator high"></div>
-            <span>Over Max</span>
-            <span class="legend-count">${filteredData.filter(item => 
-              getStockClass(item.stoc_dest, item.min_dest, item.max_dest).includes('stock-high')).length}</span>
-          </div>
-          <div class="legend-item ${this.stockStatusFilter === 'undefined' ? 'active' : ''}" 
-               @click="${() => { this.stockStatusFilter = 'undefined'; this.requestUpdate(); }}">
-            <div class="legend-indicator"></div>
-            <span>No Min/Max</span>
-            <span class="legend-count">${filteredData.filter(item => 
-              getStockClass(item.stoc_dest, item.min_dest, item.max_dest).includes('stock-undefined')).length}</span>
-          </div>
-          <div class="legend-item ${this.stockStatusFilter === 'all' ? 'active' : ''}" 
-               @click="${() => { this.stockStatusFilter = 'all'; this.requestUpdate(); }}">
-            <div class="legend-indicator"></div>
-            <span>All</span>
-            <span class="legend-count">${filteredData.length}</span>
-          </div>
-        </div>
-        
-        <!-- Data Table -->
-        <div class="table-responsive">
-          <table class="table table-sm table-hover compact-table">
-            <thead class="sticky-top">
-              <tr class="table-row-compact">
-                <th class="text-center" style="width: 40px;">#</th>
-                <th style="display:none;">keyField</th>
-                <th style="width: 80px;">Cod</th>
-                <th style="width: 180px;">Descriere</th>
-                <th style="display:none">Branch</th>
-                <th style="width: 70px;">
-                  <select class="form-select form-select-sm border-0 bg-transparent p-0" 
-                          style="height: 22px; font-size: 0.75rem;"
-                          .value="${this.destinationFilter}"
-                          @change="${e => {
-                            this.destinationFilter = e.target.value;
-                            this.requestUpdate();
-                          }}">
-                    <option value="all">Dest.</option>
-                    ${uniqueDestinations.map(dest => html`
-                      <option value="${dest}">${dest}</option>
-                    `)}
-                  </select>
-                </th>
-                <th style="width: 40px;" title="Blacklisted">BL</th>
-                <th style="width: 40px;" title="In Lichidare">IL</th>
-                <th class="group-source">SE</th>
-                <th class="group-source">MinE</th>
-                <th class="group-source">MaxE</th>
-                <th class="group-source vertical-divider">DMin</th>
-                <th class="group-source">DMax</th>
-                <th class="group-destination vertical-divider">SD</th>
-                <th class="group-destination">MinD</th>
-                <th class="group-destination">MaxD</th>
-                <th class="group-destination vertical-divider" title="Orders">Com</th>
-                <th class="group-destination" title="In Transit">TrIn</th>
-                <th class="group-necessity vertical-divider">NecM</th>
-                <th class="group-necessity">NecX</th>
-                <th class="group-necessity">NMC</th>
-                <th class="group-necessity">NXC</th>
-                <th class="group-action vertical-divider">CMin</th>
-                <th class="group-action">CMax</th>
-                <th class="group-action">Trf</th>
-              </tr>
-              <tr class="filter-row">
-                <th colspan="5">
-                  <div class="btn-group btn-group-sm">
-                    <input type="radio" class="btn-check" name="transferFilter" id="all"
-                           .checked="${this.transferFilter === 'all'}"
-                           @change="${() => { this.transferFilter = 'all'; this.requestUpdate(); }}"
-                           autocomplete="off">
-                    <label class="btn btn-outline-secondary btn-xxs py-0" for="all">All</label>
-                    
-                    <input type="radio" class="btn-check" name="transferFilter" id="positive"
-                           .checked="${this.transferFilter === 'positive'}"
-                           @change="${() => { this.transferFilter = 'positive'; this.requestUpdate(); }}"
-                           autocomplete="off">
-                    <label class="btn btn-outline-secondary btn-xxs py-0" for="positive">Trans</label>
-                    
-                    <input type="radio" class="btn-check" name="transferFilter" id="zero"
-                           .checked="${this.transferFilter === 'zero'}"
-                           @change="${() => { this.transferFilter = 'zero'; this.requestUpdate(); }}"
-                           autocomplete="off">
-                    <label class="btn btn-outline-secondary btn-xxs py-0" for="zero">Zero</label>
-                  </div>
-                </th>
-                <th colspan="18"></th>
-              </tr>
-            </thead>
-            <tbody>
-              ${filteredData.map((item, index) => this.renderRow(item, index))}
-            </tbody>
-          </table>
         </div>
       </div>
     `;
