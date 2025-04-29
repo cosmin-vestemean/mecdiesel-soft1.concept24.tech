@@ -339,7 +339,24 @@ export class BranchReplenishmentContainer extends LitElement {
   // --- Event Handlers for Child Component Updates ---
   _handleQueryUpdate(e) {
     const { property, value } = e.detail;
-    if (this.hasOwnProperty(property)) {
+    if (property === 'selectedDestBranches') {
+      // Create a new array to ensure reactivity
+      this.selectedDestBranches = Array.isArray(value) ? [...value] : [];
+      // Store the selection in localStorage to persist across page reloads
+      try {
+        localStorage.setItem('branchReplenishment_selectedDestBranches', JSON.stringify(this.selectedDestBranches));
+      } catch (err) {
+        console.error('Failed to save selected branches to localStorage:', err);
+      }
+    } else if (property === 'branchesEmit') {
+      this.branchesEmit = value;
+      // Store the source branch selection in localStorage
+      try {
+        localStorage.setItem('branchReplenishment_branchesEmit', value);
+      } catch (err) {
+        console.error('Failed to save source branch to localStorage:', err);
+      }
+    } else if (this.hasOwnProperty(property)) {
       this[property] = value;
     }
   }
@@ -386,6 +403,26 @@ export class BranchReplenishmentContainer extends LitElement {
   }
 
   // --- Lifecycle Callbacks ---
+  connectedCallback() {
+    super.connectedCallback();
+    
+    // Load saved destination branches from localStorage if available
+    try {
+      const savedBranches = localStorage.getItem('branchReplenishment_selectedDestBranches');
+      if (savedBranches) {
+        this.selectedDestBranches = JSON.parse(savedBranches);
+      }
+      
+      // Load saved source branch from localStorage
+      const savedSourceBranch = localStorage.getItem('branchReplenishment_branchesEmit');
+      if (savedSourceBranch) {
+        this.branchesEmit = savedSourceBranch;
+      }
+    } catch (err) {
+      console.error('Failed to load saved settings from localStorage:', err);
+    }
+  }
+
   updated(changedProperties) {
     // Initialize tooltips after rendering/updating
     const tooltipTriggerList = this.querySelectorAll('[data-bs-toggle="tooltip"]');
@@ -466,7 +503,7 @@ export class BranchReplenishmentContainer extends LitElement {
           @update-property=${this._handleLegendUpdate}>
         </status-legend>
 
-        <data-table
+        <replenishment-data-table
           .tableData=${currentFilteredData}
           .columnConfig=${columnConfig}
           .destinationFilter=${this.destinationFilter}
@@ -480,7 +517,7 @@ export class BranchReplenishmentContainer extends LitElement {
           }}
           .loading=${this.loading}
           @update-property=${this._handleTableUpdate}>
-        </data-table>
+        </replenishment-data-table>
       </div>
     `;
   }

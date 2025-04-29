@@ -1,5 +1,4 @@
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
-import './query-panel.css'; // Import CSS
 
 export class QueryPanel extends LitElement {
   static get properties() {

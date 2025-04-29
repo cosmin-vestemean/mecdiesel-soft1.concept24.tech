@@ -1,5 +1,4 @@
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
-import './manipulation-panel.css'; // Import CSS
 
 export class ManipulationPanel extends LitElement {
   static get properties() {

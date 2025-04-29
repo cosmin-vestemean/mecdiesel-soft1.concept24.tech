@@ -1,7 +1,6 @@
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
-import './data-table.css'; // Import CSS
 
-export class DataTable extends LitElement {
+export class ReplenishmentDataTable extends LitElement {
   static get properties() {
     return {
       tableData: { type: Array },
@@ -206,4 +205,4 @@ export class DataTable extends LitElement {
     `;
   }
 }
-customElements.define('data-table', DataTable);
+customElements.define('replenishment-data-table', ReplenishmentDataTable);
