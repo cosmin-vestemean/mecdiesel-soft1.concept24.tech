@@ -39,19 +39,9 @@ function getAnalytics(apiObj) {
   const d = (endT - startT) / 1000;
 
   var j = ds.JSON;
+  //replace null with empty string
+  j = j.replace(/"null"/g, '""');
   var obj = JSON.parse(j);
-  // Add duration to the response object, not as a separate property if obj is an array
-  if (Array.isArray(obj)) {
-    // If the result is an array, we might want to wrap it or add duration differently
-    // Option 1: Wrap in an object
-    // return { data: obj, duration: d }; 
-    // Option 2: Add duration to each item (less ideal)
-    // obj.forEach(item => item.duration = d);
-    // Option 3: Return as is, duration might be logged or handled elsewhere
-     return obj; // Returning array directly, assuming duration might be logged or handled elsewhere
-  } else {
-     // If obj is already an object (e.g., error or single result), add duration
-     obj.duration = d;
-     return obj;
-  }
+  obj.duration = d;
+  return obj;
 }

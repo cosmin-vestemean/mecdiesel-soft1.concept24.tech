@@ -1,9 +1,11 @@
 import { LitElement, html, css } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
-import { BranchReplenishmentState } from './utils/state-management.js'; // Corrected path
+import { connectToS1 } from '../../dataFetching.js';
+import { client } from '../../socketConfig.js';
+import { BranchReplenishmentState } from './utils/state-management.js';
 import { branchReplenishmentStyles } from './styles.js';
-import { filterData, getStockClass, getStockStatusCounts, getUniqueDestinations, getValueClass } from './utils/dataUtils.js'; // Assuming utils exist
-import { exportToExcel } from './utils/exportUtils.js'; // Assuming utils exist
-import { columnMask, getVisibleColumns } from './utils/columnConfig.js'; // Import the mask
+import { filterData, getUniqueDestinations } from './utils/filtering.js';
+import { exportToExcel } from './utils/export.js';
+import { getStockClass, getValueClass } from './utils/stock-calculations.js';
 
 /**
  * Branch Replenishment Component
@@ -510,49 +512,43 @@ export class BranchReplenishment extends LitElement {
    */
   renderRow(item, index) {
     const descriere = (item.Descriere || '').substring(0, 50);
-    const visibleColumns = getVisibleColumns(); // Get visible columns based on mask
-
-    // Helper to render a cell based on mask visibility
-    const renderCell = (columnKey, content, classes = '', title = '') => {
-      if (columnMask[columnKey]?.visible) {
-        return html`<td class="${classes}" title="${title}">${content}</td>`;
-      }
-      return ''; // Return empty string if column is not visible
-    };
-
+    
     return html`
       <tr>
-        ${renderCell('index', index + 1, 'text-center')} {/* Assuming index is always needed */}
-        ${renderCell('Cod', item.Cod)}
-        ${renderCell('Descriere', descriere, 'text-truncate', item.Descriere)}
-        ${renderCell('Destinatie', item.Destinatie)}
-        ${renderCell('Blacklisted', item.Blacklisted, item.Blacklisted === 'Da' ? 'text-danger fw-bold' : '')}
-        ${renderCell('InLichidare', item.InLichidare, item.InLichidare === 'Da' ? 'text-warning fw-bold' : '')}
+        <td class="text-center">${index + 1}</td>
+        <td style="display:none">${item.keyField || ''}</td>
+        <td style="display:none">${item.mtrl || ''}</td>
+        <td>${item.Cod}</td>
+        <td class="text-truncate" style="max-width: 200px;" title="${item.Descriere}">${descriere}</td>
+        <td style="display:none">${item.branchD || ''}</td>
+        <td>${item.Destinatie}</td>
+        <td class="${item.Blacklisted === 'Da' ? 'text-danger fw-bold' : ''}">${item.Blacklisted}</td>
+        <td class="${item.InLichidare === 'Da' ? 'text-warning fw-bold' : ''}">${item.InLichidare}</td>
         
         <!-- Source Group -->
-        ${renderCell('stoc_emit', html`<span class="${getStockClass(item.stoc_emit, item.min_emit, item.max_emit)}">${item.stoc_emit}</span>`, 'group-source')}
-        ${renderCell('min_emit', item.min_emit, `group-source ${getValueClass(item.min_emit)}`)}
-        ${renderCell('max_emit', item.max_emit, `group-source ${getValueClass(item.max_emit)}`)}
-        ${renderCell('disp_min_emit', item.disp_min_emit, `group-source vertical-divider ${getValueClass(item.disp_min_emit)}`)}
-        ${renderCell('disp_max_emit', item.disp_max_emit, `group-source ${getValueClass(item.disp_max_emit)}`)}
-
+        <td class="group-source ${getStockClass(item.stoc_emit, item.min_emit, item.max_emit)}">${item.stoc_emit}</td>
+        <td class="group-source ${getValueClass(item.min_emit)}">${item.min_emit}</td>
+        <td class="group-source ${getValueClass(item.max_emit)}">${item.max_emit}</td>
+        <td class="group-source vertical-divider ${getValueClass(item.disp_min_emit)}">${item.disp_min_emit}</td>
+        <td class="group-source ${getValueClass(item.disp_max_emit)}">${item.disp_max_emit}</td>
+        
         <!-- Destination Group -->
-        ${renderCell('stoc_dest', html`<span class="${getStockClass(item.stoc_dest, item.min_dest, item.max_dest)}">${item.stoc_dest}</span>`, 'group-destination vertical-divider')}
-        ${renderCell('min_dest', item.min_dest, `group-destination ${getValueClass(item.min_dest)}`)}
-        ${renderCell('max_dest', item.max_dest, `group-destination ${getValueClass(item.max_dest)}`)}
-        ${renderCell('comenzi', item.comenzi, `group-destination vertical-divider ${getValueClass(item.comenzi)}`)}
-        ${renderCell('transf_nerec', item.transf_nerec, `group-destination ${getValueClass(item.transf_nerec)}`)}
-
+        <td class="group-destination vertical-divider ${getStockClass(item.stoc_dest, item.min_dest, item.max_dest)}">${item.stoc_dest}</td>
+        <td class="group-destination ${getValueClass(item.min_dest)}">${item.min_dest}</td>
+        <td class="group-destination ${getValueClass(item.max_dest)}">${item.max_dest}</td>
+        <td class="group-destination vertical-divider ${getValueClass(item.comenzi)}">${item.comenzi}</td>
+        <td class="group-destination ${getValueClass(item.transf_nerec)}">${item.transf_nerec}</td>
+        
         <!-- Necessity Group -->
-        ${renderCell('nec_min', item.nec_min, `group-necessity vertical-divider ${getValueClass(item.nec_min)}`)}
-        ${renderCell('nec_max', item.nec_max, `group-necessity ${getValueClass(item.nec_max)}`)}
-        ${renderCell('nec_min_comp', item.nec_min_comp, `group-necessity ${getValueClass(item.nec_min_comp)}`)}
-        ${renderCell('nec_max_comp', item.nec_max_comp, `group-necessity ${getValueClass(item.nec_max_comp)}`)}
-
+        <td class="group-necessity vertical-divider ${getValueClass(item.nec_min)}">${item.nec_min}</td>
+        <td class="group-necessity ${getValueClass(item.nec_max)}">${item.nec_max}</td>
+        <td class="group-necessity ${getValueClass(item.nec_min_comp)}">${item.nec_min_comp}</td>
+        <td class="group-necessity ${getValueClass(item.nec_max_comp)}">${item.nec_max_comp}</td>
+        
         <!-- Action Group -->
-        ${renderCell('cant_min', item.cant_min, `group-action vertical-divider ${getValueClass(item.cant_min)}`)}
-        ${renderCell('cant_max', item.cant_max, `group-action ${getValueClass(item.cant_max)}`)}
-        ${renderCell('transfer', html`
+        <td class="group-action vertical-divider ${getValueClass(item.cant_min)}">${item.cant_min}</td>
+        <td class="group-action ${getValueClass(item.cant_max)}">${item.cant_max}</td>
+        <td class="group-action">
           <input
             class="compact-input ${getValueClass(item.transfer)}"
             data-row-index="${index}"
@@ -563,7 +559,7 @@ export class BranchReplenishment extends LitElement {
             @keydown="${this.handleKeyNav}"
             @change="${(e) => this.onTransferChange(e, item)}"
           />
-        `, 'group-action')}
+        </td>
       </tr>
     `;
   }
@@ -577,46 +573,6 @@ export class BranchReplenishment extends LitElement {
     const filteredCount = filteredData.length;
     const uniqueDestinations = this.getUniqueDestinations();
     const zenModeClass = this.viewMode === 'zen' ? 'zen-mode' : '';
-    const visibleColumns = getVisibleColumns(); // Get visible columns for header
-
-    // Helper to render table headers based on mask
-    const renderHeaders = () => {
-      // Group columns for multi-level headers (optional, but good for complex tables)
-      const groups = {
-        'Info': ['Cod', 'Descriere', 'Destinatie', 'Blacklisted', 'InLichidare'],
-        'Source': ['stoc_emit', 'min_emit', 'max_emit', 'disp_min_emit', 'disp_max_emit'],
-        'Destination': ['stoc_dest', 'min_dest', 'max_dest', 'comenzi', 'transf_nerec'],
-        'Necessity': ['nec_min', 'nec_max', 'nec_min_comp', 'nec_max_comp'],
-        'Action': ['cant_min', 'cant_max', 'transfer']
-      };
-
-      // Calculate colspan for each group based on visible columns
-      const groupColspans = Object.entries(groups).reduce((acc, [groupName, cols]) => {
-        acc[groupName] = cols.filter(colKey => columnMask[colKey]?.visible).length;
-        return acc;
-      }, {});
-
-      return html`
-        <thead>
-          {/* Optional: Group Headers */}
-          <tr>
-            <th rowspan="2" class="text-center">#</th> {/* Index column */}
-            ${Object.entries(groupColspans).map(([groupName, colspan]) => 
-              colspan > 0 ? html`<th colspan="${colspan}" class="text-center group-header">${groupName}</th>` : ''
-            )}
-          </tr>
-          {/* Individual Column Headers */}
-          <tr>
-            ${visibleColumns.map(col => html`
-              <th class="text-center ${col.group ? `group-${col.group.toLowerCase()}` : ''}">
-                ${col.label}
-                {/* Add filter inputs here if needed based on col.filterable and col.type */}
-              </th>
-            `)}
-          </tr>
-        </thead>
-      `;
-    };
 
     return html`
       <div class="branch-replenishment-container ${zenModeClass}">
@@ -626,7 +582,59 @@ export class BranchReplenishment extends LitElement {
         ${!this.loading && !this.error && this.data.length > 0 ? html`
           <div class="table-responsive">
             <table class="table table-bordered table-hover table-sm data-table">
-              ${renderHeaders()}
+              <thead>
+                <tr>
+                  <th class="text-center">#</th>
+                  <th style="display:none">KeyField</th>
+                  <th style="display:none">Mtrl</th>
+                  <th>Cod</th>
+                  <th class="text-truncate" style="max-width: 200px;">Descriere</th>
+                  <th style="display:none">BranchD</th>
+                  <th>Destinatie</th>
+                  <th>Blacklisted</th>
+                  <th>InLichidare</th>
+                  <th colspan="5" class="text-center group-header">Source</th>
+                  <th colspan="5" class="text-center group-header">Destination</th>
+                  <th colspan="4" class="text-center group-header">Necessity</th>
+                  <th colspan="3" class="text-center group-header">Action</th>
+                </tr>
+                <tr>
+                  <th class="text-center">#</th>
+                  <th style="display:none">KeyField</th>
+                  <th style="display:none">Mtrl</th>
+                  <th>Cod</th>
+                  <th class="text-truncate" style="max-width: 200px;">Descriere</th>
+                  <th style="display:none">BranchD</th>
+                  <th>Destinatie</th>
+                  <th>Blacklisted</th>
+                  <th>InLichidare</th>
+                  
+                  <!-- Source Group -->
+                  <th class="group-source">Stoc Emit</th>
+                  <th class="group-source">Min Emit</th>
+                  <th class="group-source">Max Emit</th>
+                  <th class="group-source vertical-divider">Disp Min</th>
+                  <th class="group-source">Disp Max</th>
+                  
+                  <!-- Destination Group -->
+                  <th class="group-destination vertical-divider">Stoc Dest</th>
+                  <th class="group-destination">Min Dest</th>
+                  <th class="group-destination">Max Dest</th>
+                  <th class="group-destination vertical-divider">Comenzi</th>
+                  <th class="group-destination">Transf Nerec</th>
+                  
+                  <!-- Necessity Group -->
+                  <th class="group-necessity vertical-divider">Nec Min</th>
+                  <th class="group-necessity">Nec Max</th>
+                  <th class="group-necessity">Nec Min Comp</th>
+                  <th class="group-necessity">Nec Max Comp</th>
+                  
+                  <!-- Action Group -->
+                  <th class="group-action vertical-divider">Cant Min</th>
+                  <th class="group-action">Cant Max</th>
+                  <th class="group-action">Transfer</th>
+                </tr>
+              </thead>
               <tbody>
                 ${filteredData.map((item, index) => this.renderRow(item, index))}
               </tbody>
