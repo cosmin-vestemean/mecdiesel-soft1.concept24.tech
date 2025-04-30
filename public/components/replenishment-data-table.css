@@ -1,7 +1,7 @@
 .data-table-container {
     position: relative; /* Needed for overlay */
-    max-height: 65vh; /* Adjust max height as needed */
-    overflow-y: auto; /* Enable vertical scroll */
+    /*max-height: 65vh;
+    overflow-y: auto;  */
     border: 1px solid #dee2e6;
     border-radius: 4px;
 }
@@ -40,10 +40,25 @@
 }
 
 .modern-table .text-truncate {
-    max-width: 200px; /* Adjust as needed */
-    display: inline-block; /* Needed for truncation */
+    /*max-width: 200px;
+    display: inline-block; */
 }
 
+/* Fix for truncated text in spans */
+.modern-table td span {
+    font-size: inherit; /* Ensure spans inherit parent font size */
+    line-height: inherit;
+    vertical-align: middle;
+}
+
+.modern-table td.text-truncate span {
+    font-size: 0.8rem; /* Match table font size */
+    max-width: 200px;
+    display: inline-block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
 /* Sticky Header */
 thead.sticky-top {

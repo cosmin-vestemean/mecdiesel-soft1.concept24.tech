@@ -1,4 +1,5 @@
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
+import { columnConfig } from '../config/table-column-config.js'; // Import the column config
 
 export class ReplenishmentDataTable extends LitElement {
   static get properties() {
@@ -9,6 +10,12 @@ export class ReplenishmentDataTable extends LitElement {
       uniqueDestinations: { type: Array },
       utilityFunctions: { type: Object }, // Pass utility functions { getStockClass, getValueClass, etc. }
       loading: { type: Boolean },
+      // Dynamic properties for number filters - safely create with imported columnConfig
+      ...Object.fromEntries(
+        (columnConfig || [])
+          .filter(col => col.type === 'number' && col.isHeaderFilter)
+          .map(col => [`numberFilter_${col.key}`, { type: String, state: true }])
+      )
     };
   }
 
@@ -17,6 +24,15 @@ export class ReplenishmentDataTable extends LitElement {
       this.tableData = [];
       this.columnConfig = [];
       this.utilityFunctions = {};
+      
+      // Initialize all number filters to 'all'
+      if (Array.isArray(columnConfig)) {
+        columnConfig
+          .filter(col => col.type === 'number' && col.isHeaderFilter)
+          .forEach(col => {
+            this[`numberFilter_${col.key}`] = 'all';
+          });
+      }
   }
 
   createRenderRoot() { return this; } // Render in light DOM
@@ -90,17 +106,64 @@ export class ReplenishmentDataTable extends LitElement {
 
   // --- Rendering Logic ---
   renderHeader() {
+    // Safety check to prevent undefined errors
+    if (!this.columnConfig || !Array.isArray(this.columnConfig)) {
+      console.warn('Column config is undefined or not an array');
+      return html`<tr><th>No column configuration available</th></tr>`;
+    }
+    
     const visibleColumns = this.columnConfig.filter(col => col.visible);
     return html`
       <tr>
         ${visibleColumns.map(col => html`
           <th class="${col.group || ''} ${col.divider ? 'vertical-divider' : ''}"
               title="${col.tooltip || col.displayName}">
-            ${col.isHeaderFilter ? this.renderDestinationFilterHeader(col) : col.displayName}
+            ${col.isHeaderFilter 
+              ? (col.type === 'number' 
+                ? this.renderNumberFilterHeader(col)
+                : this.renderDestinationFilterHeader(col))
+              : col.displayName}
           </th>
         `)}
       </tr>
     `;
+  }
+
+  renderNumberFilterHeader(column) {
+    // Each number column will have a filter: all, positive, negative, zero
+    return html`
+      <div class="d-flex flex-column align-items-center">
+        <div class="small fw-bold mb-1">${column.displayName}</div>
+        <div class="btn-group btn-group-sm number-filter-group">
+          <button class="btn btn-outline-secondary btn-xs ${this.getNumberFilterStatus(column.key, 'all')}" 
+                  @click=${() => this._dispatchUpdate(`numberFilter_${column.key}`, 'all')}
+                  title="Show all values">
+            <i class="bi bi-asterisk"></i>
+          </button>
+          <button class="btn btn-outline-success btn-xs ${this.getNumberFilterStatus(column.key, 'positive')}" 
+                  @click=${() => this._dispatchUpdate(`numberFilter_${column.key}`, 'positive')}
+                  title="Show positive values only">
+            <i class="bi bi-plus"></i>
+          </button>
+          <button class="btn btn-outline-danger btn-xs ${this.getNumberFilterStatus(column.key, 'negative')}" 
+                  @click=${() => this._dispatchUpdate(`numberFilter_${column.key}`, 'negative')}
+                  title="Show negative values only">
+            <i class="bi bi-dash"></i>
+          </button>
+          <button class="btn btn-outline-secondary btn-xs ${this.getNumberFilterStatus(column.key, 'zero')}" 
+                  @click=${() => this._dispatchUpdate(`numberFilter_${column.key}`, 'zero')}
+                  title="Show zero values only">
+            <i class="bi bi-0-circle"></i>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  getNumberFilterStatus(columnKey, filterValue) {
+    // Helper to highlight the active filter button
+    const activeFilter = this[`numberFilter_${columnKey}`] || 'all';
+    return activeFilter === filterValue ? 'active' : '';
   }
 
   renderDestinationFilterHeader(column) {
@@ -159,8 +222,10 @@ export class ReplenishmentDataTable extends LitElement {
     } else if (column.type === 'boolean') {
         content = html`${value === 'Da' ? 'Yes' : (value === '-' ? 'No' : value)}`; // Handle 'Da'/'No'/-
     } else if (column.truncate) {
+        // Improved truncation with proper styling
         const truncatedValue = (value || '').substring(0, column.truncate);
-        content = html`<span title="${value}">${truncatedValue}${value?.length > column.truncate ? '...' : ''}</span>`;
+        const showEllipsis = value?.length > column.truncate;
+        content = html`<span title="${value}">${truncatedValue}${showEllipsis ? '...' : ''}</span>`;
         cellClassList.push('text-truncate');
     } else {
       // Default rendering for other types (string, number)
@@ -186,23 +251,81 @@ export class ReplenishmentDataTable extends LitElement {
     `;
   }
 
+  /**
+   * Apply number filters to filter the displayed data
+   * @returns {Array} The filtered data
+   */
+  getFilteredData() {
+    // Start with all data
+    let filtered = [...this.tableData];
+    
+    // Apply all number filters
+    if (this.columnConfig) {
+      this.columnConfig
+        .filter(col => col.type === 'number' && col.isHeaderFilter && col.visible)
+        .forEach(col => {
+          const filterValue = this[`numberFilter_${col.key}`];
+          if (filterValue && filterValue !== 'all') {
+            filtered = filtered.filter(item => {
+              const value = parseFloat(item[col.key]);
+              if (isNaN(value)) return false;
+              
+              switch (filterValue) {
+                case 'positive': return value > 0;
+                case 'negative': return value < 0;
+                case 'zero': return value === 0;
+                default: return true;
+              }
+            });
+          }
+        });
+    }
+    
+    return filtered;
+  }
+
   render() {
+    // Safety checks for all required properties
+    if (!this.columnConfig || !Array.isArray(this.columnConfig)) {
+      console.warn('Column config is undefined or not an array');
+      return html`
+        <div class="alert alert-warning">
+          Configuration error: Column configuration is missing or invalid
+        </div>
+      `;
+    }
+
+    // Apply filters to the data
+    const filteredData = this.getFilteredData();
+
     return html`
       <div class="table-responsive data-table-container">
         ${this.loading ? html`<div class="table-overlay"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>` : ''}
         <table class="table table-sm table-hover table-bordered modern-table compact-table">
-          <thead class="sticky-top bg-light">
+          <thead class="sticky-top bg-light small">
             ${this.renderHeader()}
           </thead>
-          <tbody>
-            ${this.tableData && this.tableData.length > 0
-              ? this.tableData.map((item, index) => this.renderRow(item, index))
-              : html`<tr><td colspan="${this.columnConfig.filter(c => c.visible).length}" class="text-center text-muted p-3">No data available for the current selection and filters.</td></tr>`
+          <tbody class="small">
+            ${filteredData && filteredData.length > 0
+              ? filteredData.map((item, index) => this.renderRow(item, index))
+              : html`<tr><td colspan="${(this.columnConfig && Array.isArray(this.columnConfig)) ? this.columnConfig.filter(c => c.visible).length : 1}" class="text-center text-muted p-2">No data available for the current selection and filters.</td></tr>`
             }
           </tbody>
         </table>
       </div>
     `;
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    
+    // Listen for filter-changed events from the container
+    document.addEventListener('filter-changed', (e) => {
+      console.log('Data table received filter-changed event:', e.detail);
+      
+      // Force the table to re-render when filters change
+      this.requestUpdate();
+    });
   }
 }
 customElements.define('replenishment-data-table', ReplenishmentDataTable);

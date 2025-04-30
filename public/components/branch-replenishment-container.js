@@ -6,7 +6,7 @@ import { columnConfig } from '../config/table-column-config.js'; // Import colum
 // Import child components
 import './query-panel.js';
 import './manipulation-panel.js';
-import './strategy-panel.js';
+import './strategy-panel.js'; // Will be used as quick-panel
 import './status-legend.js';
 import './data-table.js';
 
@@ -28,6 +28,7 @@ export class BranchReplenishmentContainer extends LitElement {
       destinationFilter: { type: String, state: true },
       isSuccessiveStrategy: { type: Boolean, state: true },
       stockStatusFilter: { type: String, state: true },
+      queryPanelVisible: { type: Boolean, state: true }, // New property to track query panel visibility
 
       // Passed down, potentially static
       branches: { type: Object },
@@ -50,6 +51,7 @@ export class BranchReplenishmentContainer extends LitElement {
     this.destinationFilter = 'all';
     this.isSuccessiveStrategy = true;
     this.stockStatusFilter = 'all';
+    this.queryPanelVisible = true; // Initially visible
     this.branches = { // Keep branches data here or fetch if dynamic
       '1000': 'HQ', '1200': 'CLUJ', '1300': 'CONSTANTA', '1400': 'GALATI',
       '1500': 'PLOIESTI', '1600': 'IASI', '1700': 'SIBIU', '1800': 'CRAIOVA',
@@ -92,6 +94,15 @@ export class BranchReplenishmentContainer extends LitElement {
         // Create a unique key if not provided by backend (adjust if backend provides one)
         keyField: item.keyField || `${item.mtrl}-${item.branchD}-${index}`
       }));
+      
+      // Hide query panel after successfully loading data
+      this.queryPanelVisible = false;
+      
+      // Update the quick panel with current query panel state
+      const quickPanel = this.querySelector('quick-panel');
+      if (quickPanel) {
+        quickPanel.queryPanelVisible = false;
+      }
 
     } catch (error) {
       console.error('Error loading branch replenishment data:', error);
@@ -261,28 +272,35 @@ export class BranchReplenishmentContainer extends LitElement {
 
   // --- Filtering Logic ---
   get filteredData() {
+    console.log('Computing filteredData - searchTerm:', this.searchTerm, 'transferFilter:', this.transferFilter);
     let filtered = this.data;
 
     // Apply search term filter (only on Code and Description by default)
     if (this.searchTerm) {
       const term = this.searchTerm.toLowerCase();
+      console.log('Filtering by search term:', term);
       // Hardcode the specific columns we want to search - Code and Description only
       const searchColumns = ['Cod', 'Descriere'];
       
       filtered = filtered.filter(item =>
         searchColumns.some(key => {
-          return item[key] && 
+          const matches = item[key] && 
                  typeof item[key] === 'string' && 
                  item[key].toLowerCase().includes(term);
+          if (matches) console.log('Match found in', key, ':', item[key]);
+          return matches;
         })
       );
     }
 
     // Apply transfer value filter
     if (this.transferFilter !== 'all') {
+      console.log('Filtering by transfer:', this.transferFilter);
       filtered = filtered.filter(item => {
         const transfer = parseFloat(item.transfer || 0);
-        return this.transferFilter === 'positive' ? transfer > 0 : transfer === 0;
+        const matches = this.transferFilter === 'positive' ? transfer > 0 : transfer === 0;
+        if (matches) console.log('Transfer match:', transfer);
+        return matches;
       });
     }
 
@@ -305,6 +323,7 @@ export class BranchReplenishmentContainer extends LitElement {
         }
       });
     }
+    console.log('Filtered results:', filtered.length);
     return filtered;
   }
 
@@ -370,17 +389,26 @@ export class BranchReplenishmentContainer extends LitElement {
   _handleManipulationUpdate(e) {
     const { property, value } = e.detail;
     if (this.hasOwnProperty(property)) {
+      console.log(`Manipulation update - Previous ${property}:`, this[property]);
       this[property] = value;
-      console.log('Manipulation update:', property, value);
-      this.requestUpdate();
+      console.log(`Manipulation update - New ${property}:`, value);
+      
+      // Per Lit documentation - dispatch a 'filter-changed' event that will
+      // notify all children of the filter change
+      this.dispatchEvent(new CustomEvent('filter-changed', {
+        bubbles: true,
+        composed: true,
+        detail: { property, value, source: 'manipulation' }
+      }));
     }
   }
 
   _handleStrategyUpdate(e) {
     const { property, value } = e.detail;
     if (this.hasOwnProperty(property)) {
+      console.log(`Strategy update - Previous ${property}:`, this[property]);
       this[property] = value;
-      console.log('Strategy update:', property, value);
+      console.log(`Strategy update - New ${property}:`, value);
       this.requestUpdate();
     }
   }
@@ -396,6 +424,14 @@ export class BranchReplenishmentContainer extends LitElement {
      const { property, value, itemKey, transferValue } = e.detail;
      if (property === 'destinationFilter') {
          this.destinationFilter = value;
+     } else if (property.startsWith('numberFilter_')) {
+         // Handle number filter events from the data table
+         const dataTable = this.querySelector('replenishment-data-table');
+         if (dataTable) {
+             dataTable[property] = value;
+             console.log(`Updated number filter ${property} to:`, value);
+             dataTable.requestUpdate();
+         }
      } else if (property === 'itemTransfer' && itemKey !== undefined) {
          // Update transfer value for a specific item
          const dataIndex = this.data.findIndex(item => item.keyField === itemKey);
@@ -433,6 +469,132 @@ export class BranchReplenishmentContainer extends LitElement {
     }
   }
 
+  firstUpdated() {
+    console.log('Container firstUpdated - adding direct listeners');
+    
+    // Get references to the child panels
+    const manipulationPanel = this.querySelector('manipulation-panel');
+    const strategyPanel = this.querySelector('strategy-panel');
+    
+    if (manipulationPanel) {
+      console.log('Found manipulation panel, adding direct listener');
+      manipulationPanel.addEventListener('update-property', (e) => {
+        console.log('Direct listener caught event from manipulation panel:', e.detail);
+        const { property, value } = e.detail;
+        
+        // Directly set the property on this component
+        if (this.hasOwnProperty(property)) {
+          this[property] = value;
+          console.log(`Container: Updated ${property} to`, value);
+          
+          // Force a complete re-render
+          this.requestUpdate();
+          
+          // Find and update the data table directly
+          this._updateDataTable();
+        }
+      });
+    } else {
+      console.warn('Manipulation panel not found in firstUpdated');
+    }
+    
+    if (strategyPanel) {
+      console.log('Found strategy panel, adding direct listener');
+      strategyPanel.addEventListener('update-property', (e) => {
+        console.log('Direct listener caught event from strategy panel:', e.detail);
+        const { property, value } = e.detail;
+        
+        // Directly set the property on this component
+        if (this.hasOwnProperty(property)) {
+          this[property] = value;
+          console.log(`Container: Updated ${property} to`, value);
+          
+          // Force a complete re-render
+          this.requestUpdate();
+          
+          // Find and update the data table directly
+          this._updateDataTable();
+        }
+      });
+    } else {
+      console.warn('Strategy panel not found in firstUpdated');
+    }
+  }
+  
+  // New helper method to directly update the data table
+  _updateDataTable() {
+    // Calculate filtered data
+    const filteredData = [...this.filteredData];
+    console.log('Directly updating data table with', filteredData.length, 'items');
+    
+    // Find and update the data-table directly
+    const dataTable = this.querySelector('replenishment-data-table');
+    if (dataTable) {
+      console.log('Found data table component, setting tableData directly');
+      
+      // Force a new array reference to trigger reactivity
+      dataTable.tableData = [...filteredData];
+      console.log('Data table tableData property set with', dataTable.tableData.length, 'items');
+      
+      // Update counts
+      const manipulationPanel = this.querySelector('manipulation-panel');
+      if (manipulationPanel) {
+        manipulationPanel.filteredCount = filteredData.length;
+        manipulationPanel.totalCount = this.data.length;
+        console.log('Updated manipulation panel counts:', manipulationPanel.filteredCount, 'of', manipulationPanel.totalCount);
+      }
+      
+      // Force the data table to update
+      if (typeof dataTable.requestUpdate === 'function') {
+        console.log('Forcing data table to update');
+        
+        // EXTREME SOLUTION: Force redraw by replacing the entire table
+        setTimeout(() => {
+          console.log('REDRAW: Recreating data table to ensure update');
+          // Get the parent node
+          const tableParent = dataTable.parentNode;
+          if (tableParent) {
+            // Clone the data table node
+            const newTable = dataTable.cloneNode(false);
+            
+            // IMPORTANT - Get the column config from the imported module
+            // This ensures the new table has the proper column configuration
+            const importedColumnConfig = columnConfig || [];
+            
+            // Set properties on the new table
+            newTable.tableData = [...filteredData];
+            newTable.columnConfig = importedColumnConfig; // Use the imported config
+            newTable.destinationFilter = this.destinationFilter;
+            newTable.uniqueDestinations = this.uniqueDestinations;
+            newTable.utilityFunctions = {
+              getStockClassEmit: this.getStockClassEmit,
+              getStockClassDest: this.getStockClassDest,
+              getValueClass: this.getValueClass,
+              getBlacklistedClass: this.getBlacklistedClass,
+              getLichidareClass: this.getLichidareClass
+            };
+            newTable.loading = this.loading;
+            
+            // Log to verify column config is properly set
+            console.log('Setting column config on new table:', importedColumnConfig.length, 'columns');
+            
+            // Replace the old table with the new one
+            tableParent.replaceChild(newTable, dataTable);
+            
+            // Add event listener for update-property
+            newTable.addEventListener('update-property', (e) => {
+              this._handleTableUpdate(e);
+            });
+            
+            console.log('REDRAW: Data table replaced successfully');
+          }
+        }, 0);
+      }
+    } else {
+      console.warn('Could not find data table to update directly');
+    }
+  }
+
   updated(changedProperties) {
     console.log('Container updated. searchTerm:', this.searchTerm, 'transferFilter:', this.transferFilter, 'selectedReplenishmentStrategy:', this.selectedReplenishmentStrategy);
     // Initialize tooltips after rendering/updating
@@ -455,9 +617,11 @@ export class BranchReplenishmentContainer extends LitElement {
 
   // --- Rendering ---
   render() {
-    const currentFilteredData = this.filteredData;
+    // Force filteredData calculation on each render
+    const currentFilteredData = [...this.filteredData];
     const totalCount = this.data.length;
     const filteredCount = currentFilteredData.length;
+    console.log('Render - filtered count:', filteredCount, 'total:', totalCount);
 
     // Calculate counts for the legend based on the *currently filtered* data
     // This makes the legend counts dynamic based on other active filters
@@ -477,35 +641,54 @@ export class BranchReplenishmentContainer extends LitElement {
                             <button type="button" class="btn-close" @click=${() => this.error = ''} aria-label="Close"></button>
                           </div>` : ''}
 
-        <query-panel
-          .branches=${this.branches}
-          .branchesEmit=${this.branchesEmit}
-          .selectedDestBranches=${this.selectedDestBranches}
-          .setConditionForNecesar=${this.setConditionForNecesar}
-          .setConditionForLimits=${this.setConditionForLimits}
-          .loading=${this.loading}
-          @load-data=${this._handleLoadData}
-          @save-data=${this._handleSaveData}
-          @export-data=${this._handleExportData}
-          @update-property=${this._handleQueryUpdate}>
-        </query-panel>
+        <!-- Query panel with animation for showing/hiding -->
+        <div class="query-panel-container ${this.queryPanelVisible ? 'visible' : 'hidden'}">
+          <query-panel
+            .branches=${this.branches}
+            .branchesEmit=${this.branchesEmit}
+            .selectedDestBranches=${this.selectedDestBranches}
+            .setConditionForNecesar=${this.setConditionForNecesar}
+            .setConditionForLimits=${this.setConditionForLimits}
+            .loading=${this.loading}
+            @load-data=${this._handleLoadData}
+            @save-data=${this._handleSaveData}
+            @export-data=${this._handleExportData}
+            @update-property=${this._handleQueryUpdate}>
+          </query-panel>
+        </div>
 
-        <manipulation-panel
-          .searchTerm=${this.searchTerm}
-          .transferFilter=${this.transferFilter}
-          .totalCount=${totalCount}
-          .filteredCount=${filteredCount}
-          @update-property=${this._handleManipulationUpdate.bind(this)}>
-        </manipulation-panel>
+        <!-- Layout with manipulation panel only - quick panel is floating -->
+        <div class="row g-2 mb-3">
+          <!-- Manipulation panel (search) taking full width -->
+          <div class="col-12">
+            <manipulation-panel
+              .searchTerm=${this.searchTerm}
+              .transferFilter=${this.transferFilter}
+              .totalCount=${totalCount}
+              .filteredCount=${filteredCount}
+              @searchTerm-changed=${e => { this.searchTerm = e.detail.value; this._updateDataTable(); }}
+              @transferFilter-changed=${e => { this.transferFilter = e.detail.value; this._updateDataTable(); }}
+              @update-property=${this._handleManipulationUpdate}>
+            </manipulation-panel>
+          </div>
+        </div>
 
-        <strategy-panel
+        <!-- Floating quick panel - positioned with CSS -->
+        <quick-panel
           .selectedReplenishmentStrategy=${this.selectedReplenishmentStrategy}
           .isSuccessiveStrategy=${this.isSuccessiveStrategy}
           .loading=${this.loading}
+          .queryPanelVisible=${this.queryPanelVisible}
           ?disabled=${!this.data || this.data.length === 0}
+          @selectedReplenishmentStrategy-changed=${e => { 
+            console.log('Container caught selectedReplenishmentStrategy-changed event:', e.detail.value); 
+            this.selectedReplenishmentStrategy = e.detail.value; 
+            this.requestUpdate(); 
+          }}
+          @toggle-query-panel=${this._handleToggleQueryPanel}
           @apply-strategy=${this._handleApplyStrategy}
-          @update-property=${this._handleStrategyUpdate.bind(this)}>
-        </strategy-panel>
+          @update-property=${this._handleStrategyUpdate}>
+        </quick-panel>
 
         <status-legend
           .stockStatusFilter=${this.stockStatusFilter}
@@ -531,6 +714,20 @@ export class BranchReplenishmentContainer extends LitElement {
         </replenishment-data-table>
       </div>
     `;
+  }
+
+  // Handle toggle query panel event from quick panel
+  _handleToggleQueryPanel() {
+    console.log('Toggling query panel visibility. Current state:', this.queryPanelVisible);
+    this.queryPanelVisible = !this.queryPanelVisible;
+    
+    // Update the quick panel with current query panel state
+    const quickPanel = this.querySelector('quick-panel');
+    if (quickPanel) {
+      quickPanel.queryPanelVisible = this.queryPanelVisible;
+    }
+    
+    this.requestUpdate();
   }
 }
 

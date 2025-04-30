@@ -204,7 +204,7 @@ export class QueryPanel extends LitElement {
                 </div>
               </div>
             </div>
-            <div class="col-lg-3 text-lg-end mt-2 mt-lg-0">
+            <div class="col-lg-3 text-lg-end">
                <div class="btn-group btn-group-sm">
                   <button class="btn btn-success" @click=${() => this._emitAction('save-data')} ?disabled=${this.loading}>
                     <i class="bi bi-save me-1"></i> Save

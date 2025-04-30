@@ -3,21 +3,47 @@ import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit
 export class ManipulationPanel extends LitElement {
   static get properties() {
     return {
-      searchTerm: { type: String },
-      transferFilter: { type: String },
-      totalCount: { type: Number },
-      filteredCount: { type: Number },
+      searchTerm: { type: String, state: true },
+      transferFilter: { type: String, state: true },
+      totalCount: { type: Number, state: true },
+      filteredCount: { type: Number, state: true },
     };
+  }
+
+  constructor() {
+    super();
+    this.searchTerm = '';
+    this.transferFilter = 'all';
+    this.totalCount = 0;
+    this.filteredCount = 0;
   }
 
   createRenderRoot() { return this; } // Render in light DOM
 
   _dispatchUpdate(property, value) {
+    console.log(`ManipulationPanel dispatching ${property}:`, value);
+    
+    // Dispatch the generic update-property event
     this.dispatchEvent(new CustomEvent('update-property', {
       detail: { property, value },
       bubbles: true,
       composed: true
     }));
+    
+    // Also dispatch specific property-changed events that the container is now listening for
+    if (property === 'searchTerm') {
+      this.dispatchEvent(new CustomEvent('searchTerm-changed', {
+        detail: { value },
+        bubbles: true,
+        composed: true
+      }));
+    } else if (property === 'transferFilter') {
+      this.dispatchEvent(new CustomEvent('transferFilter-changed', {
+        detail: { value },
+        bubbles: true,
+        composed: true
+      }));
+    }
   }
 
   render() {
@@ -33,21 +59,6 @@ export class ManipulationPanel extends LitElement {
               <button class="btn btn-outline-secondary btn-clear-search" @click=${() => this._dispatchUpdate('searchTerm', '')} title="Clear search">
                 <i class="bi bi-x"></i>
               </button>` : ''}
-          </div>
-          <div class="btn-group btn-group-sm transfer-filter-group" role="group">
-            ${[
-                { value: 'all', label: 'All Items' },
-                { value: 'positive', label: 'With Transfer' },
-                { value: 'zero', label: 'No Transfer' }
-            ].map(filter => html`
-              <input type="radio" class="btn-check" name="transferFilter" id="tf-${filter.value}"
-                     .checked=${this.transferFilter === filter.value}
-                     @change=${() => this._dispatchUpdate('transferFilter', filter.value)}
-                     autocomplete="off">
-              <label class="btn btn-outline-secondary" for="tf-${filter.value}">
-                ${filter.label}
-              </label>
-            `)}
           </div>
         </div>
         <div class="text-muted small item-count-display ms-3">
