@@ -17,7 +17,7 @@
 /* Tab that sticks out for toggling the panel */
 .floating-quick-panel .floating-tab {
   width: 25px;
-  background-color: #f8f9fa;
+  background-color: rgb(68, 110, 155);
   border-radius: 6px 0 0 6px;
   display: flex;
   align-items: center;
@@ -29,7 +29,7 @@
 }
 
 .floating-quick-panel .floating-tab:hover {
-  background-color: #e9ecef;
+  background-color: #a2d0ff;
 }
 
 .floating-quick-panel .floating-tab i {

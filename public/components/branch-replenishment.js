@@ -1068,7 +1068,13 @@ PRIORITAR:
 -daca disponibil > 0 && disponibil - necesar < 0 => disponibil in cantitate (min/max) OK
 -adauga mtrl inainte de cod in tabel si export OK
 -sortare pe calup destinatii cu vizualizare in interfata calupuri destinatii
--filtre per coloanele numerice
+-filtre per coloanele numerice OK
 -freeze la capul de tabel
--zen view
+-zen view OK (quick panel)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!Login cu S1 credentials, doar ca o poarta, fara drepturi si asa!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+1. bug dropdown destinatie
+2. login poarta in platforma
+3. TOP ABC per companie si sucursala
 */

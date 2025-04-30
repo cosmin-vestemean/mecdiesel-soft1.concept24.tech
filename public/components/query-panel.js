@@ -115,8 +115,10 @@ export class QueryPanel extends LitElement {
       : Object.entries(this.branches || {});
 
     return html`
-      <div class="fancy-dropdown-menu" @click=${this.handleDropdownClick}>
-        <div class="fancy-dropdown-header">
+      <div class="fancy-dropdown-menu" 
+           style="position: absolute; z-index: 99999 !important; top: 100%; left: 0; right: 0;"
+           @click=${this.handleDropdownClick}>
+        <div class="fancy-dropdown-header" style="z-index: 99998 !important;">
            <input type="text" class="form-control form-control-sm" placeholder="Search branches..."
                  .value=${this.destSearchTerm}
                  @input=${e => this.destSearchTerm = e.target.value}

@@ -282,7 +282,7 @@ BEGIN
         dm.branchE, 
         br.branch branchD, 
         m.Code Cod, 
-        CASE WHEN LEN(m.Name) > 50 THEN CONCAT(LEFT(m.Name, 200), '...') ELSE m.Name END Descriere,
+        CASE WHEN LEN(m.Name) > 50 THEN CONCAT(LEFT(m.Name, 300), '...') ELSE m.Name END Descriere,
         dm.CantitateE stoc_emit, 
         dm.MinE min_emit, 
         dm.MaxE max_emit,

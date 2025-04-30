@@ -1,0 +1,29 @@
+.query-panel-container {
+  position: relative; /* Establish stacking context */
+  z-index: 1050 !important; /* Ensure it's above the sticky table header (z-index: 1020) */
+  transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.query-panel-container.hidden {
+  opacity: 0;
+  transform: translateY(-10px);
+  pointer-events: none; /* Prevent interaction when hidden */
+  height: 0;
+  overflow: hidden;
+  margin-bottom: 0 !important; /* Collapse margin when hidden */
+}
+
+/* Add styles for the quick panel positioning if needed */
+quick-panel {
+    position: fixed;
+    bottom: 50px; /* Adjust as needed, above footer */
+    right: 20px;
+    z-index: 1040; /* Below dropdown menu, but above most content */
+    /* Add other styles like background, padding, shadow etc. */
+    background-color: #fff;
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}

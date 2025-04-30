@@ -642,7 +642,7 @@ export class BranchReplenishmentContainer extends LitElement {
                           </div>` : ''}
 
         <!-- Query panel with animation for showing/hiding -->
-        <div class="query-panel-container ${this.queryPanelVisible ? 'visible' : 'hidden'}">
+        <div class="query-panel-container ${this.queryPanelVisible ? 'visible' : 'hidden'}" style="height: 600px;">
           <query-panel
             .branches=${this.branches}
             .branchesEmit=${this.branchesEmit}
