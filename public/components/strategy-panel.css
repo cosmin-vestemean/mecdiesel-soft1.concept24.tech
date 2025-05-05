@@ -41,7 +41,7 @@
 .floating-quick-panel .panel-content {
   padding: 15px;
   width: 280px;
-  overflow: hidden;
+  overflow: visible;
   transition: max-width 0.3s ease, opacity 0.2s ease;
 }
 
@@ -80,8 +80,10 @@
 
 .query-panel-container.hidden {
   max-height: 0;
+  overflow: hidden;
 }
 
 .query-panel-container.visible {
-  max-height: 500px; /* Adjust based on your query panel's height */
+  max-height: 500px;
+  overflow: visible;
 }

@@ -17,6 +17,9 @@
   transition: all 0.2s ease-in-out !important;
   height: auto !important;
   line-height: 1.5 !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
 }
 
 .fancy-dropdown-toggle:hover {
@@ -29,16 +32,14 @@
   outline: 0 !important;
 }
 
+/* Hide the standard select arrow in IE */
+.fancy-dropdown-toggle::-ms-expand {
+  display: none !important;
+}
+
+/* Remove the custom arrow */
 .fancy-dropdown-toggle::after {
-  display: inline-block !important;
-  content: '' !important;
-  width: 0.5em !important;
-  height: 0.5em !important;
-  margin-left: 0.5em !important;
-  border-top: 0.3em solid !important;
-  border-right: 0.3em solid transparent !important;
-  border-left: 0.3em solid transparent !important;
-  transition: transform 0.2s ease-in-out !important;
+  display: none !important;
 }
 
 .fancy-dropdown-menu {
@@ -52,11 +53,10 @@
   border: 1px solid #dee2e6 !important;
   border-radius: 4px !important;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15) !important;
-  max-height: 400px !important; /* Increased from 320px to 400px */
+  max-height: 320px !important;
   display: flex !important;
   flex-direction: column !important;
   animation: fadeIn 0.1s ease-out !important;
-  overflow: visible !important; /* Ensure content is not cut off */
 }
 
 @keyframes fadeIn {
@@ -97,7 +97,7 @@
 
 .fancy-dropdown-items {
   overflow-y: auto !important;
-  max-height: 320px !important; /* Increased from 240px to 320px */
+  max-height: 240px !important;
   scrollbar-width: thin !important;
   scrollbar-color: #ccc #f5f5f5 !important;
 }
@@ -152,20 +152,4 @@
   font-size: 0.75rem !important;
   font-weight: 500 !important;
   padding: 0.2em 0.5em !important;
-}
-
-/* Fix for dropdown position issues */
-.query-panel-container .fancy-dropdown-menu {
-  position: fixed !important; /* Use fixed positioning to avoid container constraints */
-  max-height: 450px !important; /* Provide even more space in query panel context */
-}
-
-/* Ensure dropdown is visible when inside container with overflow:hidden */
-.query-panel-container.visible .fancy-dropdown {
-  overflow: visible !important;
-  position: static !important;
-}
-
-.query-panel-container.visible .fancy-dropdown-menu {
-  z-index: 10000 !important; /* Even higher z-index for dropdowns in query panel */
 }

@@ -20,11 +20,11 @@ export class StatusLegend extends LitElement {
 
   render() {
     const statuses = [
-        { key: 'critical', label: 'Under Min', iconClass: 'critical' },
-        { key: 'optimal', label: 'Optimal', iconClass: 'optimal' },
-        { key: 'high', label: 'Over Max', iconClass: 'high' },
-        { key: 'undefined', label: 'No Limits', iconClass: 'undefined' },
-        { key: 'all', label: 'All Items', iconClass: 'all' }
+        { key: 'critical', label: 'Under Min', iconClass: 'critical', tooltip: 'Stock is below minimum threshold' },
+        { key: 'optimal', label: 'Optimal', iconClass: 'optimal', tooltip: 'Stock is between minimum and maximum thresholds' },
+        { key: 'high', label: 'Over Max', iconClass: 'high', tooltip: 'Stock is above maximum threshold' },
+        { key: 'undefined', label: 'No Limits', iconClass: 'undefined', tooltip: 'No minimum or maximum thresholds defined' },
+        { key: 'all', label: 'All Items', iconClass: 'all', tooltip: 'Show all items regardless of stock status' }
     ];
 
     const counts = this.statusCounts || {};
@@ -33,7 +33,8 @@ export class StatusLegend extends LitElement {
       <div class="status-legend mb-3 ${this.disabled ? 'disabled-panel' : ''}">
         ${statuses.map(status => html`
           <div class="legend-item ${this.stockStatusFilter === status.key ? 'active' : ''}"
-               @click=${() => !this.disabled && this._dispatchUpdate(status.key)}>
+               @click=${() => !this.disabled && this._dispatchUpdate(status.key)}
+               title="${status.tooltip}">
             <div class="legend-indicator ${status.iconClass}"></div>
             <span class="legend-label">${status.label}</span>
             <span class="legend-count">

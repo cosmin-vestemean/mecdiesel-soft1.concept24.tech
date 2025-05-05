@@ -35,7 +35,10 @@ export class ReplenishmentDataTable extends LitElement {
       }
   }
 
-  createRenderRoot() { return this; } // Render in light DOM
+  createRenderRoot() {
+    // Disable shadow DOM to allow external styles to apply
+    return this;
+  }
 
   _dispatchUpdate(property, value, itemKey = undefined, transferValue = undefined) {
       const detail = { property, value };
@@ -117,6 +120,9 @@ export class ReplenishmentDataTable extends LitElement {
       <tr>
         ${visibleColumns.map(col => html`
           <th class="${col.group || ''} ${col.divider ? 'vertical-divider' : ''}"
+              data-bs-toggle="tooltip"
+              data-bs-placement="top"
+              data-bs-trigger="hover"
               title="${col.tooltip || col.displayName}">
             ${col.isHeaderFilter 
               ? (col.type === 'number' 
@@ -137,21 +143,29 @@ export class ReplenishmentDataTable extends LitElement {
         <div class="btn-group btn-group-sm number-filter-group">
           <button class="btn btn-outline-secondary btn-xs ${this.getNumberFilterStatus(column.key, 'all')}" 
                   @click=${() => this._dispatchUpdate(`numberFilter_${column.key}`, 'all')}
+                  data-bs-toggle="tooltip"
+                  data-bs-placement="top"
                   title="Show all values">
             <i class="bi bi-asterisk"></i>
           </button>
           <button class="btn btn-outline-success btn-xs ${this.getNumberFilterStatus(column.key, 'positive')}" 
                   @click=${() => this._dispatchUpdate(`numberFilter_${column.key}`, 'positive')}
+                  data-bs-toggle="tooltip"
+                  data-bs-placement="top"
                   title="Show positive values only">
             <i class="bi bi-plus"></i>
           </button>
           <button class="btn btn-outline-danger btn-xs ${this.getNumberFilterStatus(column.key, 'negative')}" 
                   @click=${() => this._dispatchUpdate(`numberFilter_${column.key}`, 'negative')}
+                  data-bs-toggle="tooltip"
+                  data-bs-placement="top"
                   title="Show negative values only">
             <i class="bi bi-dash"></i>
           </button>
           <button class="btn btn-outline-secondary btn-xs ${this.getNumberFilterStatus(column.key, 'zero')}" 
                   @click=${() => this._dispatchUpdate(`numberFilter_${column.key}`, 'zero')}
+                  data-bs-toggle="tooltip"
+                  data-bs-placement="top"
                   title="Show zero values only">
             <i class="bi bi-0-circle"></i>
           </button>
@@ -190,17 +204,21 @@ export class ReplenishmentDataTable extends LitElement {
   renderCell(item, column, index) {
     let content = '';
     const value = item[column.key];
-    const cellClassList = [column.group || ''];
-    if (column.divider) cellClassList.push('vertical-divider');
+    // Ensure group class is first in the list and has !important
+    const cellClassList = [];
+    if (column.group) {
+      cellClassList.push(`group-${column.group}`);
+    }
+    if (column.divider) {
+      cellClassList.push('vertical-divider');
+    }
 
     // Apply dynamic class functions if defined
     if (column.classFn && typeof this.utilityFunctions[column.classFn] === 'function') {
-        cellClassList.push(this.utilityFunctions[column.classFn](item)); // Pass the whole item
+      cellClassList.push(this.utilityFunctions[column.classFn](item));
     } else if (column.classFn === 'getValueClass' && typeof this.utilityFunctions.getValueClass === 'function') {
-        // Special case for getValueClass which takes the value directly
-        cellClassList.push(this.utilityFunctions.getValueClass(value));
+      cellClassList.push(this.utilityFunctions.getValueClass(value));
     }
-
 
     if (column.type === 'index') {
       content = html`${index + 1}`;
@@ -220,29 +238,27 @@ export class ReplenishmentDataTable extends LitElement {
         />
       `;
     } else if (column.type === 'boolean') {
-        content = html`${value === 'Da' ? 'Yes' : (value === '-' ? 'No' : value)}`; // Handle 'Da'/'No'/-
+      content = html`${value === 'Da' ? 'Yes' : (value === '-' ? 'No' : value)}`;
     } else if (column.truncate) {
-        // Improved truncation with proper styling
-        const truncatedValue = (value || '').substring(0, column.truncate);
-        const showEllipsis = value?.length > column.truncate;
-        content = html`<span title="${value}">${truncatedValue}${showEllipsis ? '...' : ''}</span>`;
-        cellClassList.push('text-truncate');
+      const truncatedValue = (value || '').substring(0, column.truncate);
+      const showEllipsis = value?.length > column.truncate;
+      content = html`<span title="${value}">${truncatedValue}${showEllipsis ? '...' : ''}</span>`;
+      cellClassList.push('text-truncate');
     } else {
-      // Default rendering for other types (string, number)
       content = html`${value}`;
     }
 
-    // Add stock indicator styling directly if needed (can be redundant if classFn handles it)
+    // Add stock indicator styling if needed
     let indicatorHtml = '';
     if (column.key === 'stoc_emit' || column.key === 'stoc_dest') {
-        const stockClass = column.key === 'stoc_emit'
-            ? this.utilityFunctions.getStockClassEmit(item)
-            : this.utilityFunctions.getStockClassDest(item);
-        if (stockClass.includes('stock-critical')) indicatorHtml = html`<span class="stock-indicator critical">▼</span>`;
-        else if (stockClass.includes('stock-optimal')) indicatorHtml = html`<span class="stock-indicator optimal">✓</span>`;
-        else if (stockClass.includes('stock-high')) indicatorHtml = html`<span class="stock-indicator high">▲</span>`;
+      const stockClass = column.key === 'stoc_emit' 
+        ? this.utilityFunctions.getStockClassEmit(item)
+        : this.utilityFunctions.getStockClassDest(item);
+      
+      if (stockClass.includes('stock-critical')) indicatorHtml = html`<span class="stock-indicator critical">▼</span>`;
+      else if (stockClass.includes('stock-optimal')) indicatorHtml = html`<span class="stock-indicator optimal">✓</span>`;
+      else if (stockClass.includes('stock-high')) indicatorHtml = html`<span class="stock-indicator high">▲</span>`;
     }
-
 
     return html`
       <td class="${cellClassList.join(' ')}">
@@ -314,6 +330,21 @@ export class ReplenishmentDataTable extends LitElement {
         </table>
       </div>
     `;
+  }
+
+  updated(changedProperties) {
+    super.updated(changedProperties);
+    // Initialize tooltips after each update
+    const tooltipTriggerList = this.querySelectorAll('[data-bs-toggle="tooltip"]');
+    tooltipTriggerList.forEach(tooltipTriggerEl => {
+      // Dispose existing tooltip instance if it exists
+      const existingTooltip = bootstrap.Tooltip.getInstance(tooltipTriggerEl);
+      if (existingTooltip) {
+        existingTooltip.dispose();
+      }
+      // Create new tooltip instance
+      new bootstrap.Tooltip(tooltipTriggerEl);
+    });
   }
 
   connectedCallback() {

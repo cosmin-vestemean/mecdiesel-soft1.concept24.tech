@@ -367,20 +367,8 @@ export class BranchReplenishmentContainer extends LitElement {
     if (property === 'selectedDestBranches') {
       // Create a new array to ensure reactivity
       this.selectedDestBranches = Array.isArray(value) ? [...value] : [];
-      // Store the selection in localStorage to persist across page reloads
-      try {
-        localStorage.setItem('branchReplenishment_selectedDestBranches', JSON.stringify(this.selectedDestBranches));
-      } catch (err) {
-        console.error('Failed to save selected branches to localStorage:', err);
-      }
     } else if (property === 'branchesEmit') {
       this.branchesEmit = value;
-      // Store the source branch selection in localStorage
-      try {
-        localStorage.setItem('branchReplenishment_branchesEmit', value);
-      } catch (err) {
-        console.error('Failed to save source branch to localStorage:', err);
-      }
     } else if (this.hasOwnProperty(property)) {
       this[property] = value;
     }
@@ -416,7 +404,10 @@ export class BranchReplenishmentContainer extends LitElement {
   _handleLegendUpdate(e) {
      const { property, value } = e.detail;
      if (property === 'stockStatusFilter') {
-        this.stockStatusFilter = value;
+       this.stockStatusFilter = value;
+       // Re-render and update data table based on new stock status filter
+       this.requestUpdate();
+       this._updateDataTable();
      }
   }
 
@@ -451,22 +442,6 @@ export class BranchReplenishmentContainer extends LitElement {
   // --- Lifecycle Callbacks ---
   connectedCallback() {
     super.connectedCallback();
-    
-    // Load saved destination branches from localStorage if available
-    try {
-      const savedBranches = localStorage.getItem('branchReplenishment_selectedDestBranches');
-      if (savedBranches) {
-        this.selectedDestBranches = JSON.parse(savedBranches);
-      }
-      
-      // Load saved source branch from localStorage
-      const savedSourceBranch = localStorage.getItem('branchReplenishment_branchesEmit');
-      if (savedSourceBranch) {
-        this.branchesEmit = savedSourceBranch;
-      }
-    } catch (err) {
-      console.error('Failed to load saved settings from localStorage:', err);
-    }
   }
 
   firstUpdated() {
@@ -642,7 +617,7 @@ export class BranchReplenishmentContainer extends LitElement {
                           </div>` : ''}
 
         <!-- Query panel with animation for showing/hiding -->
-        <div class="query-panel-container ${this.queryPanelVisible ? 'visible' : 'hidden'}" style="height: 600px;">
+        <div class="query-panel-container ${this.queryPanelVisible ? 'visible' : 'hidden'}">
           <query-panel
             .branches=${this.branches}
             .branchesEmit=${this.branchesEmit}

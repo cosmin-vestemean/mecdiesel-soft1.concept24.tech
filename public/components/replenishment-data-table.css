@@ -1,7 +1,5 @@
 .data-table-container {
     position: relative; /* Needed for overlay */
-    /*max-height: 65vh;
-    overflow-y: auto;  */
     border: 1px solid #dee2e6;
     border-radius: 4px;
 }
@@ -19,9 +17,9 @@
     z-index: 1030; /* Above sticky header */
 }
 
-
+/* Table Layout & Structure */
 .modern-table {
-    font-size: 0.85rem;
+    font-size: 0.7rem !important; /* Set base font size for the entire table */
     margin-bottom: 0; /* Remove default margin */
 }
 
@@ -31,28 +29,24 @@
     vertical-align: middle;
     text-align: center;
     font-weight: 600;
-    font-size: 0.8rem;
 }
+
 .modern-table td {
     padding: 0.2rem 0.5rem; /* Adjust cell padding */
     vertical-align: middle;
     position: relative; /* For indicators */
-}
-
-.modern-table .text-truncate {
-    /*max-width: 200px;
-    display: inline-block; */
+    font-size: 0.7rem !important;
 }
 
 /* Fix for truncated text in spans */
 .modern-table td span {
-    font-size: inherit; /* Ensure spans inherit parent font size */
+    font-size: 0.7rem !important;
     line-height: inherit;
     vertical-align: middle;
 }
 
 .modern-table td.text-truncate span {
-    font-size: 0.8rem; /* Match table font size */
+    font-size: 0.7rem !important;
     max-width: 200px;
     display: inline-block;
     white-space: nowrap;
@@ -71,22 +65,35 @@ thead.sticky-top {
 
 /* Vertical Dividers */
 .vertical-divider {
-  border-left: 1px solid #d3d9df;
+    border-left: 1px solid #d3d9df !important;
 }
+
 th.vertical-divider {
-    border-left: 1px solid #c1c9d1; /* Slightly darker for header */
+    border-left: 1px solid #c1c9d1 !important;
 }
 
+/* Group Background Colors - High Specificity */
+.modern-table td.group-source,
+.modern-table th.group-source { 
+    background-color: rgba(230, 240, 255, 0.4) !important;
+}
 
-/* Group Backgrounds */
-.group-info { background-color: rgba(230, 240, 255, 0.3); }
-.group-source { background-color: rgba(240, 249, 255, 0.4); }
-.group-destination { background-color: rgba(240, 255, 240, 0.4); }
-.group-necessity { background-color: rgba(255, 248, 240, 0.4); }
-.group-action { background-color: rgba(249, 240, 255, 0.4); }
+.modern-table td.group-destination,
+.modern-table th.group-destination { 
+    background-color: rgba(230, 255, 235, 0.4) !important;
+}
+
+.modern-table td.group-necessity,
+.modern-table th.group-necessity { 
+    background-color: rgba(255, 245, 230, 0.4) !important;
+}
+
+.modern-table td.group-action,
+.modern-table th.group-action { 
+    background-color: rgba(245, 235, 255, 0.4) !important;
+}
 
 /* Alternating Row Colors */
-.odd-row { /* background-color: #ffffff; */ } /* Default white */
 .even-row { background-color: rgba(248, 249, 250, 0.5); } /* Very light gray */
 
 /* Hover effect */
@@ -94,37 +101,37 @@ tbody tr:hover {
     background-color: rgba(220, 235, 255, 0.5) !important; /* Light blue hover */
 }
 
-
-/* Compact Input for Transfer */
+/* Compact Input Styling */
 .compact-input {
-  padding: 0.1rem 0.2rem;
-  height: calc(1.5em + 0.2rem + 2px);
-  font-size: 0.8rem;
-  text-align: right;
-  border-radius: 2px;
-  max-width: 70px; /* Adjust width */
-  -moz-appearance: textfield; /* Firefox */
+    padding: 0.1rem 0.2rem !important;
+    height: calc(1.5em + 0.2rem + 2px) !important;
+    font-size: 0.8rem !important;
+    text-align: right !important;
+    border-radius: 2px !important;
+    max-width: 70px !important;
+    appearance: textfield !important;
+    -moz-appearance: textfield !important;
 }
+
 .compact-input::-webkit-outer-spin-button,
 .compact-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+    -webkit-appearance: none !important;
+    margin: 0 !important;
 }
 
 /* Header Filter Select */
 .header-filter-select {
-    font-size: 0.8rem;
-    font-weight: normal; /* Override bold header */
+    font-size: 0.8rem !important;
+    font-weight: normal !important; /* Override bold header */
     padding: 0.1rem 0.2rem !important; /* Override default padding */
-    min-width: 100px;
-    max-width: 150px;
-    background-image: none; /* Remove default arrow if needed */
+    min-width: 100px !important;
+    max-width: 150px !important;
+    background-image: none !important; /* Remove default arrow if needed */
 }
 .header-filter-select:focus {
     box-shadow: none;
     border-color: transparent;
 }
-
 
 /* Text Color Classes (from utilityFunctions) */
 .text-danger { color: #dc3545 !important; }
@@ -133,7 +140,6 @@ tbody tr:hover {
 .text-muted { color: #6c757d !important; }
 .text-dark { color: #212529 !important; }
 .fw-bold { font-weight: bold !important; }
-
 
 /* Stock Status Indicator Styles (applied via classFn or directly in renderCell) */
 .stock-indicator {
@@ -146,12 +152,46 @@ tbody tr:hover {
     padding: 1px;
     border-radius: 2px;
 }
-.stock-indicator.critical { color: #dc3545; }
-.stock-indicator.optimal { color: #0f5132; }
-.stock-indicator.high { color: #198754; }
+
+.stock-indicator.critical { 
+    color: #dc3545 !important; 
+}
+
+.stock-indicator.optimal { 
+    color: #0f5132 !important; 
+}
+
+.stock-indicator.high { 
+    color: #198754 !important; 
+}
 
 /* Apply base styles from getStockClass */
-td.stock-critical { /* color: #dc3545; */ } /* Color applied by text-danger */
-td.stock-optimal { /* color: #0f5132; */ font-weight: 500; } /* Color applied by text-dark */
-td.stock-high { /* color: #198754; */ } /* Color applied by text-success */
-td.stock-undefined { /* color: #ffc107; */ } /* Color applied by text-warning */
+.modern-table td.stock-critical { color: inherit; }
+.modern-table td.stock-optimal { font-weight: 500; }
+.modern-table td.stock-high { color: inherit; }
+.modern-table td.stock-undefined { color: inherit; }
+
+/* Tooltip Styling */
+.tooltip {
+    font-family: inherit !important;
+    font-size: 0.75rem !important;
+    opacity: 0.95 !important;
+}
+
+.tooltip .tooltip-inner {
+    max-width: 300px !important;
+    padding: 0.4rem 0.8rem !important;
+    background-color: var(--bs-primary) !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+}
+
+/* Custom arrow color to match primary background */
+.tooltip .tooltip-arrow::before {
+    border-top-color: var(--bs-primary) !important;
+    border-bottom-color: var(--bs-primary) !important;
+}
+
+/* Ensure tooltips appear above other elements */
+.tooltip {
+    z-index: 1070 !important;
+}

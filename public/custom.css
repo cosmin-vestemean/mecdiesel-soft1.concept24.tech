@@ -115,7 +115,7 @@ h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
 #searchItems {
   border-radius: 20px;
   padding-left: 12px;
-  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="%23446e9b" class="bi bi-search" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>') no-repeat;
+  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="%23446e9b" class="bi bi-search" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 5.5 0 1 1-11 0 5.5 5.5 5.5 0 0 1-11 0z"/></svg>') no-repeat;
   background-position: right 10px center;
   padding-right: 30px;
 }
@@ -515,21 +515,7 @@ branch-replenishment .compact-input {
 }
 
 /* Improved visual grouping for column types */
-branch-replenishment .group-source {
-  background-color: rgba(210, 230, 255, 0.3) !important;
-}
-
-branch-replenishment .group-destination {
-  background-color: rgba(210, 255, 220, 0.3) !important;
-}
-
-branch-replenishment .group-necessity {
-  background-color: rgba(255, 245, 210, 0.3) !important;
-}
-
-branch-replenishment .group-action {
-  background-color: rgba(240, 230, 255, 0.3) !important;
-}
+/* REMOVED duplicate group styles - these are now in replenishment-data-table.css */
 
 branch-replenishment .vertical-divider {
   border-left: 1px solid #dee2e6 !important;
@@ -577,4 +563,42 @@ branch-replenishment .stock-optimal::after {
 
 branch-replenishment .stock-high::before {
   font-size: 8px !important;
+}
+
+/* Custom Tooltip Styling */
+.tooltip {
+  --bs-tooltip-bg: #446e9b;
+  --bs-tooltip-opacity: 1;
+  --bs-tooltip-border-radius: 6px;
+  --bs-tooltip-padding-x: 12px;
+  --bs-tooltip-padding-y: 8px;
+  --bs-tooltip-font-size: 0.85rem;
+  --bs-tooltip-color: #fff;
+  --bs-tooltip-max-width: 300px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));
+}
+
+.tooltip .tooltip-inner {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
+  line-height: 1.4;
+  font-weight: 400;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: 0.2px;
+}
+
+.tooltip.bs-tooltip-top .tooltip-arrow::before {
+  border-top-color: #446e9b;
+}
+
+.tooltip.bs-tooltip-bottom .tooltip-arrow::before {
+  border-bottom-color: #446e9b;
+}
+
+.tooltip.bs-tooltip-start .tooltip-arrow::before {
+  border-left-color: #446e9b;
+}
+
+.tooltip.bs-tooltip-end .tooltip-arrow::before {
+  border-right-color: #446e9b;
 }
