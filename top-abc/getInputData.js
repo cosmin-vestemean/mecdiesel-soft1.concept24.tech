@@ -1,4 +1,25 @@
 /**
+ * Top ABC Stock Analysis and Replenishment Module
+ * =============================================
+ * 
+ * This module is executed within the Softone ERP environment to analyze and manage stock levels.
+ * It provides functionality for ABC analysis and automated stock replenishment calculations.
+ * 
+ * API Endpoints:
+ * -------------
+ * - Article Search:    https://mecdiesel.oncloud.gr/s1services/JS/adaugaArticoleCfFiltre
+ * - Replenishment:     https://mecdiesel.oncloud.gr/s1services/JS/ReumplereSucursale/adaugaArticole
+ * - Single Item:       https://mecdiesel.oncloud.gr/s1services/JS/ReumplereSucursale/test_getSingleItemNeeds
+ * - Test Endpoints:
+ *   - Article Filter:  https://mecdiesel.oncloud.gr/s1services/JS/ReumplereSucursale/test_getArticoleCfFiltre
+ *   - Needs Analysis: https://mecdiesel.oncloud.gr/s1services/JS/ReumplereSucursale/test_getCalculatedNeeds
+ * 
+ *TODO: Security
+ * ---------
+ * Access is restricted to web interface calls (X.SYS.USER === 104) for helper functions.
+ */
+
+/**
  * Returnează tipul de date al coloanei unei tabele.
  * @param {string} columnName - Numele coloanei.
  * @returns {string} Tipul de date al coloanei (text, varchar, int, etc.).
@@ -81,7 +102,7 @@ function conditiiFlitrare() {
 }
 
 /**
- * Adaugă articole în buffer pe baza filtrelor.
+ * Caută articole în baza de date pe baza filtrelor.
  * @param {object} config - Obiect de configurare.
  * @param {string} config.filterColumnName - Numele coloanei pentru filtrare.
  * @param {string} [config.sucursalaSqlInCondition] - Lista de ID-uri de sucursale (ex: "1,2,3").
@@ -93,14 +114,13 @@ function conditiiFlitrare() {
  * @param {number} [config.signVal] - Tipul de filtrare numeric.
  * @param {number} [config.val1] - Prima valoare pentru filtrul numeric.
  * @param {number} [config.val2] - A doua valoare pentru filtrul numeric.
- * @param {Array} outputBuffer - Array în care se adaugă materialele.
- * @returns {object} Statusul operației: { success: boolean, messages: Array, itemsAdded: number }
+ * @returns {object} { success: boolean, messages: string[], items: Array }
  */
-function adaugaArticoleCfFiltre(config, outputBuffer) {
-    var result = { success: false, messages: [], itemsAdded: 0 };
+function adaugaArticoleCfFiltre(config) {
+    var result = { success: false, messages: [], items: [] };
 
-    if (!config || !outputBuffer) {
-        result.messages.push("Configurație invalidă sau buffer de ieșire lipsă.");
+    if (!config) {
+        result.messages.push("Configurație invalidă.");
         return result;
     }
 
@@ -148,10 +168,10 @@ function adaugaArticoleCfFiltre(config, outputBuffer) {
     var whereDeblocate = config.doarDeblocate ? " AND isnull(m.CCCBLOCKPUR, 0)=0 " : "";
 
     var baseQuery =
-        "SELECT DISTINCT m.mtrl FROM mtrl m " +
+        "SELECT DISTINCT m.mtrl, m.code, m.name FROM mtrl m " +
         "INNER JOIN MTRBRNLIMITS l ON (m.mtrl = l.mtrl AND m.company = l.company) " +
         "WHERE m.company = " + X.SYS.COMPANY + " " +
-        conditiiFlitrare() + // Presupunem că această funcție este disponibilă și independentă de UI
+        conditiiFlitrare() +
         whereStocZero +
         whereDeblocate +
         " AND m.isactive=1 AND m.sodtype=51 AND m.mtracn=101 " +
@@ -173,11 +193,14 @@ function adaugaArticoleCfFiltre(config, outputBuffer) {
     if (dsItems && dsItems.RECORDCOUNT > 0) {
         dsItems.FIRST;
         while (!dsItems.EOF) {
-            outputBuffer.push({ MTRL: dsItems.mtrl });
+            result.items.push({
+                MTRL: dsItems.mtrl,
+                CODE: dsItems.code,
+                NAME: dsItems.name
+            });
             dsItems.NEXT;
         }
-        result.itemsAdded = dsItems.RECORDCOUNT;
-        result.messages.push("S-au adaugat " + result.itemsAdded + " articole in buffer.");
+        result.messages.push("S-au găsit " + dsItems.RECORDCOUNT + " articole.");
         result.success = true;
     } else {
         result.messages.push("Nu exista articole pentru filtrele selectate.");
@@ -411,27 +434,27 @@ function maxSucSel_sql(sucursalaSqlInCondition) {
 // și depind de aliasurile 'm' și 'a' definite acolo.
 
 function minCo_sql() {
-  return "SELECT CASE WHEN isnull(m.REMAINLIMMIN, 0) > isnull(m.CCCMINAUTOCOMP, 0) THEN isnull(m.REMAINLIMMIN, 0) ELSE isnull(m.CCCMINAUTOCOMP, 0) END";
+    return "SELECT CASE WHEN isnull(m.REMAINLIMMIN, 0) > isnull(m.CCCMINAUTOCOMP, 0) THEN isnull(m.REMAINLIMMIN, 0) ELSE isnull(m.CCCMINAUTOCOMP, 0) END";
 }
 
 function maxCo_sql() {
-  return "SELECT CASE WHEN isnull(m.REMAINLIMMAX, 0) > isnull(m.CCCMAXAUTOCOMP, 0) THEN isnull(m.REMAINLIMMAX, 0) ELSE isnull(m.CCCMAXAUTOCOMP, 0) END";
+    return "SELECT CASE WHEN isnull(m.REMAINLIMMAX, 0) > isnull(m.CCCMAXAUTOCOMP, 0) THEN isnull(m.REMAINLIMMAX, 0) ELSE isnull(m.CCCMAXAUTOCOMP, 0) END";
 }
 
 function nivMinSucSel_sql() {
-  return "SELECT isnull(remainlimmin, 0) remainlimmin FROM mtrbrnlimits WHERE mtrl = m.mtrl AND branch = a.branch";
+    return "SELECT isnull(remainlimmin, 0) remainlimmin FROM mtrbrnlimits WHERE mtrl = m.mtrl AND branch = a.branch";
 }
 
 function nivMaxSucSel_sql() {
-  return "SELECT isnull(remainlimmax, 0) remainlimmax FROM mtrbrnlimits WHERE mtrl = m.mtrl AND branch = a.branch";
+    return "SELECT isnull(remainlimmax, 0) remainlimmax FROM mtrbrnlimits WHERE mtrl = m.mtrl AND branch = a.branch";
 }
 
 function minAutoSucSel_sql() {
-  return "SELECT isnull(cccminauto, 0) cccminauto FROM mtrbrnlimits WHERE mtrl = m.mtrl AND branch = a.branch";
+    return "SELECT isnull(cccminauto, 0) cccminauto FROM mtrbrnlimits WHERE mtrl = m.mtrl AND branch = a.branch";
 }
 
 function maxAutoSucSel_sql() {
-  return "SELECT isnull(cccmaxauto, 0) cccmaxauto FROM mtrbrnlimits WHERE mtrl = m.mtrl AND branch = a.branch";
+    return "SELECT isnull(cccmaxauto, 0) cccmaxauto FROM mtrbrnlimits WHERE mtrl = m.mtrl AND branch = a.branch";
 }
 
 /**
@@ -445,15 +468,14 @@ function maxAutoSucSel_sql() {
  * @param {Date} config.currentDate - Data curentă.
  * @param {string} [config.sucursalaSqlInCondition] - Lista de ID-uri de sucursale separate prin virgulă (ex: "10,20").
  * @param {string} [config.supplierFilterSql] - Clauză SQL pentru filtrare furnizori.
- * @param {Array} outputLinesBuffer - Buffer pentru liniile generate.
  * @returns {object} Statusul operației: { success: boolean, messages: Array, linesAdded: number, processedLinesData: Array }
  */
-function adaugaArticole(isSingle, mtrlInput, config, outputLinesBuffer) {
-    var result = { success: false, messages: [], linesAdded: 0, processedLinesData: [] };
+function adaugaArticole(isSingle, mtrlInput, config) {
+    var result = { success: false, messages: [], items: [] };
 
     // Validări
-    if (!config || !outputLinesBuffer || config.salesHistoryMonths === undefined || !config.currentDate) {
-        result.messages.push("Configurație invalidă sau buffer de ieșire lipsă.");
+    if (!config || config.salesHistoryMonths === undefined || !config.currentDate) {
+        result.messages.push("Configurație invalidă.");
         return result;
     }
 
@@ -507,7 +529,7 @@ function adaugaArticole(isSingle, mtrlInput, config, outputLinesBuffer) {
 
     // Construcție SQL principal
     var mainQuery =
-        "SELECT DISTINCT * FROM (SELECT * " +
+        "SELECT DISTINCT d.*, m.code, m.name FROM (SELECT * " +
         "FROM ( " +
         "SELECT DISTINCT mtrl " +
         '	,NecesarMinCo = ' + necMinCo +
@@ -547,7 +569,8 @@ function adaugaArticole(isSingle, mtrlInput, config, outputLinesBuffer) {
         "	) a" +
         ") c WHERE (NecesarMinCo > 0 OR NecesarMaxCo > 0 OR NecesarMinSucSel > 0 OR NecesarMaxSucSel > 0)" +
         ") d " +
-        "LEFT JOIN trdr b ON (d.trdr = b.trdr AND d.company = b.company AND b.isactive = 1 AND b.sodtype = 12)";
+        "LEFT JOIN trdr b ON (d.trdr = b.trdr AND d.company = b.company AND b.isactive = 1 AND b.sodtype = 12) " +
+        "LEFT JOIN mtrl m ON (d.mtrl = m.mtrl)";
 
     var dsItems = X.GETSQLDATASET(mainQuery, null);
 
@@ -555,69 +578,63 @@ function adaugaArticole(isSingle, mtrlInput, config, outputLinesBuffer) {
     var nLuniVanzari = config.salesHistoryMonths;
     if (dsItems && dsItems.RECORDCOUNT > 0) {
         var currentLineNum = 1;
-        if (outputLinesBuffer.length > 0) {
-            currentLineNum = outputLinesBuffer.length + 1;
-        }
 
         dsItems.FIRST;
         while (!dsItems.EOF) {
-            var newItemLine = {};
+            var newItem = {
+                MTRL: dsItems.mtrl,
+                CODE: dsItems.code,
+                NAME: dsItems.name,
+                CCCFURNIZORALES: dsItems.trdr,
+                CCCQTYREZERVAT: dsItems.rezSucSel || 0,
+                CCCQTYASTEPTAT: getPending(1, dsItems.mtrl, true, sucursalaSqlInCondition) || 0,
+                CCCQTYSTOC: dsItems.stocSucSel || 0,
+                NUM03: dsItems.transferSucSel || 0,
+                CCCQTY1: dsItems.NecesarMinSucSel || 0,
+                CCCQTY2: dsItems.NecesarMaxSucSel || 0,
+                CCCREFERAT: dsItems.NecesarMinCo || 0,
+                CCCTERMEN: dsItems.NecesarMaxCo || 0
+            };
 
-            if (dsItems.trdr) newItemLine.CCCFURNIZORALES = dsItems.trdr;
-            newItemLine.MTRL = dsItems.mtrl;
-            newItemLine.LINENUM = currentLineNum;
-            newItemLine.MTRLINES = currentLineNum;
-            newItemLine.CCCQTYREZERVAT = dsItems.rezSucSel || 0;
-            newItemLine.CCCQTYASTEPTAT = getPending(1, newItemLine.MTRL, true, sucursalaSqlInCondition) || 0;
-            newItemLine.CCCQTYSTOC = dsItems.stocSucSel || 0;
-            newItemLine.NUM03 = dsItems.transferSucSel || 0;
-            newItemLine.CCCQTY1 = dsItems.NecesarMinSucSel || 0;
-            newItemLine.CCCQTY2 = dsItems.NecesarMaxSucSel || 0;
-            newItemLine.CCCREFERAT = dsItems.NecesarMinCo || 0;
-            newItemLine.CCCTERMEN = dsItems.NecesarMaxCo || 0;
-            newItemLine.CCC3MSALES = getLastNMonthSales(newItemLine.MTRL, nLuniVanzari, sucursalaSqlInCondition) || 0;
+            // Obține vânzările
+            newItem.CCC3MSALES = getLastNMonthSales(newItem.MTRL, nLuniVanzari, sucursalaSqlInCondition) || 0;
 
             // Calcul acoperire lunară
-            if (newItemLine.CCC3MSALES > 0 && nLuniVanzari > 0) {
-                var acoperireLunara = (newItemLine.CCCQTYASTEPTAT + newItemLine.CCCQTYSTOC + newItemLine.NUM03) / (newItemLine.CCC3MSALES / nLuniVanzari);
-                newItemLine.CCCACOPLUN = parseFloat(acoperireLunara.toFixed(2));
+            if (newItem.CCC3MSALES > 0 && nLuniVanzari > 0) {
+                var acoperireLunara = (newItem.CCCQTYASTEPTAT + newItem.CCCQTYSTOC + newItem.NUM03) / (newItem.CCC3MSALES / nLuniVanzari);
+                newItem.CCCACOPLUN = parseFloat(acoperireLunara.toFixed(2));
             } else {
-                newItemLine.CCCACOPLUN = 0;
+                newItem.CCCACOPLUN = 0;
             }
 
             // Calcul necesar minim și maxim
-            newItemLine.CCCNECMIN = Math.max(dsItems.NecesarMinCo || 0, dsItems.NecesarMinSucSel || 0);
-            newItemLine.CCCNECMAX = Math.max(dsItems.NecesarMaxCo || 0, dsItems.NecesarMaxSucSel || 0);
+            newItem.CCCNECMIN = Math.max(dsItems.NecesarMinCo || 0, dsItems.NecesarMinSucSel || 0);
+            newItem.CCCNECMAX = Math.max(dsItems.NecesarMaxCo || 0, dsItems.NecesarMaxSucSel || 0);
 
             // Calcul cantitate de comandat
             var adjustOrder = config.adjustOrderWithPending === true;
             if (adjustOrder) {
-                newItemLine.CCCORDERMIN = newItemLine.CCCNECMIN;
-                newItemLine.CCCORDERMAX = newItemLine.CCCNECMAX;
+                newItem.CCCORDERMIN = newItem.CCCNECMIN;
+                newItem.CCCORDERMAX = newItem.CCCNECMAX;
             } else {
-                var orderMin = newItemLine.CCCNECMIN - newItemLine.CCCQTYASTEPTAT;
-                newItemLine.CCCORDERMIN = orderMin > 0 ? orderMin : 0;
+                var orderMin = newItem.CCCNECMIN - newItem.CCCQTYASTEPTAT;
+                newItem.CCCORDERMIN = orderMin > 0 ? orderMin : 0;
 
-                var orderMax = newItemLine.CCCNECMAX - newItemLine.CCCQTYASTEPTAT;
-                newItemLine.CCCORDERMAX = orderMax > 0 ? orderMax : 0;
+                var orderMax = newItem.CCCNECMAX - newItem.CCCQTYASTEPTAT;
+                newItem.CCCORDERMAX = orderMax > 0 ? orderMax : 0;
             }
 
-            newItemLine.CCCQTYDATE = config.currentDate;
-
             // Obținere preț furnizor
-            var priceInfo = getDefaultSuppPrice(newItemLine.MTRL);
-            newItemLine.PRICE = priceInfo.price || 0;
-            newItemLine.CCCSOCURRENCY = priceInfo.currency || 0;
+            var priceInfo = getDefaultSuppPrice(newItem.MTRL);
+            newItem.PRICE = priceInfo.price || 0;
+            newItem.CCCSOCURRENCY = priceInfo.currency || 0;
 
-            outputLinesBuffer.push(newItemLine);
-            result.processedLinesData.push({ MTRL: newItemLine.MTRL, LINENUM: newItemLine.LINENUM });
-
+            result.items.push(newItem);
             currentLineNum++;
             dsItems.NEXT;
         }
 
-        result.linesAdded = dsItems.RECORDCOUNT;
-        result.messages.push("S-au procesat și adăugat " + result.linesAdded + " linii în buffer.");
+        result.messages.push("S-au calculat necesarul pentru " + dsItems.RECORDCOUNT + " articole.");
         result.success = true;
     } else {
         if (!dsItems) {
@@ -631,51 +648,43 @@ function adaugaArticole(isSingle, mtrlInput, config, outputLinesBuffer) {
     return result;
 }
 
-// Exemplu de folosire:
-// Pentru adaugaArticoleCfFiltre
-function testAdaugaArticoleCfFiltre() {
+// Example usage functions returning JSON endpoints
+function test_getArticoleCfFiltre() {
     var config = {
-        filterColumnName: "CODE", // fostul PURDOC.COMMENTS1
-        //sucursalaSqlInCondition: "10,20", // fostul CCCFILTRENECESARMINMAX.SUCURSALA
-        //selectedSuppliersSqlClause: " AND m.mtrsup IN (105,107) ", // rezultat din getSelectedSupp()
-        doarStocZero: false, // fostul CCCFILTRENECESARMINMAX.DOARSTOCZERO
-        doarDeblocate: true, // fostul CCCFILTRENECESARMINMAX.DOARDEBLOCATE
-        valTxt: "IVP1905", // fostul CCCFILTRENECESARMINMAX.VALTXT
-        signTxt: 1 // fostul CCCFILTRENECESARMINMAX.SIGNTXT
+        filterColumnName: "CODE",
+        doarStocZero: false,
+        doarDeblocate: true,
+        valTxt: "IVP1905",
+        signTxt: 1
     };
-    var outputBuffer = [];
-    var result = adaugaArticoleCfFiltre(config, outputBuffer);
 
-    return result;
+    return adaugaArticoleCfFiltre(config);
 }
 
-// Pentru adaugaArticole
-function testAdaugaArticole() {
-    var outputLinesBuffer1 = [];
-    var mtrlInput = [];
-
-    // Step 1: Run adaugaArticoleCfFiltre first
+function test_getCalculatedNeeds() {
+    // Step 1: Get filtered articles
     var resultArticoleCfFiltre = adaugaArticoleCfFiltre({
-        filterColumnName: "CODE", // fostul PURDOC.COMMENTS1
-        //sucursalaSqlInCondition: "10,20", // fostul CCCFILTRENECESARMINMAX.SUCURSALA
-        //selectedSuppliersSqlClause: " AND m.mtrsup IN (105,107) ", // rezultat din getSelectedSupp()
-        doarStocZero: false, // fostul CCCFILTRENECESARMINMAX.DOARSTOCZERO
-        doarDeblocate: true, // fostul CCCFILTRENECESARMINMAX.DOARDEBLOCATE
-        valTxt: "IVP1905", // fostul CCCFILTRENECESARMINMAX.VALTXT
-        signTxt: 1 // fostul CCCFILTRENECESARMINMAX.SIGNTXT
-    }, outputLinesBuffer1);
+        filterColumnName: "CODE",
+        doarStocZero: false,
+        doarDeblocate: true,
+        valTxt: "IVP1905",
+        signTxt: 1
+    });
 
-    // Check if first step succeeded
     if (!resultArticoleCfFiltre.success) {
         return resultArticoleCfFiltre;
     }
 
-    // Step 2: Build mtrl input string from results
-    mtrlInput = outputLinesBuffer1.map(function (item) {
-        return item.MTRL;
-    }).join(",");
+    // Step 2: Build mtrl input string 
+    var mtrlInput = '';
+    for (var i = 0; i < resultArticoleCfFiltre.items.length; i++) {
+        mtrlInput += resultArticoleCfFiltre.items[i].MTRL;
+        if (i < resultArticoleCfFiltre.items.length - 1) {
+            mtrlInput += ',';
+        }
+    }
 
-    // Step 3: Configure and run adaugaArticole
+    // Step 3: Get calculated needs
     var configArticole = {
         overstockBehavior: 0,
         salesHistoryMonths: 6,
@@ -683,13 +692,16 @@ function testAdaugaArticole() {
         currentDate: new Date()
     };
 
-    var outputLinesBuffer2 = [];
-    var resultArticole = adaugaArticole(false, mtrlInput, configArticole, outputLinesBuffer2);
+    return adaugaArticole(false, mtrlInput, configArticole);
+}
 
-    // Add additional message if successful
-    if (resultArticole.success) {
-        resultArticole.messages.push("S-au adăugat " + resultArticole.linesAdded + " articole în buffer.");
-    }
+function getSingleItemNeeds(mtrlId) {
+    var config = {
+        overstockBehavior: 0,
+        salesHistoryMonths: 6,
+        adjustOrderWithPending: false,
+        currentDate: new Date()
+    };
 
-    return resultArticole;
+    return adaugaArticole(true, mtrlId, config);
 }
