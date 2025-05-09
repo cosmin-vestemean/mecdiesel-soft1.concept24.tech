@@ -24,6 +24,8 @@ client.use("s1", socketClient.service("s1"), {
       "processListOfStocks",
       "getSqlDataset",
       "getAnalyticsForBranchReplenishment",
+      "getRegisteredUsers", // Keep registered method
+      "validateUserPwd", // Keep registered method
     ],
   });
 

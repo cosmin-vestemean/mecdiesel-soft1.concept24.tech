@@ -280,6 +280,113 @@ class s1Service {
       gzip: true,
     });
   }
+
+  async getRegisteredUsers(data, params) {
+    let loginResponse;
+    try {
+        loginResponse = await request({
+            method: "POST",
+            uri: "/",
+            body: {
+                service: "login",
+                username: "mecws",
+                password: "@28t$F",
+                appId: "2002",
+            },
+            json: true,
+            gzip: true,
+        });
+    } catch (loginError) {
+        console.error("Internal login failed within getRegisteredUsers:", loginError);
+        return { success: false, error: "Internal server error: Could not authenticate to fetch users." };
+    }
+
+    if (loginResponse.success) {
+        const users = loginResponse.objs;
+        console.log("Registered users fetched successfully.");
+        return {
+            success: true,
+            users: users,
+            appId: loginResponse.appId,
+            clientID: loginResponse.clientID,
+            version: loginResponse.ver,
+            sn: loginResponse.sn
+        };
+    } else {
+        console.error("Internal login failed within getRegisteredUsers, API response:", loginResponse.error);
+        return { success: false, error: `Failed to fetch users: ${loginResponse.error || 'Authentication failed'}` };
+    }
+  }
+
+  async validateUserPwd(data, params) {
+    console.log('validateUserPwd received data:', data);
+    const { sessionToken, clientID, password } = data; // clientID is the selected REFID
+
+    if (!sessionToken || !clientID || password === undefined) {
+        return { success: false, error: "Missing session token, clientID, or password for validation." };
+    }
+
+    let authResult;
+    try {
+        // Step 1: Authenticate the session using the sessionToken and the selected REFID, company, branch
+        const authPayload = {
+            service: 'authenticate',
+            clientID: sessionToken,  // The token establishing the session
+            appID: "2002",           // App ID
+            COMPANY: "1000",         // Explicitly set Company
+            BRANCH: "2200",          // Explicitly set Branch (Bucuresti)
+            MODULE: 0,               // Default module
+            REFID: clientID          // The user ID (REFID) being logged into
+        };
+        console.log(`Attempting authentication with explicit Company/Branch payload:`, authPayload);
+        authResult = await this.authenticate(authPayload);
+        console.log("Authentication result:", authResult);
+
+        if (!authResult || !authResult.success) {
+            // Use the specific error from the auth result if available
+            return { success: false, error: `Authentication failed: ${authResult.error || 'Unknown reason'}` };
+        }
+
+    } catch (authError) {
+        console.error("Error during authentication step:", authError);
+        return { success: false, error: "Server error during authentication step." };
+    }
+
+    // Step 2: Proceed with password validation using the (potentially refreshed) clientID from authResult
+    try {
+        console.log(`Proceeding to password validation for refid: ${clientID} using authenticated clientID: ${authResult.clientID}`);
+        const validationResponse = await request({ // Use the base 'request' object
+            method: "POST",
+            uri: "/JS/login/usrPwdValidate", // The specific validation endpoint
+            body: {
+                clientID: authResult.clientID, // Use the clientID from the successful auth step
+                module: 0,                 // Default module
+                refid: clientID,           // The user ID (REFID) being validated
+                password: password         // The password to validate
+            },
+            json: true,
+            gzip: true,
+        });
+
+        console.log("Password validation response:", validationResponse);
+        
+        // IMPORTANT: Return the potentially refreshed clientID from the auth step
+        // along with the validation result.
+        // Assuming validationResponse contains its own 'success' and 'error' fields.
+        return { 
+            ...validationResponse, // Spread the original validation response
+            success: validationResponse.success, // Explicitly ensure success field is from validationResponse
+            clientID: authResult.clientID // Override clientID with the one from the auth step
+        };
+
+    } catch (validationError) {
+        console.error("Error during password validation step:", validationError);
+        // Attempt to return a meaningful error if possible from the validation step's error
+        const errorMsg = validationError.error?.message || validationError.message || "Server error during password validation.";
+        // Return failure, but DO NOT return the clientID from the auth step if validation failed.
+        return { success: false, error: errorMsg }; 
+    }
+  }
 }
 
 //create a new custom service to connect to the external API
@@ -315,6 +422,8 @@ app.use("/s1", new s1Service(), {
     "processListOfStocks",
     "getSqlDataset",
     "getAnalyticsForBranchReplenishment",
+    "getRegisteredUsers",
+    "validateUserPwd",
   ],
 });
 

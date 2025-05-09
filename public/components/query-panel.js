@@ -214,6 +214,10 @@ export class QueryPanel extends LitElement {
                   <button class="btn btn-secondary" @click=${() => this._emitAction('export-data')} ?disabled=${this.loading}>
                     <i class="bi bi-file-excel me-1"></i> Export
                   </button>
+                  <button class="btn btn-danger" @click=${() => this._emitAction('reset-data')} ?disabled=${this.loading}
+                          data-bs-toggle="tooltip" data-bs-placement="top" title="Clear all data and start over">
+                    <i class="bi bi-x-circle me-1"></i> Reset
+                  </button>
                </div>
             </div>
           </div>
