@@ -1,0 +1,695 @@
+/**
+ * Returnează tipul de date al coloanei unei tabele.
+ * @param {string} columnName - Numele coloanei.
+ * @returns {string} Tipul de date al coloanei (text, varchar, int, etc.).
+ */
+function dbColumnType(columnName) {
+    return X.GETSQLDATASET(
+        "select b.name tableName, a.name columnName, c.name columnType from sys.columns a inner join sys.tables b on (a.object_id=b.object_id) " +
+        "inner join sys.types c on (a.system_type_id=c.system_type_id) where b.name in ('mtrl') and a.name='" +
+        columnName +
+        "'",
+        null
+    ).columnType;
+}
+
+/**
+ * Aplică filtre de tip string pentru căutare articole.
+ * @param {string} filterColumnName - Numele coloanei pe care se aplică filtrul.
+ * @param {string} txtVal - Valoarea pentru filtrare.
+ * @param {number} signTxt - Tipul de filtrare (1: începe cu, 2: conține, 3: se termină cu).
+ * @returns {string} Clauza SQL pentru filtrul text.
+ */
+function applyStringFilters(filterColumnName, txtVal, signTxt) {
+    if (!txtVal) return "";
+
+    // Escapare caractere speciale SQL
+    var escapedTxtVal = txtVal.replace(/'/g, "''");
+    escapedTxtVal = escapedTxtVal.replace(/%/g, "[%]");
+    escapedTxtVal = escapedTxtVal.replace(/_/g, "[_]");
+    escapedTxtVal = escapedTxtVal.replace(/!/g, "[!]");
+    escapedTxtVal = escapedTxtVal.replace(/\[/g, "[[]");
+    escapedTxtVal = escapedTxtVal.replace(/\]/g, "[]]");
+    escapedTxtVal = escapedTxtVal.replace(/\^/g, "[^]");
+    escapedTxtVal = escapedTxtVal.replace(/#/g, "[#]");
+    escapedTxtVal = escapedTxtVal.replace(/&/g, "[&]");
+    escapedTxtVal = escapedTxtVal.replace(/\$/g, "[$]");
+    escapedTxtVal = escapedTxtVal.replace(/"/g, '["]');
+
+    if (signTxt == 1) { // Începe cu
+        return " AND " + filterColumnName + " LIKE '" + escapedTxtVal + "%'";
+    } else if (signTxt == 2) { // Conține
+        return " AND " + filterColumnName + " LIKE '%" + escapedTxtVal + "%'";
+    } else if (signTxt == 3) { // Se termină cu
+        return " AND " + filterColumnName + " LIKE '%" + escapedTxtVal + "'";
+    }
+    return "";
+}
+
+/**
+ * Aplică filtre numerice pentru căutare articole.
+ * @param {string} filterColumnName - Numele coloanei pe care se aplică filtrul.
+ * @param {number} signVal - Tipul de filtru (1: egal, 2: între).
+ * @param {number} val1 - Prima valoare.
+ * @param {number} val2 - A doua valoare (pentru interval).
+ * @returns {string} Clauza SQL pentru filtrul numeric.
+ */
+function applyNumbersFilter(filterColumnName, signVal, val1, val2) {
+    if (signVal == 1) {
+        return " AND " + filterColumnName + " = " + val1;
+    } else if (signVal == 2) {
+        return " AND " + filterColumnName + " BETWEEN " + val1 + " AND " + val2;
+    }
+    return "";
+}
+
+/**
+ * Returnează condiții de filtrare SQL pentru articole cu limitări de stoc.
+ * @returns {string} Clauza SQL pentru filtrare.
+ */
+function conditiiFlitrare() {
+    return (
+        "AND (isnull(m.REMAINLIMMIN, 0) > 0 " +
+        "OR isnull(m.REMAINLIMMAX, 0) > 0 " +
+        "OR isnull(m.CCCMINAUTOCOMP, 0) > 0 " +
+        "OR isnull(m.CCCMAXAUTOCOMP, 0) > 0 " +
+        "OR isnull(l.REMAINLIMMIN, 0) > 0 " +
+        "OR isnull(l.REMAINLIMMAX, 0) > 0 " +
+        "OR isnull(l.CCCMINAUTO, 0) > 0 " +
+        "OR isnull(l.CCCMAXAUTO, 0) > 0) "
+    );
+}
+
+/**
+ * Adaugă articole în buffer pe baza filtrelor.
+ * @param {object} config - Obiect de configurare.
+ * @param {string} config.filterColumnName - Numele coloanei pentru filtrare.
+ * @param {string} [config.sucursalaSqlInCondition] - Lista de ID-uri de sucursale (ex: "1,2,3").
+ * @param {string} [config.selectedSuppliersSqlClause] - Clauza SQL pentru furnizori selectați.
+ * @param {boolean} [config.doarStocZero=false] - Filtru pentru stoc zero.
+ * @param {boolean} [config.doarDeblocate=false] - Filtru pentru articole deblocate.
+ * @param {string} [config.valTxt] - Valoarea pentru filtrul text.
+ * @param {number} [config.signTxt] - Tipul de filtrare text.
+ * @param {number} [config.signVal] - Tipul de filtrare numeric.
+ * @param {number} [config.val1] - Prima valoare pentru filtrul numeric.
+ * @param {number} [config.val2] - A doua valoare pentru filtrul numeric.
+ * @param {Array} outputBuffer - Array în care se adaugă materialele.
+ * @returns {object} Statusul operației: { success: boolean, messages: Array, itemsAdded: number }
+ */
+function adaugaArticoleCfFiltre(config, outputBuffer) {
+    var result = { success: false, messages: [], itemsAdded: 0 };
+
+    if (!config || !outputBuffer) {
+        result.messages.push("Configurație invalidă sau buffer de ieșire lipsă.");
+        return result;
+    }
+
+    // În original: CCCFILTRENECESARMINMAX.CONFIRMARE = 0;
+
+    // Verificare duplicate în mtrbrnlimits
+    var dsDuplicateCheck = X.GETSQLDATASET(
+        "SELECT b.code, a.mtrl, a.branch, count(*) FROM mtrbrnlimits a " +
+        "INNER JOIN mtrl b ON (a.MTRL = b.MTRl) " +
+        "GROUP BY a.mtrl, a.BRANCH, b.code " +
+        "HAVING count(*) > 1",
+        null
+    );
+
+    if (dsDuplicateCheck && dsDuplicateCheck.RECORDCOUNT > 0) {
+        var msg = 'Următoarele coduri au nevoie de atentie in tab-ul "Niveluri stoc filiale:"\n';
+        dsDuplicateCheck.FIRST;
+        while (!dsDuplicateCheck.EOF) {
+            msg += dsDuplicateCheck.code + "\n";
+            dsDuplicateCheck.NEXT;
+        }
+        result.messages.push(msg);
+        return result;
+    }
+
+    var columnType = config.filterColumnName ? dbColumnType(config.filterColumnName) : null;
+
+    var selBranches1 = config.sucursalaSqlInCondition
+        ? " AND l.branch IN (" + config.sucursalaSqlInCondition + ") "
+        : "";
+
+    var selSupps = config.selectedSuppliersSqlClause || "";
+
+    var whereStocZeroSuc = (config.doarStocZero && config.sucursalaSqlInCondition)
+        ? " AND c.cccbranch IN (" + config.sucursalaSqlInCondition + ") "
+        : "";
+
+    var whereStocZero = config.doarStocZero
+        ? " AND (SELECT coalesce(sum(coalesce(impqty1, 0)) - sum(coalesce(expqty1, 0)), 0) FROM mtrbalsheet b" +
+        " INNER JOIN whouse c ON (b.whouse=c.whouse AND b.company=c.company) WHERE b.mtrl=m.mtrl" +
+        whereStocZeroSuc +
+        " AND b.fiscprd=year(getdate()))=0 "
+        : "";
+
+    var whereDeblocate = config.doarDeblocate ? " AND isnull(m.CCCBLOCKPUR, 0)=0 " : "";
+
+    var baseQuery =
+        "SELECT DISTINCT m.mtrl FROM mtrl m " +
+        "INNER JOIN MTRBRNLIMITS l ON (m.mtrl = l.mtrl AND m.company = l.company) " +
+        "WHERE m.company = " + X.SYS.COMPANY + " " +
+        conditiiFlitrare() + // Presupunem că această funcție este disponibilă și independentă de UI
+        whereStocZero +
+        whereDeblocate +
+        " AND m.isactive=1 AND m.sodtype=51 AND m.mtracn=101 " +
+        selSupps +
+        selBranches1;
+
+    var filterQuery = "";
+    if (columnType) {
+        if (columnType == "text" || columnType == "varchar") {
+            filterQuery = applyStringFilters(config.filterColumnName, config.valTxt, config.signTxt);
+        } else {
+            filterQuery = applyNumbersFilter(config.filterColumnName, config.signVal, config.val1, config.val2);
+        }
+    }
+
+    var finalQuery = baseQuery + filterQuery;
+    var dsItems = X.GETSQLDATASET(finalQuery, null);
+
+    if (dsItems && dsItems.RECORDCOUNT > 0) {
+        dsItems.FIRST;
+        while (!dsItems.EOF) {
+            outputBuffer.push({ MTRL: dsItems.mtrl });
+            dsItems.NEXT;
+        }
+        result.itemsAdded = dsItems.RECORDCOUNT;
+        result.messages.push("S-au adaugat " + result.itemsAdded + " articole in buffer.");
+        result.success = true;
+    } else {
+        result.messages.push("Nu exista articole pentru filtrele selectate.");
+        result.success = false;
+    }
+
+    return result;
+}
+
+/**
+ * Returnează vânzările pe ultimele N luni pentru un material.
+ * @param {number} mtrl - ID-ul materialului.
+ * @param {number} lastNMonths - Numărul de luni.
+ * @param {string} [sucursalaSqlInCondition] - Lista de ID-uri de sucursale separate prin virgulă (ex: "10,20").
+ * @returns {number} Cantitatea vândută.
+ */
+function getLastNMonthSales(mtrl, lastNMonths, sucursalaSqlInCondition) {
+    var branchQry = sucursalaSqlInCondition
+        ? " AND whouse IN (" + sucursalaSqlInCondition + ") "
+        : "";
+
+    var currentYear = new Date().getFullYear();
+    var startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - (lastNMonths - 1));
+    var startYear = startDate.getFullYear();
+    var startMonth = startDate.getMonth() + 1;
+
+    var q =
+        "SELECT isnull(SUM(isnull(SALQTY, 0)), 0) AS cant FROM MTRBALSHEET " +
+        "WHERE MTRL=" + mtrl +
+        " AND COMPANY=" + X.SYS.COMPANY +
+        " AND PERIOD != 0" +
+        " AND (FISCPRD > " + startYear + " OR (FISCPRD = " + startYear + " AND PERIOD >= " + startMonth + "))" +
+        branchQry;
+
+    var ds = X.GETSQLDATASET(q, null);
+    if (ds && ds.RECORDCOUNT > 0 && ds.cant !== null) {
+        return ds.cant;
+    }
+    return 0;
+}
+
+/**
+ * Returnează cantitățile de materiale în așteptare/rezervate.
+ * @param {number} restCateg - Categoria stării (1: așteptat, 2: rezervat).
+ * @param {number} mtrl - ID-ul materialului.
+ * @param {boolean} sumResult - True pentru a returna suma totală.
+ * @param {string} [sucursalaSqlInCondition] - Lista de ID-uri de sucursale separate prin virgulă (ex: "10,20").
+ * @returns {number|object} Cantitatea sau un dataset.
+ */
+function getPending(restCateg, mtrl, sumResult, sucursalaSqlInCondition) {
+    var branchQry = sucursalaSqlInCondition
+        ? " WHERE fil IN (" + sucursalaSqlInCondition + ") "
+        : "";
+
+    var strPendingQuery = sumResult ? "SELECT sum(cant) AS cant FROM (" : "";
+    strPendingQuery +=
+        "SELECT mtrl, fil, sum(qty1) AS cant " +
+        "FROM ( " +
+        "SELECT mtrl, CASE isnull(salesman, 0) WHEN 0 THEN fil_doc ELSE fil_repr END AS fil, restmode, restcateg, qty1 " +
+        "FROM ( " +
+        "SELECT a.mtrl, e.cccbranch AS fil_doc, d.BRANCH AS fil_repr, a.SALESMAN, A.RESTMODE, C.RESTCATEG, " +
+        "SUM(dbo.FNSOGETLINEPEND(A.FINDOC, A.MTRLINES)) AS QTY1 " +
+        "FROM MTRLINES A " +
+        "INNER JOIN FINDOC B ON (a.FINDOC = b.FINDOC AND a.SOSOURCE = b.SOSOURCE AND a.COMPANY = b.COMPANY) " +
+        "INNER JOIN RESTMODE C ON (a.RESTMODE = c.RESTMODE AND a.COMPANY = C.COMPANY) " +
+        "LEFT JOIN prsn d ON (B.salesman = d.prsn AND a.company = d.company) " +
+        "INNER JOIN WHOUSE e ON (e.whouse = a.whouse AND a.company = e.company) " +
+        "WHERE A.COMPANY = " + X.SYS.COMPANY + " AND A.MTRL = " + mtrl + " AND A.PENDING = 1 " +
+        "AND B.TRNDATE <= cast(getdate() AS DATE) AND B.ISCANCEL = 0 AND C.RESTCATEG = " + restCateg + " " +
+        "GROUP BY A.COMPANY, A.MTRL, A.PENDING, e.cccbranch, d.BRANCH, a.SALESMAN, A.RESTMODE, C.RESTCATEG " +
+        ") x " +
+        ") y " +
+        branchQry +
+        "GROUP BY mtrl, fil, restmode, restcateg";
+    strPendingQuery += sumResult ? ") t1" : "";
+
+    var ds = X.GETSQLDATASET(strPendingQuery, null);
+    if (sumResult) {
+        if (ds && ds.RECORDCOUNT > 0 && ds.cant !== null) {
+            return ds.cant;
+        }
+        return 0;
+    }
+    return ds;
+}
+
+/**
+ * Returnează prețul și moneda pentru furnizorul implicit al unui material.
+ * @param {number} mtrl - ID-ul materialului.
+ * @returns {{price: number, currency: number}} Informații despre preț.
+ */
+function getDefaultSuppPrice(mtrl) {
+    var q =
+        "SELECT isnull(PRICE, 0) AS PRICE, isnull(SOCURRENCY, 0) AS SOCURRENCY FROM CCCMTRLSUPPRCS " +
+        "WHERE MTRL = " + mtrl +
+        " AND TRDR = (SELECT mtrsup FROM mtrl WHERE mtrl = " + mtrl + " AND company = " + X.SYS.COMPANY + ")";
+
+    var ds = X.GETSQLDATASET(q, null);
+    if (ds && ds.RECORDCOUNT > 0) {
+        return { price: ds.PRICE, currency: ds.SOCURRENCY };
+    }
+    return { price: 0, currency: 0 };
+}
+
+/**
+ * Generează query-ul pentru stoc
+ * @param {string} [sucursalaSqlInCondition] - Lista de ID-uri de sucursale separate prin virgulă (ex: "10,20").
+ * @returns {string} Fragment SQL.
+ */
+function stoc_sql(sucursalaSqlInCondition) {
+    var selBranches1 = sucursalaSqlInCondition
+        ? " AND b.cccbranch IN (" + sucursalaSqlInCondition + ") "
+        : "";
+
+    return (
+        "SELECT isnull(sum(cant), 0) cant " +
+        "FROM ( " +
+        "  SELECT mtrl, fil, sum(qty1) cant " +
+        "  FROM ( " +
+        "    SELECT a.mtrl, b.cccbranch fil, a.qty1 " +
+        "    FROM mtrfindata a " +
+        "    INNER JOIN whouse b ON (a.whouse = b.whouse AND a.company = b.company " +
+        "      AND b.CCCBRANCH IS NOT NULL AND b.whouse <> 9999) " +
+        "    WHERE mtrl = m.mtrl " +
+        "    AND a.company = " + X.SYS.COMPANY + " " +
+        "    AND a.fiscprd = year(getdate()) " +
+        selBranches1 +
+        "  ) t1 " +
+        "  GROUP BY mtrl, fil " +
+        ") t2"
+    );
+}
+
+/**
+ * Generează query-ul pentru transferuri
+ * @param {boolean} isComp - True pentru nivel companie, false pentru nivel sucursală.
+ * @param {string} [sucursalaSqlInCondition] - Lista de ID-uri de sucursale separate prin virgulă (ex: "10,20").
+ * @returns {string} Fragment SQL.
+ */
+function inTransfer_sql(isComp, sucursalaSqlInCondition) {
+    var branchFilterClause = (!isComp && sucursalaSqlInCondition)
+        ? " AND B.BRANCHSEC IN (" + sucursalaSqlInCondition + ") "
+        : "";
+
+    return (
+        "SELECT isnull(sum(isnull(cant, 0)), 0) cant FROM (SELECT isnull(sum(c.qty1), 0) cant " +
+        "FROM FINDOC A INNER JOIN MTRDOC B ON A.FINDOC = B.FINDOC AND A.COMPANY = B.COMPANY " +
+        "INNER JOIN MTRLINES C ON (A.SOSOURCE=C.SOSOURCE AND A.FINDOC=C.FINDOC AND A.COMPANY=C.COMPANY) " +
+        "WHERE A.COMPANY = " + X.SYS.COMPANY + " AND A.SOSOURCE = 1151 AND A.FPRMS = 3153 " +
+        "AND A.FULLYTRANSF = 0 AND C.MTRL = M.MTRL AND B.WHOUSESEC = 9999 " +
+        branchFilterClause + " AND A.FISCPRD = YEAR(GETDATE()) " +
+        "GROUP BY A.COMPANY, B.BRANCHSEC, B.WHOUSESEC, C.MTRL) t1"
+    );
+}
+
+/**
+ * Generează query-ul pentru rezervări
+ * @param {string} [sucursalaSqlInCondition] - Lista de ID-uri de sucursale separate prin virgulă (ex: "10,20").
+ * @returns {string} Fragment SQL.
+ */
+function rezervat_sql(sucursalaSqlInCondition) {
+    var selBranches2 = sucursalaSqlInCondition
+        ? "AND (e.cccbranch IN (" + sucursalaSqlInCondition + ") OR d.BRANCH IN (" + sucursalaSqlInCondition + ")) "
+        : "";
+
+    return (
+        "SELECT isnull(sum(cant), 0) cant " +
+        "FROM ( " +
+        "  SELECT mtrl, fil, sum(qty1) cant " +
+        "  FROM ( " +
+        "    SELECT mtrl, " +
+        "    CASE isnull(salesman, 0) WHEN 0 THEN fil_doc ELSE fil_repr END AS fil, " +
+        "    restmode, restcateg, qty1 " +
+        "    FROM ( " +
+        "      SELECT a.mtrl, e.cccbranch fil_doc, d.BRANCH fil_repr, " +
+        "      a.SALESMAN, A.RESTMODE, C.RESTCATEG, SUM(dbo.FNSOGETLINEPEND(A.FINDOC, A.MTRLINES)) AS QTY1 " +
+        "      FROM MTRLINES A INNER JOIN FINDOC B ON (a.FINDOC = b.FINDOC AND a.SOSOURCE = b.SOSOURCE AND a.COMPANY = b.COMPANY) " +
+        "      INNER JOIN RESTMODE C ON (a.RESTMODE = c.RESTMODE AND a.COMPANY = C.COMPANY) " +
+        "      LEFT JOIN prsn d ON (B.salesman = d.prsn AND a.company = d.company) " +
+        "      INNER JOIN WHOUSE e ON (e.whouse = a.whouse AND a.company = e.company) " +
+        "      WHERE A.COMPANY = " + X.SYS.COMPANY + " AND A.MTRL = m.mtrl AND A.PENDING = 1 " +
+        "      AND B.TRNDATE <= cast(getdate() AS DATE) AND B.ISCANCEL = 0 AND C.RESTCATEG = 2 " +
+        selBranches2 +
+        "      GROUP BY A.COMPANY, A.MTRL, A.PENDING, e.cccbranch, d.BRANCH, a.SALESMAN, A.RESTMODE, C.RESTCATEG " +
+        "    ) x " +
+        "  ) y " +
+        "  GROUP BY mtrl, fil, restmode, restcateg " +
+        ") t1"
+    );
+}
+
+/**
+ * Generează query-ul pentru minim sucursale selectate
+ * @param {string} [sucursalaSqlInCondition] - Lista de ID-uri de sucursale separate prin virgulă (ex: "10,20").
+ * @returns {string} Fragment SQL.
+ */
+function minSucSel_sql(sucursalaSqlInCondition) {
+    var selBranches1 = sucursalaSqlInCondition
+        ? " AND a.branch IN (" + sucursalaSqlInCondition + ") "
+        : "";
+
+    return (
+        "SELECT sum(maxx) FROM (SELECT (SELECT CASE WHEN (" + nivMinSucSel_sql() + ") > (" +
+        minAutoSucSel_sql() + ") THEN (" + nivMinSucSel_sql() + ") ELSE (" +
+        minAutoSucSel_sql() + ") END) AS maxx FROM branch a WHERE company = " +
+        X.SYS.COMPANY + selBranches1 + ") aa"
+    );
+}
+
+/**
+ * Generează query-ul pentru maxim sucursale selectate
+ * @param {string} [sucursalaSqlInCondition] - Lista de ID-uri de sucursale separate prin virgulă (ex: "10,20").
+ * @returns {string} Fragment SQL.
+ */
+function maxSucSel_sql(sucursalaSqlInCondition) {
+    var selBranches1 = sucursalaSqlInCondition
+        ? " AND a.branch IN (" + sucursalaSqlInCondition + ") "
+        : "";
+
+    return (
+        "SELECT sum(maxx) FROM (SELECT (SELECT CASE WHEN (" + nivMaxSucSel_sql() + ") > (" +
+        maxAutoSucSel_sql() + ") THEN (" + nivMaxSucSel_sql() + ") ELSE (" +
+        maxAutoSucSel_sql() + ") END) AS maxx FROM branch a WHERE company = " +
+        X.SYS.COMPANY + selBranches1 + ") aa"
+    );
+}
+
+// --- FUNCȚII SQL SNIPPET ---
+// Acestea returnează doar fragmente de SQL care sunt utilizate în query-ul principal
+// și depind de aliasurile 'm' și 'a' definite acolo.
+
+function minCo_sql() {
+  return "SELECT CASE WHEN isnull(m.REMAINLIMMIN, 0) > isnull(m.CCCMINAUTOCOMP, 0) THEN isnull(m.REMAINLIMMIN, 0) ELSE isnull(m.CCCMINAUTOCOMP, 0) END";
+}
+
+function maxCo_sql() {
+  return "SELECT CASE WHEN isnull(m.REMAINLIMMAX, 0) > isnull(m.CCCMAXAUTOCOMP, 0) THEN isnull(m.REMAINLIMMAX, 0) ELSE isnull(m.CCCMAXAUTOCOMP, 0) END";
+}
+
+function nivMinSucSel_sql() {
+  return "SELECT isnull(remainlimmin, 0) remainlimmin FROM mtrbrnlimits WHERE mtrl = m.mtrl AND branch = a.branch";
+}
+
+function nivMaxSucSel_sql() {
+  return "SELECT isnull(remainlimmax, 0) remainlimmax FROM mtrbrnlimits WHERE mtrl = m.mtrl AND branch = a.branch";
+}
+
+function minAutoSucSel_sql() {
+  return "SELECT isnull(cccminauto, 0) cccminauto FROM mtrbrnlimits WHERE mtrl = m.mtrl AND branch = a.branch";
+}
+
+function maxAutoSucSel_sql() {
+  return "SELECT isnull(cccmaxauto, 0) cccmaxauto FROM mtrbrnlimits WHERE mtrl = m.mtrl AND branch = a.branch";
+}
+
+/**
+ * Adaugă articole cu necesar calculat într-un buffer de output.
+ * @param {boolean} isSingle - True pentru a procesa un singur material.
+ * @param {number|string} mtrlInput - ID-ul materialului sau string cu ID-uri separate prin virgulă.
+ * @param {object} config - Configurație.
+ * @param {number} [config.overstockBehavior=0] - Comportament overstock (0: compensare, 1: fără compensare).
+ * @param {number} config.salesHistoryMonths - Numărul de luni pentru istoricul vânzărilor.
+ * @param {boolean} [config.adjustOrderWithPending=false] - Flag pentru ajustarea comenzii cu cantitatea în așteptare.
+ * @param {Date} config.currentDate - Data curentă.
+ * @param {string} [config.sucursalaSqlInCondition] - Lista de ID-uri de sucursale separate prin virgulă (ex: "10,20").
+ * @param {string} [config.supplierFilterSql] - Clauză SQL pentru filtrare furnizori.
+ * @param {Array} outputLinesBuffer - Buffer pentru liniile generate.
+ * @returns {object} Statusul operației: { success: boolean, messages: Array, linesAdded: number, processedLinesData: Array }
+ */
+function adaugaArticole(isSingle, mtrlInput, config, outputLinesBuffer) {
+    var result = { success: false, messages: [], linesAdded: 0, processedLinesData: [] };
+
+    // Validări
+    if (!config || !outputLinesBuffer || config.salesHistoryMonths === undefined || !config.currentDate) {
+        result.messages.push("Configurație invalidă sau buffer de ieșire lipsă.");
+        return result;
+    }
+
+    // Construcție clauză WHERE pentru mtrl
+    var strMtrl = "";
+    if (isSingle) {
+        if (!mtrlInput) {
+            result.messages.push("ID material lipsă pentru procesare individuală.");
+            return result;
+        }
+        strMtrl = " AND m.mtrl = " + mtrlInput;
+    } else if (mtrlInput && String(mtrlInput).length) {
+        // Verificare validitate pentru o listă de ID-uri
+        var mtrlArray = String(mtrlInput).split(',');
+        for (var i = 0; i < mtrlArray.length; i++) {
+            if (isNaN(parseInt(mtrlArray[i].trim(), 10))) {
+                result.messages.push("Lista de materiale conține valori non-numerice.");
+                return result;
+            }
+        }
+        strMtrl = " AND m.mtrl IN (" + mtrlInput + ")";
+    } else {
+        result.messages.push("Niciun material specificat pentru procesare.");
+        return result;
+    }
+
+    // Pregătire clauze SQL
+    var overstockBehavior = config.overstockBehavior !== undefined ? config.overstockBehavior : 0;
+    var sucursalaSqlInCondition = config.sucursalaSqlInCondition || "";
+    var selTrdrs = config.supplierFilterSql || "";
+
+    // Construcție formule pentru necesar
+    var disponibilCo = " isnull((isnull(stocCo, 0) + isnull(transferCo, 0) - isnull(rezCo, 0)), 0) ";
+    var disponibilSucSel = " isnull((isnull(stocSucSel, 0) + isnull(transferSucSel, 0) - isnull(rezSucSel, 0)), 0) ";
+
+    var necMinCo = overstockBehavior ?
+        " isnull(minCo, 0) - " + disponibilCo :
+        "CASE WHEN " + disponibilCo + " < isnull(minCo, 0) THEN isnull(minCo, 0) - " + disponibilCo + " ELSE 0 END ";
+
+    var necMinSucSel = overstockBehavior ?
+        " isnull(minSucSel, 0) - " + disponibilSucSel :
+        "CASE WHEN " + disponibilSucSel + " < isnull(minSucSel, 0) THEN isnull(minSucSel, 0) - " + disponibilSucSel + " ELSE 0 END ";
+
+    var necMaxCo = overstockBehavior ?
+        " isnull(maxCo, 0) - " + disponibilCo :
+        "CASE WHEN " + disponibilCo + " < isnull(maxCo, 0) THEN isnull(maxCo, 0) - " + disponibilCo + " ELSE 0 END ";
+
+    var necMaxSucSel = overstockBehavior ?
+        " isnull(maxSucSel, 0) - " + disponibilSucSel :
+        "CASE WHEN " + disponibilSucSel + " < isnull(maxSucSel, 0) THEN isnull(maxSucSel, 0) - " + disponibilSucSel + " ELSE 0 END ";
+
+    // Construcție SQL principal
+    var mainQuery =
+        "SELECT DISTINCT * FROM (SELECT * " +
+        "FROM ( " +
+        "SELECT DISTINCT mtrl " +
+        '	,NecesarMinCo = ' + necMinCo +
+        '	,NecesarMinSucSel = ' + necMinSucSel +
+        '	,NecesarMaxCo = ' + necMaxCo +
+        '	,NecesarMaxSucSel = ' + necMaxSucSel +
+        "	,isnull(minCo, 0) AS minCo " +
+        "	,isnull(maxCo, 0) AS maxCo " +
+        "	,isnull(minSucSel, 0) AS minSucSel " +
+        "	,isnull(maxSucSel, 0) AS maxSucSel " +
+        "	,isnull(stocCo, 0) AS stocCo " +
+        "	,isnull(stocSucSel, 0) AS stocSucSel " +
+        "	,isnull(transferCo, 0) AS transferCo " +
+        "	,isnull(transferSucSel, 0) AS transferSucSel " +
+        "	,isnull(rezCo, 0) AS rezCo " +
+        "	,isnull(rezSucSel, 0) AS rezSucSel " +
+        "	,a.trdr " +
+        "	,a.company " +
+        "FROM ( " +
+        "	SELECT DISTINCT m.company, m.mtrsup AS trdr, m.mtrl " +
+        "		,(" + minCo_sql() + ") AS minCo " +
+        "		,(" + maxCo_sql() + ") AS maxCo " +
+        "		,(" + minSucSel_sql(sucursalaSqlInCondition) + ") AS minSucSel " +
+        "		,(" + maxSucSel_sql(sucursalaSqlInCondition) + ") AS maxSucSel " +
+        "		,(" + inTransfer_sql(false, sucursalaSqlInCondition) + ") AS transferSucSel " +
+        "		,(" + inTransfer_sql(true, null) + ") AS transferCo " +
+        "		,(" + stoc_sql("") + ") AS stocCo " +
+        "		,(" + stoc_sql(sucursalaSqlInCondition) + ") AS stocSucSel " +
+        "		,(" + rezervat_sql("") + ") AS rezCo " +
+        "		,(" + rezervat_sql(sucursalaSqlInCondition) + ") AS rezSucSel " +
+        "	FROM mtrl m " +
+        "	INNER JOIN MTRBRNLIMITS l ON (m.mtrl = l.mtrl AND m.company = l.company) " +
+        "	WHERE m.sodtype = 51 AND m.isactive = 1 AND m.company = " + X.SYS.COMPANY +
+        " " + selTrdrs + " AND isnull(m.cccexstat, 0) = 0 " + strMtrl +
+        (sucursalaSqlInCondition ? " AND l.branch IN (" + sucursalaSqlInCondition + ") " : "") +
+        conditiiFlitrare() +
+        "	) a" +
+        ") c WHERE (NecesarMinCo > 0 OR NecesarMaxCo > 0 OR NecesarMinSucSel > 0 OR NecesarMaxSucSel > 0)" +
+        ") d " +
+        "LEFT JOIN trdr b ON (d.trdr = b.trdr AND d.company = b.company AND b.isactive = 1 AND b.sodtype = 12)";
+
+    var dsItems = X.GETSQLDATASET(mainQuery, null);
+
+    // Procesare rezultate
+    var nLuniVanzari = config.salesHistoryMonths;
+    if (dsItems && dsItems.RECORDCOUNT > 0) {
+        var currentLineNum = 1;
+        if (outputLinesBuffer.length > 0) {
+            currentLineNum = outputLinesBuffer.length + 1;
+        }
+
+        dsItems.FIRST;
+        while (!dsItems.EOF) {
+            var newItemLine = {};
+
+            if (dsItems.trdr) newItemLine.CCCFURNIZORALES = dsItems.trdr;
+            newItemLine.MTRL = dsItems.mtrl;
+            newItemLine.LINENUM = currentLineNum;
+            newItemLine.MTRLINES = currentLineNum;
+            newItemLine.CCCQTYREZERVAT = dsItems.rezSucSel || 0;
+            newItemLine.CCCQTYASTEPTAT = getPending(1, newItemLine.MTRL, true, sucursalaSqlInCondition) || 0;
+            newItemLine.CCCQTYSTOC = dsItems.stocSucSel || 0;
+            newItemLine.NUM03 = dsItems.transferSucSel || 0;
+            newItemLine.CCCQTY1 = dsItems.NecesarMinSucSel || 0;
+            newItemLine.CCCQTY2 = dsItems.NecesarMaxSucSel || 0;
+            newItemLine.CCCREFERAT = dsItems.NecesarMinCo || 0;
+            newItemLine.CCCTERMEN = dsItems.NecesarMaxCo || 0;
+            newItemLine.CCC3MSALES = getLastNMonthSales(newItemLine.MTRL, nLuniVanzari, sucursalaSqlInCondition) || 0;
+
+            // Calcul acoperire lunară
+            if (newItemLine.CCC3MSALES > 0 && nLuniVanzari > 0) {
+                var acoperireLunara = (newItemLine.CCCQTYASTEPTAT + newItemLine.CCCQTYSTOC + newItemLine.NUM03) / (newItemLine.CCC3MSALES / nLuniVanzari);
+                newItemLine.CCCACOPLUN = parseFloat(acoperireLunara.toFixed(2));
+            } else {
+                newItemLine.CCCACOPLUN = 0;
+            }
+
+            // Calcul necesar minim și maxim
+            newItemLine.CCCNECMIN = Math.max(dsItems.NecesarMinCo || 0, dsItems.NecesarMinSucSel || 0);
+            newItemLine.CCCNECMAX = Math.max(dsItems.NecesarMaxCo || 0, dsItems.NecesarMaxSucSel || 0);
+
+            // Calcul cantitate de comandat
+            var adjustOrder = config.adjustOrderWithPending === true;
+            if (adjustOrder) {
+                newItemLine.CCCORDERMIN = newItemLine.CCCNECMIN;
+                newItemLine.CCCORDERMAX = newItemLine.CCCNECMAX;
+            } else {
+                var orderMin = newItemLine.CCCNECMIN - newItemLine.CCCQTYASTEPTAT;
+                newItemLine.CCCORDERMIN = orderMin > 0 ? orderMin : 0;
+
+                var orderMax = newItemLine.CCCNECMAX - newItemLine.CCCQTYASTEPTAT;
+                newItemLine.CCCORDERMAX = orderMax > 0 ? orderMax : 0;
+            }
+
+            newItemLine.CCCQTYDATE = config.currentDate;
+
+            // Obținere preț furnizor
+            var priceInfo = getDefaultSuppPrice(newItemLine.MTRL);
+            newItemLine.PRICE = priceInfo.price || 0;
+            newItemLine.CCCSOCURRENCY = priceInfo.currency || 0;
+
+            outputLinesBuffer.push(newItemLine);
+            result.processedLinesData.push({ MTRL: newItemLine.MTRL, LINENUM: newItemLine.LINENUM });
+
+            currentLineNum++;
+            dsItems.NEXT;
+        }
+
+        result.linesAdded = dsItems.RECORDCOUNT;
+        result.messages.push("S-au procesat și adăugat " + result.linesAdded + " linii în buffer.");
+        result.success = true;
+    } else {
+        if (!dsItems) {
+            result.messages.push("Eroare la interogarea necesarului de articole.");
+        } else {
+            result.messages.push("Nu s-au găsit articole cu necesar calculat pentru criteriile date.");
+        }
+        result.success = false;
+    }
+
+    return result;
+}
+
+// Exemplu de folosire:
+// Pentru adaugaArticoleCfFiltre
+function testAdaugaArticoleCfFiltre() {
+    var config = {
+        filterColumnName: "CODE", // fostul PURDOC.COMMENTS1
+        //sucursalaSqlInCondition: "10,20", // fostul CCCFILTRENECESARMINMAX.SUCURSALA
+        //selectedSuppliersSqlClause: " AND m.mtrsup IN (105,107) ", // rezultat din getSelectedSupp()
+        doarStocZero: false, // fostul CCCFILTRENECESARMINMAX.DOARSTOCZERO
+        doarDeblocate: true, // fostul CCCFILTRENECESARMINMAX.DOARDEBLOCATE
+        valTxt: "IVP1905", // fostul CCCFILTRENECESARMINMAX.VALTXT
+        signTxt: 1 // fostul CCCFILTRENECESARMINMAX.SIGNTXT
+    };
+    var outputBuffer = [];
+    var result = adaugaArticoleCfFiltre(config, outputBuffer);
+
+    return result;
+}
+
+// Pentru adaugaArticole
+function testAdaugaArticole() {
+    var outputLinesBuffer1 = [];
+    var mtrlInput = [];
+
+    // Step 1: Run adaugaArticoleCfFiltre first
+    var resultArticoleCfFiltre = adaugaArticoleCfFiltre({
+        filterColumnName: "CODE", // fostul PURDOC.COMMENTS1
+        //sucursalaSqlInCondition: "10,20", // fostul CCCFILTRENECESARMINMAX.SUCURSALA
+        //selectedSuppliersSqlClause: " AND m.mtrsup IN (105,107) ", // rezultat din getSelectedSupp()
+        doarStocZero: false, // fostul CCCFILTRENECESARMINMAX.DOARSTOCZERO
+        doarDeblocate: true, // fostul CCCFILTRENECESARMINMAX.DOARDEBLOCATE
+        valTxt: "IVP1905", // fostul CCCFILTRENECESARMINMAX.VALTXT
+        signTxt: 1 // fostul CCCFILTRENECESARMINMAX.SIGNTXT
+    }, outputLinesBuffer1);
+
+    // Check if first step succeeded
+    if (!resultArticoleCfFiltre.success) {
+        return resultArticoleCfFiltre;
+    }
+
+    // Step 2: Build mtrl input string from results
+    mtrlInput = outputLinesBuffer1.map(function (item) {
+        return item.MTRL;
+    }).join(",");
+
+    // Step 3: Configure and run adaugaArticole
+    var configArticole = {
+        overstockBehavior: 0,
+        salesHistoryMonths: 6,
+        adjustOrderWithPending: false,
+        currentDate: new Date()
+    };
+
+    var outputLinesBuffer2 = [];
+    var resultArticole = adaugaArticole(false, mtrlInput, configArticole, outputLinesBuffer2);
+
+    // Add additional message if successful
+    if (resultArticole.success) {
+        resultArticole.messages.push("S-au adăugat " + resultArticole.linesAdded + " articole în buffer.");
+    }
+
+    return resultArticole;
+}
