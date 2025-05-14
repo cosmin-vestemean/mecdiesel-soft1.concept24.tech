@@ -123,6 +123,11 @@
                 Branch Replenishment</i>
               </button>
             </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="topAbcButton" data-bs-toggle="tab" type="button" role="tab">
+                Top ABC</i>
+              </button>
+            </li>
           </ul>
           <div class="d-flex align-items-center mt-2 gap-2">
             <select id="tables" class="form-select w-auto">
@@ -262,6 +267,9 @@
         <div id="branchReplenishContent">
           <branch-replenishment-container></branch-replenishment-container>
         </div>
+        <div id="topAbcContent">
+          <top-abc></top-abc>
+        </div>
       </div>
       <!--footer-->
       <div id="footer">
@@ -379,7 +387,8 @@
     <script type="module" src="components/branch-replenishment-container.js"></script>
     <!-- Original component kept for backward compatibility -->
     <!-- <script type="module" src="components/branch-replenishment.js"></script> -->
-    
+    <!-- Top ABC component -->
+    <script type="module" src="components/top-abc.js"></script>
     <!-- Load print_config content via JavaScript instead of inline script -->
     <script>
       $(function() {

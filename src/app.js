@@ -127,14 +127,14 @@ class s1Service {
       method: "POST",
       uri: "/",
       body: {
-      service: "sqlData",
-      clientID: data.token,
-      skip_rows: data.skip_rows,
-      fetch_next_rows: data.fetch_next_rows,
-      appId: "2002",
-      SqlName: "CDB_SchimbareStoc",
-      stoc: data.stoc,
-      mec_code: data.mec_code,
+        service: "sqlData",
+        clientID: data.token,
+        skip_rows: data.skip_rows,
+        fetch_next_rows: data.fetch_next_rows,
+        appId: "2002",
+        SqlName: "CDB_SchimbareStoc",
+        stoc: data.stoc,
+        mec_code: data.mec_code,
       },
       json: true,
       gzip: true,
@@ -284,37 +284,37 @@ class s1Service {
   async getRegisteredUsers(data, params) {
     let loginResponse;
     try {
-        loginResponse = await request({
-            method: "POST",
-            uri: "/",
-            body: {
-                service: "login",
-                username: "mecws",
-                password: "@28t$F",
-                appId: "2002",
-            },
-            json: true,
-            gzip: true,
-        });
+      loginResponse = await request({
+        method: "POST",
+        uri: "/",
+        body: {
+          service: "login",
+          username: "mecws",
+          password: "@28t$F",
+          appId: "2002",
+        },
+        json: true,
+        gzip: true,
+      });
     } catch (loginError) {
-        console.error("Internal login failed within getRegisteredUsers:", loginError);
-        return { success: false, error: "Internal server error: Could not authenticate to fetch users." };
+      console.error("Internal login failed within getRegisteredUsers:", loginError);
+      return { success: false, error: "Internal server error: Could not authenticate to fetch users." };
     }
 
     if (loginResponse.success) {
-        const users = loginResponse.objs;
-        console.log("Registered users fetched successfully.");
-        return {
-            success: true,
-            users: users,
-            appId: loginResponse.appId,
-            clientID: loginResponse.clientID,
-            version: loginResponse.ver,
-            sn: loginResponse.sn
-        };
+      const users = loginResponse.objs;
+      console.log("Registered users fetched successfully.");
+      return {
+        success: true,
+        users: users,
+        appId: loginResponse.appId,
+        clientID: loginResponse.clientID,
+        version: loginResponse.ver,
+        sn: loginResponse.sn
+      };
     } else {
-        console.error("Internal login failed within getRegisteredUsers, API response:", loginResponse.error);
-        return { success: false, error: `Failed to fetch users: ${loginResponse.error || 'Authentication failed'}` };
+      console.error("Internal login failed within getRegisteredUsers, API response:", loginResponse.error);
+      return { success: false, error: `Failed to fetch users: ${loginResponse.error || 'Authentication failed'}` };
     }
   }
 
@@ -323,68 +323,68 @@ class s1Service {
     const { sessionToken, clientID, password } = data; // clientID is the selected REFID
 
     if (!sessionToken || !clientID || password === undefined) {
-        return { success: false, error: "Missing session token, clientID, or password for validation." };
+      return { success: false, error: "Missing session token, clientID, or password for validation." };
     }
 
     let authResult;
     try {
-        // Step 1: Authenticate the session using the sessionToken and the selected REFID, company, branch
-        const authPayload = {
-            service: 'authenticate',
-            clientID: sessionToken,  // The token establishing the session
-            appID: "2002",           // App ID
-            COMPANY: "1000",         // Explicitly set Company
-            BRANCH: "2200",          // Explicitly set Branch (Bucuresti)
-            MODULE: 0,               // Default module
-            REFID: clientID          // The user ID (REFID) being logged into
-        };
-        console.log(`Attempting authentication with explicit Company/Branch payload:`, authPayload);
-        authResult = await this.authenticate(authPayload);
-        console.log("Authentication result:", authResult);
+      // Step 1: Authenticate the session using the sessionToken and the selected REFID, company, branch
+      const authPayload = {
+        service: 'authenticate',
+        clientID: sessionToken,  // The token establishing the session
+        appID: "2002",           // App ID
+        COMPANY: "1000",         // Explicitly set Company
+        BRANCH: "2200",          // Explicitly set Branch (Bucuresti)
+        MODULE: 0,               // Default module
+        REFID: clientID          // The user ID (REFID) being logged into
+      };
+      console.log(`Attempting authentication with explicit Company/Branch payload:`, authPayload);
+      authResult = await this.authenticate(authPayload);
+      console.log("Authentication result:", authResult);
 
-        if (!authResult || !authResult.success) {
-            // Use the specific error from the auth result if available
-            return { success: false, error: `Authentication failed: ${authResult.error || 'Unknown reason'}` };
-        }
+      if (!authResult || !authResult.success) {
+        // Use the specific error from the auth result if available
+        return { success: false, error: `Authentication failed: ${authResult.error || 'Unknown reason'}` };
+      }
 
     } catch (authError) {
-        console.error("Error during authentication step:", authError);
-        return { success: false, error: "Server error during authentication step." };
+      console.error("Error during authentication step:", authError);
+      return { success: false, error: "Server error during authentication step." };
     }
 
     // Step 2: Proceed with password validation using the (potentially refreshed) clientID from authResult
     try {
-        console.log(`Proceeding to password validation for refid: ${clientID} using authenticated clientID: ${authResult.clientID}`);
-        const validationResponse = await request({ // Use the base 'request' object
-            method: "POST",
-            uri: "/JS/login/usrPwdValidate", // The specific validation endpoint
-            body: {
-                clientID: authResult.clientID, // Use the clientID from the successful auth step
-                module: 0,                 // Default module
-                refid: clientID,           // The user ID (REFID) being validated
-                password: password         // The password to validate
-            },
-            json: true,
-            gzip: true,
-        });
+      console.log(`Proceeding to password validation for refid: ${clientID} using authenticated clientID: ${authResult.clientID}`);
+      const validationResponse = await request({ // Use the base 'request' object
+        method: "POST",
+        uri: "/JS/login/usrPwdValidate", // The specific validation endpoint
+        body: {
+          clientID: authResult.clientID, // Use the clientID from the successful auth step
+          module: 0,                 // Default module
+          refid: clientID,           // The user ID (REFID) being validated
+          password: password         // The password to validate
+        },
+        json: true,
+        gzip: true,
+      });
 
-        console.log("Password validation response:", validationResponse);
-        
-        // IMPORTANT: Return the potentially refreshed clientID from the auth step
-        // along with the validation result.
-        // Assuming validationResponse contains its own 'success' and 'error' fields.
-        return { 
-            ...validationResponse, // Spread the original validation response
-            success: validationResponse.success, // Explicitly ensure success field is from validationResponse
-            clientID: authResult.clientID // Override clientID with the one from the auth step
-        };
+      console.log("Password validation response:", validationResponse);
+
+      // IMPORTANT: Return the potentially refreshed clientID from the auth step
+      // along with the validation result.
+      // Assuming validationResponse contains its own 'success' and 'error' fields.
+      return {
+        ...validationResponse, // Spread the original validation response
+        success: validationResponse.success, // Explicitly ensure success field is from validationResponse
+        clientID: authResult.clientID // Override clientID with the one from the auth step
+      };
 
     } catch (validationError) {
-        console.error("Error during password validation step:", validationError);
-        // Attempt to return a meaningful error if possible from the validation step's error
-        const errorMsg = validationError.error?.message || validationError.message || "Server error during password validation.";
-        // Return failure, but DO NOT return the clientID from the auth step if validation failed.
-        return { success: false, error: errorMsg }; 
+      console.error("Error during password validation step:", validationError);
+      // Attempt to return a meaningful error if possible from the validation step's error
+      const errorMsg = validationError.error?.message || validationError.message || "Server error during password validation.";
+      // Return failure, but DO NOT return the clientID from the auth step if validation failed.
+      return { success: false, error: errorMsg };
     }
   }
 }
@@ -424,6 +424,118 @@ app.use("/s1", new s1Service(), {
     "getAnalyticsForBranchReplenishment",
     "getRegisteredUsers",
     "validateUserPwd",
+  ],
+});
+
+// TopABC service for ABC Analysis and Branch Replenishment
+class TopAbcService {
+  constructor(options) {
+    this.options = options || {};
+  }
+
+  async getArticoleCfFiltre(data, params) {
+    try {
+      return await request({
+        method: "POST",
+        uri: "/JS/NecesarAchizitie/adaugaArticoleCfFiltre",
+        body: {
+          clientID: data.token,
+          filterColumnName: data.filterColumnName || "CODE",
+          doarStocZero: data.doarStocZero || false,
+          doarDeblocate: data.doarDeblocate || true,
+          valTxt: data.valTxt || "",
+          signTxt: data.signTxt || 1,
+          sucursalaSqlInCondition: data.sucursalaSqlInCondition || ""
+        },
+        json: true,
+        gzip: true
+      });
+    } catch (error) {
+      console.error('Error in getArticoleCfFiltre:', error);
+      throw new Error(`Failed to get articles: ${error.message}`);
+    }
+  }
+
+  async getCalculatedNeeds(data, params) {
+    try {
+      return await request({
+        method: "POST",
+        uri: "/JS/NecesarAchizitie/adaugaArticole",
+        body: {
+          clientID: data.token,
+          isSingle: data.isSingle || false,
+          mtrlInput: data.mtrlInput,
+          overstockBehavior: data.overstockBehavior || 0,
+          salesHistoryMonths: data.salesHistoryMonths || 6,
+          adjustOrderWithPending: data.adjustOrderWithPending || false,
+          sucursalaSqlInCondition: data.sucursalaSqlInCondition || ""
+        },
+        json: true,
+        gzip: true
+      });
+    } catch (error) {
+      console.error('Error in getCalculatedNeeds:', error);
+      throw new Error(`Failed to get calculated needs: ${error.message}`);
+    }
+  }
+
+  async getSingleItemNeeds(data, params) {
+    try {
+      return await request({
+        method: "POST",
+        uri: "/JS/NecesarAchizitie/getSingleItemNeeds",
+        body: {
+          clientID: data.token,
+          mtrlId: data.mtrlId
+        },
+        json: true,
+        gzip: true
+      });
+    } catch (error) {
+      console.error('Error in getSingleItemNeeds:', error);
+      throw new Error(`Failed to get single item needs: ${error.message}`);
+    }
+  }
+
+  async test_getArticoleCfFiltre(data, params) {
+    try {
+      let r = await request({
+        method: "POST",
+        uri: "/JS/NecesarAchizitie/test_getArticoleCfFiltre",
+        json: true,
+        gzip: true
+      });
+      console.log("test_getArticoleCfFiltre response:", r);
+    } catch (error) {
+      console.error('Error in test_getArticoleCfFiltre:', error);
+      throw new Error(`Failed to get articles for test: ${error.message}`);
+    }
+  }
+
+  async test_getCalculatedNeeds(data, params) {
+    try {
+      let r = await request({
+        method: "POST",
+        uri: "/JS/NecesarAchizitie/test_getCalculatedNeeds",
+        json: true,
+        gzip: true
+      });
+      console.log("test_getCalculatedNeeds response:", r);
+    } catch (error) {
+      console.error('Error in test_getCalculatedNeeds:', error);
+      throw new Error(`Failed to get calculated needs for test: ${error.message}`);
+    }
+  }
+}
+
+// Register the TopAbc service
+app.use("/top-abc", new TopAbcService(), {
+  methods: [
+    "getArticoleCfFiltre",
+    "getCalculatedNeeds",
+    "getSingleItemNeeds",
+    "test_getArticoleCfFiltre",
+    "test_getCalculatedNeeds"
   ],
 });
 

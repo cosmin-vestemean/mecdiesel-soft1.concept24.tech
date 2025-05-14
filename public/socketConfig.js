@@ -7,26 +7,36 @@ client.configure(socketClient);
 
 //register s1 service and methods
 client.use("s1", socketClient.service("s1"), {
-    methods: [
-      "ping",
-      "login",
-      "authenticate",
-      "getMappings",
-      "getErrors",
-      "getMesagerieConvAuto",
-      "makeBatchRequest",
-      "getSchimbareStoc",
-      "getAllSoSourceObjectsRo",
-      "getAllFprmsForSoSource",
-      "getAllSeriesForFprms",
-      "getPrintTemplates",
-      "getAllPrintTemplatesForSoSource",
-      "processListOfStocks",
-      "getSqlDataset",
-      "getAnalyticsForBranchReplenishment",
-      "getRegisteredUsers", // Keep registered method
-      "validateUserPwd", // Keep registered method
-    ],
-  });
+  methods: [
+    "ping",
+    "login",
+    "authenticate",
+    "getMappings",
+    "getErrors",
+    "getMesagerieConvAuto",
+    "makeBatchRequest",
+    "getSchimbareStoc",
+    "getAllSoSourceObjectsRo",
+    "getAllFprmsForSoSource",
+    "getAllSeriesForFprms",
+    "getPrintTemplates",
+    "getAllPrintTemplatesForSoSource",
+    "processListOfStocks",
+    "getSqlDataset",
+    "getAnalyticsForBranchReplenishment",
+    "getRegisteredUsers", // Keep registered method
+    "validateUserPwd", // Keep registered method
+  ],
+});
+
+client.use("top-abc", socketClient.service("top-abc"), {
+  methods: [
+    "getArticoleCfFiltre",
+    "getCalculatedNeeds",
+    "getSingleItemNeeds",
+    "test_getArticoleCfFiltre",
+    "test_getCalculatedNeeds"
+  ],
+});
 
 export { client };

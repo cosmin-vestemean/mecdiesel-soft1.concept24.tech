@@ -7,12 +7,12 @@
  * 
  * API Endpoints:
  * -------------
- * - Article Search:    https://mecdiesel.oncloud.gr/s1services/JS/adaugaArticoleCfFiltre
- * - Replenishment:     https://mecdiesel.oncloud.gr/s1services/JS/ReumplereSucursale/adaugaArticole
- * - Single Item:       https://mecdiesel.oncloud.gr/s1services/JS/ReumplereSucursale/test_getSingleItemNeeds
+ * - Article Search:    https://mecdiesel.oncloud.gr/s1services/JS/NecesarAchizitie/adaugaArticoleCfFiltre
+ * - Replenishment:     https://mecdiesel.oncloud.gr/s1services/JS/NecesarAchizitie/adaugaArticole
+ * - Single Item:       https://mecdiesel.oncloud.gr/s1services/JS/NecesarAchizitie/test_getSingleItemNeeds
  * - Test Endpoints:
- *   - Article Filter:  https://mecdiesel.oncloud.gr/s1services/JS/ReumplereSucursale/test_getArticoleCfFiltre
- *   - Needs Analysis: https://mecdiesel.oncloud.gr/s1services/JS/ReumplereSucursale/test_getCalculatedNeeds
+ *   - Article Filter:  https://mecdiesel.oncloud.gr/s1services/JS/NecesarAchizitie/test_getArticoleCfFiltre
+ *   - Needs Analysis: https://mecdiesel.oncloud.gr/s1services/JS/NecesarAchizitie/test_getCalculatedNeeds
  * 
  *TODO: Security
  * ---------
@@ -206,6 +206,21 @@ function adaugaArticoleCfFiltre(config) {
         result.messages.push("Nu exista articole pentru filtrele selectate.");
         result.success = false;
     }
+
+    //adauga si parametrii de configurare
+    result.config = {
+        filterColumnName: config.filterColumnName,
+        sucursalaSqlInCondition: config.sucursalaSqlInCondition,
+        selectedSuppliersSqlClause: config.selectedSuppliersSqlClause,
+        doarStocZero: config.doarStocZero,
+        doarDeblocate: config.doarDeblocate,
+        valTxt: config.valTxt,
+        signTxt: config.signTxt,
+        signVal: config.signVal,
+        val1: config.val1,
+        val2: config.val2
+    };
+
 
     return result;
 }
@@ -645,6 +660,17 @@ function adaugaArticole(isSingle, mtrlInput, config) {
         result.success = false;
     }
 
+    // Adaugă parametrii de configurare
+    result.config = {
+        overstockBehavior: config.overstockBehavior,
+        salesHistoryMonths: config.salesHistoryMonths,
+        adjustOrderWithPending: config.adjustOrderWithPending,
+        currentDate: config.currentDate,
+        sucursalaSqlInCondition: sucursalaSqlInCondition,
+        supplierFilterSql: selTrdrs
+    };
+    result.total = dsItems ? dsItems.RECORDCOUNT : 0;
+
     return result;
 }
 
@@ -655,7 +681,8 @@ function test_getArticoleCfFiltre() {
         doarStocZero: false,
         doarDeblocate: true,
         valTxt: "IVP1905",
-        signTxt: 1
+        signTxt: 1,
+        sucursalaSqlInCondition: "1300",
     };
 
     return adaugaArticoleCfFiltre(config);
