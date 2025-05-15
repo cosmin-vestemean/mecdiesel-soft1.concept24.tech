@@ -62,6 +62,7 @@ This project uses FeathersJS as the backend framework. Refer to the [FeathersJS 
 - Files containing Soft1 ERP specific code must use JavaScript ES5 syntax
 - All Soft1 specific files should be marked with a comment in the first line:
   - Standard S1 files: `// Cod specific S1`
+  -SQL files as API: `-- Cod specific S1 - SQL - API`
   - AJS endpoint files: `// Cod specific S1 - AJS`
 - The global variable `X` is used throughout Soft1 code and provides access to Soft1 API
 

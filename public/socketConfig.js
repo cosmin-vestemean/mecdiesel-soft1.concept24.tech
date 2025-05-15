@@ -35,7 +35,9 @@ client.use("top-abc", socketClient.service("top-abc"), {
     "getCalculatedNeeds",
     "getSingleItemNeeds",
     "test_getArticoleCfFiltre",
-    "test_getCalculatedNeeds"
+    "test_getCalculatedNeeds",
+    "getSuppliers",
+    "getSalesHistory"
   ],
 });
 

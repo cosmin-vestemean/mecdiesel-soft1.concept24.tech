@@ -441,11 +441,12 @@ class TopAbcService {
         body: {
           clientID: data.token,
           filterColumnName: data.filterColumnName || "CODE",
-          doarStocZero: data.doarStocZero || false,
-          doarDeblocate: data.doarDeblocate || true,
+          doarStocZero: typeof data.doarStocZero === "boolean" ? data.doarStocZero : false,
+          doarDeblocate: typeof data.doarDeblocate === "boolean" ? data.doarDeblocate : false,
           valTxt: data.valTxt || "",
           signTxt: data.signTxt || 1,
-          sucursalaSqlInCondition: data.sucursalaSqlInCondition || ""
+          sucursalaSqlInCondition: data.sucursalaSqlInCondition || "",
+          selectedSuppliersSqlClause: data.selectedSuppliersSqlClause || "",
         },
         json: true,
         gzip: true
@@ -458,18 +459,11 @@ class TopAbcService {
 
   async getCalculatedNeeds(data, params) {
     try {
+
       return await request({
         method: "POST",
         uri: "/JS/NecesarAchizitie/adaugaArticole",
-        body: {
-          clientID: data.token,
-          isSingle: data.isSingle || false,
-          mtrlInput: data.mtrlInput,
-          overstockBehavior: data.overstockBehavior || 0,
-          salesHistoryMonths: data.salesHistoryMonths || 6,
-          adjustOrderWithPending: data.adjustOrderWithPending || false,
-          sucursalaSqlInCondition: data.sucursalaSqlInCondition || ""
-        },
+        body: data,
         json: true,
         gzip: true
       });
@@ -526,6 +520,43 @@ class TopAbcService {
       throw new Error(`Failed to get calculated needs for test: ${error.message}`);
     }
   }
+
+  async getSuppliers(data, params) {
+    try {
+      return await request({
+        method: "POST",
+        uri: "/JS/NecesarAchizitie/getSuppliers",
+        body: {
+          clientID: data.token
+        },
+        json: true,
+        gzip: true
+      });
+    } catch (error) {
+      console.error('Error in getSuppliers:', error);
+      throw new Error(`Failed to get suppliers: ${error.message}`);
+    }
+  }
+
+  async getSalesHistory(data, params) {
+    try {
+      return await request({
+        method: "POST",
+        uri: "/JS/NecesarAchizitie/getSalesHistory",
+        body: {
+          clientID: data.token,
+          mtrl: data.mtrl,
+          lastNMonths: data.lastNMonths || 12,
+          sucursalaSqlInCondition: data.sucursalaSqlInCondition || ""
+        },
+        json: true,
+        gzip: true
+      });
+    } catch (error) {
+      console.error('Error in getSalesHistory:', error);
+      throw new Error(`Failed to get sales history: ${error.message}`);
+    }
+  }
 }
 
 // Register the TopAbc service
@@ -535,7 +566,9 @@ app.use("/top-abc", new TopAbcService(), {
     "getCalculatedNeeds",
     "getSingleItemNeeds",
     "test_getArticoleCfFiltre",
-    "test_getCalculatedNeeds"
+    "test_getCalculatedNeeds",
+    "getSuppliers",
+    "getSalesHistory"
   ],
 });
 

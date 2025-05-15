@@ -1,0 +1,86 @@
+/* Minimalist data-table styles inspired by replenishment-data-table.css */
+.data-table-container {
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background: #fff;
+}
+
+.table-responsive {
+    overflow-x: auto;
+}
+
+.modern-table {
+    font-size: 0.8rem;
+    background: #fff;
+    color: #212529;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.modern-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+    text-align: center;
+    padding: 0.5rem 0.7rem;
+    border-bottom: 1px solid #dee2e6;
+    color: #495057;
+}
+
+.modern-table td {
+    padding: 0.35rem 0.7rem;
+    border-bottom: 1px solid #f1f3f4;
+    vertical-align: middle;
+    font-size: 0.8rem;
+    background: #fff;
+}
+
+.even-row {
+    background: #f8f9fa;
+}
+
+tbody tr:hover {
+    background: #e9ecef !important;
+}
+
+.sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f8f9fa !important;
+}
+
+.vertical-divider {
+    border-left: 1px solid #dee2e6 !important;
+}
+
+.text-truncate span {
+    max-width: 180px;
+    display: inline-block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.compact-input {
+    padding: 0.1rem 0.2rem !important;
+    height: calc(1.5em + 0.2rem + 2px) !important;
+    font-size: 0.8rem !important;
+    text-align: right !important;
+    border-radius: 2px !important;
+    max-width: 70px !important;
+    appearance: textfield !important;
+    -moz-appearance: textfield !important;
+}
+
+.header-filter-select {
+    font-size: 0.8rem !important;
+    font-weight: normal !important;
+    padding: 0.1rem 0.2rem !important;
+    min-width: 90px !important;
+    max-width: 140px !important;
+    background-image: none !important;
+}
+
+.text-muted { color: #6c757d !important; }
+.text-dark { color: #212529 !important; }
+.fw-bold { font-weight: bold !important; }

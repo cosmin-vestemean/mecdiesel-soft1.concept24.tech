@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="bootstrap.css" />
     
     <!-- Component-specific styles -->
+    <link rel="stylesheet" href="components/data-table-minimal.css" />
     <link rel="stylesheet" href="components/query-panel.css" />
     <link rel="stylesheet" href="components/manipulation-panel.css" />
     <link rel="stylesheet" href="components/strategy-panel.css" />
@@ -373,6 +374,9 @@
             integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" 
             crossorigin="anonymous"></script>
     <script type="module" src="https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js"></script>
+    
+    <!-- Sales History Chart Modal Container - outside LitElement shadow DOM -->
+    <div id="salesHistoryChartModalContainer"></div>
     
     <!-- Application Scripts - Load after frameworks -->
     <script type="module" src="socketConfig.js"></script>

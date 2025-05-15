@@ -485,12 +485,52 @@ function maxAutoSucSel_sql() {
  * @param {string} [config.supplierFilterSql] - Clauză SQL pentru filtrare furnizori.
  * @returns {object} Statusul operației: { success: boolean, messages: Array, linesAdded: number, processedLinesData: Array }
  */
-function adaugaArticole(isSingle, mtrlInput, config) {
+function adaugaArticole(data) {
+    var isSingle = data.isSingle || false;
+    var mtrlInput = data.mtrlInput || null;
+    var config = data.config || {};
+
     var result = { success: false, messages: [], items: [] };
+
+    if (typeof config !== 'object' || config === null) {
+        result.messages.push("Configurație invalidă. Parametrul 'config' trebuie să fie un obiect.");
+        // Include a snapshot of what was passed as config for debugging.
+        // Be cautious if config could contain sensitive data not intended for logging or exposure.
+        result.config = {
+            isSingle: isSingle,
+            mtrlInput: mtrlInput,
+            config: config // Keep original config for context
+        };
+        return result;
+    }
+
+    //set defaults for non mandatory params
+    if (Object.prototype.hasOwnProperty.call(config, "overstockBehavior") && config.overstockBehavior === undefined) {
+        config.overstockBehavior = 0;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(config, "adjustOrderWithPending") && config.adjustOrderWithPending === undefined) {
+        config.adjustOrderWithPending = false;
+    }
+
+    // Verificare tip de date pentru mtrlInput
+    if (isSingle && (typeof mtrlInput !== "number" && typeof mtrlInput !== "string")) {
+        result.messages.push("ID material invalid pentru procesare individuală.");
+        result.config = { isSingle: isSingle, mtrlInput: mtrlInput, config: { overstockBehavior: config.overstockBehavior, salesHistoryMonths: config.salesHistoryMonths, currentDate: config.currentDate, sucursalaSqlInCondition: config.sucursalaSqlInCondition, supplierFilterSql: config.supplierFilterSql, adjustOrderWithPending: config.adjustOrderWithPending } };
+        return result;
+    }
+
+    // Verificare tip de date pentru mtrlInput (listă)
+    if (!isSingle && (typeof mtrlInput !== "string" || !String(mtrlInput).length)) {
+        result.messages.push("Lista de ID-uri materiale invalidă pentru procesare în masă.");
+        result.config = { isSingle: isSingle, mtrlInput: mtrlInput, config: { overstockBehavior: config.overstockBehavior, salesHistoryMonths: config.salesHistoryMonths, currentDate: config.currentDate, sucursalaSqlInCondition: config.sucursalaSqlInCondition, supplierFilterSql: config.supplierFilterSql, adjustOrderWithPending: config.adjustOrderWithPending } };
+        return result;
+    }
 
     // Validări
     if (!config || config.salesHistoryMonths === undefined || !config.currentDate) {
-        result.messages.push("Configurație invalidă.");
+        result.messages.push("Configurație invalidă. Parametrii 'salesHistoryMonths' și 'currentDate' sunt necesari.");
+        result.config = { isSingle: isSingle, mtrlInput: mtrlInput, config: { overstockBehavior: config.overstockBehavior, salesHistoryMonths: config.salesHistoryMonths, currentDate: config.currentDate, sucursalaSqlInCondition: config.sucursalaSqlInCondition, supplierFilterSql: config.supplierFilterSql, adjustOrderWithPending: config.adjustOrderWithPending } };
         return result;
     }
 
@@ -499,6 +539,7 @@ function adaugaArticole(isSingle, mtrlInput, config) {
     if (isSingle) {
         if (!mtrlInput) {
             result.messages.push("ID material lipsă pentru procesare individuală.");
+            result.config = { isSingle: isSingle, mtrlInput: mtrlInput, config: { overstockBehavior: config.overstockBehavior, salesHistoryMonths: config.salesHistoryMonths, currentDate: config.currentDate, sucursalaSqlInCondition: config.sucursalaSqlInCondition, supplierFilterSql: config.supplierFilterSql, adjustOrderWithPending: config.adjustOrderWithPending } };
             return result;
         }
         strMtrl = " AND m.mtrl = " + mtrlInput;
@@ -508,12 +549,14 @@ function adaugaArticole(isSingle, mtrlInput, config) {
         for (var i = 0; i < mtrlArray.length; i++) {
             if (isNaN(parseInt(mtrlArray[i].trim(), 10))) {
                 result.messages.push("Lista de materiale conține valori non-numerice.");
+                result.config = { isSingle: isSingle, mtrlInput: mtrlInput, config: { overstockBehavior: config.overstockBehavior, salesHistoryMonths: config.salesHistoryMonths, currentDate: config.currentDate, sucursalaSqlInCondition: config.sucursalaSqlInCondition, supplierFilterSql: config.supplierFilterSql, adjustOrderWithPending: config.adjustOrderWithPending } };
                 return result;
             }
         }
         strMtrl = " AND m.mtrl IN (" + mtrlInput + ")";
     } else {
         result.messages.push("Niciun material specificat pentru procesare.");
+        result.config = { isSingle: isSingle, mtrlInput: mtrlInput, config: { overstockBehavior: config.overstockBehavior, salesHistoryMonths: config.salesHistoryMonths, currentDate: config.currentDate, sucursalaSqlInCondition: config.sucursalaSqlInCondition, supplierFilterSql: config.supplierFilterSql, adjustOrderWithPending: config.adjustOrderWithPending } };
         return result;
     }
 
@@ -544,7 +587,7 @@ function adaugaArticole(isSingle, mtrlInput, config) {
 
     // Construcție SQL principal
     var mainQuery =
-        "SELECT DISTINCT d.*, m.code, m.name FROM (SELECT * " +
+        "SELECT DISTINCT d.*, m.code, CONCAT(LEFT(m.name, 20), '...') name, m.CCCBLOCKPUR Blocat, m.CCCEXSTAT Exclus, b.name numeFurnizor FROM (SELECT * " +
         "FROM ( " +
         "SELECT DISTINCT mtrl " +
         '	,NecesarMinCo = ' + necMinCo +
@@ -598,51 +641,54 @@ function adaugaArticole(isSingle, mtrlInput, config) {
         while (!dsItems.EOF) {
             var newItem = {
                 MTRL: dsItems.mtrl,
-                CODE: dsItems.code,
-                NAME: dsItems.name,
-                CCCFURNIZORALES: dsItems.trdr,
-                CCCQTYREZERVAT: dsItems.rezSucSel || 0,
-                CCCQTYASTEPTAT: getPending(1, dsItems.mtrl, true, sucursalaSqlInCondition) || 0,
-                CCCQTYSTOC: dsItems.stocSucSel || 0,
-                NUM03: dsItems.transferSucSel || 0,
-                CCCQTY1: dsItems.NecesarMinSucSel || 0,
-                CCCQTY2: dsItems.NecesarMaxSucSel || 0,
-                CCCREFERAT: dsItems.NecesarMinCo || 0,
-                CCCTERMEN: dsItems.NecesarMaxCo || 0
+                Cod: dsItems.code,
+                Denumire: dsItems.name,
+                Blocat: dsItems.Blocat,
+                Exclus: dsItems.Exclus,
+                TRDR: dsItems.trdr,
+                Furnizor: dsItems.numeFurnizor,
+                Rezervat: dsItems.rezSucSel || 0,
+                Asteptat: getPending(1, dsItems.mtrl, true, sucursalaSqlInCondition) || 0,
+                Stoc: dsItems.stocSucSel || 0,
+                InTransf: dsItems.transferSucSel || 0,
+                NecMinSuc: dsItems.NecesarMinSucSel || 0,
+                NecMaxSuc: dsItems.NecesarMaxSucSel || 0,
+                NecMinCo: dsItems.NecesarMinCo || 0,
+                NecMaxCo: dsItems.NecesarMaxCo || 0
             };
 
             // Obține vânzările
-            newItem.CCC3MSALES = getLastNMonthSales(newItem.MTRL, nLuniVanzari, sucursalaSqlInCondition) || 0;
+            newItem.Vanzari = getLastNMonthSales(newItem.MTRL, nLuniVanzari, sucursalaSqlInCondition) || 0;
 
             // Calcul acoperire lunară
-            if (newItem.CCC3MSALES > 0 && nLuniVanzari > 0) {
-                var acoperireLunara = (newItem.CCCQTYASTEPTAT + newItem.CCCQTYSTOC + newItem.NUM03) / (newItem.CCC3MSALES / nLuniVanzari);
-                newItem.CCCACOPLUN = parseFloat(acoperireLunara.toFixed(2));
+            if (newItem.Vanzari > 0 && nLuniVanzari > 0) {
+                var acoperireLunara = (newItem.Asteptat + newItem.Stoc + newItem.InTransf) / (newItem.Vanzari / nLuniVanzari);
+                newItem.AcopLun = parseFloat(acoperireLunara.toFixed(2));
             } else {
-                newItem.CCCACOPLUN = 0;
+                newItem.AcopLun = 0;
             }
 
             // Calcul necesar minim și maxim
-            newItem.CCCNECMIN = Math.max(dsItems.NecesarMinCo || 0, dsItems.NecesarMinSucSel || 0);
-            newItem.CCCNECMAX = Math.max(dsItems.NecesarMaxCo || 0, dsItems.NecesarMaxSucSel || 0);
+            newItem.NecMin = Math.max(dsItems.NecesarMinCo || 0, dsItems.NecesarMinSucSel || 0);
+            newItem.NecMax = Math.max(dsItems.NecesarMaxCo || 0, dsItems.NecesarMaxSucSel || 0);
 
             // Calcul cantitate de comandat
             var adjustOrder = config.adjustOrderWithPending === true;
             if (adjustOrder) {
-                newItem.CCCORDERMIN = newItem.CCCNECMIN;
-                newItem.CCCORDERMAX = newItem.CCCNECMAX;
+                newItem.OrderMin = newItem.NecMin;
+                newItem.OrderMax = newItem.NecMax;
             } else {
-                var orderMin = newItem.CCCNECMIN - newItem.CCCQTYASTEPTAT;
-                newItem.CCCORDERMIN = orderMin > 0 ? orderMin : 0;
+                var orderMin = newItem.NecMin - newItem.Asteptat;
+                newItem.OrderMin = orderMin > 0 ? orderMin : 0;
 
-                var orderMax = newItem.CCCNECMAX - newItem.CCCQTYASTEPTAT;
-                newItem.CCCORDERMAX = orderMax > 0 ? orderMax : 0;
+                var orderMax = newItem.NecMax - newItem.Asteptat;
+                newItem.OrderMax = orderMax > 0 ? orderMax : 0;
             }
 
             // Obținere preț furnizor
             var priceInfo = getDefaultSuppPrice(newItem.MTRL);
-            newItem.PRICE = priceInfo.price || 0;
-            newItem.CCCSOCURRENCY = priceInfo.currency || 0;
+            newItem.Pret = priceInfo.price || 0;
+            newItem.Moneda = priceInfo.currency || 0;
 
             result.items.push(newItem);
             currentLineNum++;
@@ -731,4 +777,138 @@ function getSingleItemNeeds(mtrlId) {
     };
 
     return adaugaArticole(true, mtrlId, config);
+}
+
+function getSuppliers() {
+    var q = "SELECT trdr, code, name FROM trdr WHERE isactive = 1 AND sodtype = 12 AND company = " + X.SYS.COMPANY;
+    var ds = X.GETSQLDATASET(q, null);
+    var suppliers = [];
+
+    if (ds && ds.RECORDCOUNT > 0) {
+        ds.FIRST;
+        while (!ds.EOF) {
+            suppliers.push({
+                TRDR: ds.trdr,
+                CODE: ds.code,
+                NAME: ds.name
+            });
+            ds.NEXT;
+        }
+    }
+
+    return suppliers;
+}
+
+/**
+ * Returns sales history data for a given material
+ * @param {Object} params - Parameters for the request
+ * @param {string} params.clientID - The authentication token
+ * @param {number} params.mtrl - The material ID
+ * @param {number} params.lastNMonths - Number of months to retrieve (default: 12)
+ * @param {string} params.sucursalaSqlInCondition - Optional SQL IN clause for branches
+ * @returns {Array} Array of sales data by month
+ */
+function getSalesHistory(params) {
+    // Security validation to ensure only authorized calls
+    if (X.SYS.USER !== 104) { // Web interface
+        return {
+            success: false,
+            messages: ["This function can only be called through the web interface"]
+        };
+    }
+
+    var mtrl = params.mtrl;
+    var lastNMonths = params.lastNMonths || 12;
+    var sucursalaSqlInCondition = params.sucursalaSqlInCondition || "";
+
+    if (!mtrl) {
+        return {
+            success: false,
+            messages: ["Material ID is required"]
+        };
+    }
+
+    try {
+        // Set up the date range for the query
+        var currentYear = new Date().getFullYear();
+        var startDate = new Date();
+        startDate.setMonth(startDate.getMonth() - (lastNMonths - 1));
+        var startYear = startDate.getFullYear();
+        var startMonth = startDate.getMonth() + 1;
+
+        // Branch filter condition
+        var branchQry = sucursalaSqlInCondition
+            ? " AND whouse IN (" + sucursalaSqlInCondition + ") "
+            : "";
+
+        // Query to get monthly sales data
+        var q =
+            "SELECT FISCPRD, PERIOD, SUM(ISNULL(SALQTY, 0)) AS SALQTY, " +
+            "CONCAT(CASE PERIOD " +
+            "WHEN 1 THEN 'Jan' " +
+            "WHEN 2 THEN 'Feb' " +
+            "WHEN 3 THEN 'Mar' " +
+            "WHEN 4 THEN 'Apr' " +
+            "WHEN 5 THEN 'May' " +
+            "WHEN 6 THEN 'Jun' " +
+            "WHEN 7 THEN 'Jul' " +
+            "WHEN 8 THEN 'Aug' " +
+            "WHEN 9 THEN 'Sep' " +
+            "WHEN 10 THEN 'Oct' " +
+            "WHEN 11 THEN 'Nov' " +
+            "WHEN 12 THEN 'Dec' " +
+            "END, ' ', FISCPRD) AS MONTH_LABEL " +
+            "FROM MTRBALSHEET " +
+            "WHERE MTRL=" + mtrl +
+            " AND COMPANY=" + X.SYS.COMPANY +
+            " AND PERIOD != 0" +
+            " AND (FISCPRD > " + startYear + " OR (FISCPRD = " + startYear + " AND PERIOD >= " + startMonth + "))" +
+            branchQry +
+            " GROUP BY FISCPRD, PERIOD " +
+            "ORDER BY FISCPRD, PERIOD"
+
+        var salesData = X.GETSQLDATASET(q, null);
+
+        // Format the result
+        var result = [];
+        salesData.FIRST
+        while (!salesData.EOF) {
+            result.push({
+                FISCPRD: salesData.FISCPRD,
+                PERIOD: salesData.PERIOD,
+                SALQTY: salesData.SALQTY,
+                MONTH_LABEL: salesData.MONTH_LABEL
+            });
+            salesData.NEXT
+        }
+
+        // Also get the material details
+        var materialQ =
+            "SELECT m.CODE, m.NAME " +
+            "FROM MTRL m " +
+            "WHERE m.MTRL=" + mtrl;
+
+        var materialData = X.GETSQLDATASET(materialQ, null);
+        var materialInfo = null;
+
+        if (materialData.RECORDCOUNT > 0) {
+            materialData.FIRST;
+            materialInfo = {
+                CODE: materialData.CODE,
+                NAME: materialData.NAME
+            };
+        }
+
+        return {
+            success: true,
+            items: result,
+            material: materialInfo
+        };
+    } catch (ex) {
+        X.WARNING(ex.message);
+        return {
+            success: false,
+            messages: ["Error retrieving sales history: " + ex.message]
+        };
+    }
 }

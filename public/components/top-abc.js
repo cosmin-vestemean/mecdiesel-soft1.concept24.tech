@@ -11,18 +11,27 @@ export class TopAbc extends LitElement {
       doarDeblocate: { type: Boolean },
       valTxt: { type: String },
       signTxt: { type: Number },
-      
+
       // Branch selection
       branches: { type: Object },
       selectedBranches: { type: Array },
       branchSearchTerm: { type: String },
       showBranchDropdown: { type: Boolean },
-      
+
+      // Supplier selection
+      suppliers: { type: Array },
+      selectedSuppliers: { type: Array },
+      supplierSearchTerm: { type: String },
+      showSupplierDropdown: { type: Boolean },
+
       // Config parameters
       overstockBehavior: { type: Number },
       salesHistoryMonths: { type: Number },
       adjustOrderWithPending: { type: Boolean },
-      
+
+      // Saved search configuration
+      searchConfig: { type: Object },
+
       // UI state
       step: { type: Number },
       loading: { type: Boolean },
@@ -30,7 +39,13 @@ export class TopAbc extends LitElement {
       filteredItems: { type: Array },
       selectedItems: { type: Array },
       calculatedResults: { type: Array },
-      searchTerm: { type: String }
+      searchTerm: { type: String },
+
+      // Sales history modal
+      showSalesHistoryModal: { type: Boolean },
+      salesHistoryData: { type: Object },
+      currentMaterial: { type: Object },
+      salesHistoryLoading: { type: Boolean }
     };
   }
 
@@ -42,7 +57,7 @@ export class TopAbc extends LitElement {
     super();
     this.filterColumnName = "CODE";
     this.doarStocZero = false;
-    this.doarDeblocate = true;
+    this.doarDeblocate = false;
     this.valTxt = "";
     this.signTxt = 1;
     this.branches = {
@@ -68,6 +83,10 @@ export class TopAbc extends LitElement {
     this.selectedBranches = [];
     this.branchSearchTerm = "";
     this.showBranchDropdown = false;
+    this.suppliers = [];
+    this.selectedSuppliers = [];
+    this.supplierSearchTerm = "";
+    this.showSupplierDropdown = false;
     this.overstockBehavior = 0;
     this.salesHistoryMonths = 6;
     this.adjustOrderWithPending = false;
@@ -78,6 +97,13 @@ export class TopAbc extends LitElement {
     this.selectedItems = [];
     this.calculatedResults = [];
     this.searchTerm = '';
+    this.searchConfig = {};
+
+    // Sales history modal properties
+    this.showSalesHistoryModal = false;
+    this.salesHistoryData = null;
+    this.currentMaterial = null;
+    this.salesHistoryLoading = false;
   }
 
   // Get branches as a comma separated string
@@ -94,6 +120,18 @@ export class TopAbc extends LitElement {
       return `${this.selectedBranches[0]} - ${this.branches[this.selectedBranches[0]]}`;
     }
     return `${this.selectedBranches.length} branches selected`;
+  }
+
+  // Get display text for suppliers
+  getSupplierDisplayText() {
+    if (this.selectedSuppliers.length === 0) {
+      return 'Select suppliers';
+    }
+    if (this.selectedSuppliers.length === 1) {
+      const supplier = this.suppliers.find(s => s.TRDR === this.selectedSuppliers[0]);
+      return supplier ? `${supplier.CODE} - ${supplier.NAME}` : 'Select suppliers';
+    }
+    return `${this.selectedSuppliers.length} suppliers selected`;
   }
 
   toggleBranchDropdown(e) {
@@ -131,6 +169,41 @@ export class TopAbc extends LitElement {
     this.selectedBranches = [];
   }
 
+  toggleSupplierDropdown(e) {
+    this.showSupplierDropdown = !this.showSupplierDropdown;
+    if (this.showSupplierDropdown) {
+      document.addEventListener('click', this.closeSupplierDropdown);
+    } else {
+      document.removeEventListener('click', this.closeSupplierDropdown);
+    }
+    e.stopPropagation();
+  }
+
+  closeSupplierDropdown = () => {
+    this.showSupplierDropdown = false;
+    document.removeEventListener('click', this.closeSupplierDropdown);
+  }
+
+  toggleSupplier(supplierId, e) {
+    e.stopPropagation();
+    const index = this.selectedSuppliers.indexOf(supplierId);
+    if (index === -1) {
+      this.selectedSuppliers = [...this.selectedSuppliers, supplierId];
+    } else {
+      this.selectedSuppliers = this.selectedSuppliers.filter(id => id !== supplierId);
+    }
+  }
+
+  selectAllSuppliers(e) {
+    e.stopPropagation();
+    this.selectedSuppliers = this.suppliers.map(s => s.TRDR);
+  }
+
+  clearSuppliers(e) {
+    e.stopPropagation();
+    this.selectedSuppliers = [];
+  }
+
   handleDropdownClick(e) {
     e.stopPropagation();
   }
@@ -139,7 +212,7 @@ export class TopAbc extends LitElement {
     this.loading = true;
     this.error = '';
     this.filteredItems = [];
-    
+
     try {
       if (this.selectedBranches.length === 0) {
         throw new Error('Please select at least one branch');
@@ -162,8 +235,11 @@ export class TopAbc extends LitElement {
         doarDeblocate: this.doarDeblocate,
         valTxt: this.valTxt,
         signTxt: this.signTxt,
-        sucursalaSqlInCondition: this.getBranchesString()
+        sucursalaSqlInCondition: this.getBranchesString(),
+        selectedSuppliersSqlClause: this.selectedSuppliers.length > 0 ? ` AND m.mtrsup IN (${this.selectedSuppliers.join(',')})` : ''
       });
+
+      console.log('Response from getArticoleCfFiltre:', response);
 
       if (response.success) {
         // Add a selected flag to each item
@@ -172,6 +248,10 @@ export class TopAbc extends LitElement {
           selected: true
         }));
         this.selectedItems = [...this.filteredItems];
+
+        // Store search configuration for subsequent steps
+        this.storeSearchConfig();
+
         this.step = 2;
       } else {
         throw new Error(response.messages.join('. '));
@@ -188,33 +268,44 @@ export class TopAbc extends LitElement {
     this.loading = true;
     this.error = '';
     this.calculatedResults = [];
-    
+
     try {
       if (this.selectedItems.length === 0) {
         throw new Error('No items selected');
       }
 
-      const token = await new Promise((resolve, reject) => {
-        connectToS1((token) => {
-          if (!token) {
-            reject(new Error('Failed to get token'));
-            return;
-          }
-          resolve(token);
-        });
-      });
-
       // Get MTRLs of selected items
       const mtrlInput = this.selectedItems.map(item => item.MTRL).join(',');
 
-      const response = await client.service('top-abc').getCalculatedNeeds({
-        token,
-        mtrlInput,
+      // Validate config object before sending
+      // Use the same branch and supplier selection from searchConfig to ensure consistency with Step 1
+      const config = {
         overstockBehavior: this.overstockBehavior,
         salesHistoryMonths: this.salesHistoryMonths,
-        adjustOrderWithPending: this.adjustOrderWithPending,
-        sucursalaSqlInCondition: this.getBranchesString()
-      });
+        adjustOrderWithPending: typeof this.adjustOrderWithPending === 'boolean' ? this.adjustOrderWithPending : false,
+        sucursalaSqlInCondition: this.searchConfig.selectedBranches ? this.searchConfig.selectedBranches.join(',') : this.getBranchesString(),
+        currentDate: new Date().toISOString(), // Convert Date to string to ensure proper serialization
+        supplierFilterSql: this.searchConfig.selectedSuppliers && this.searchConfig.selectedSuppliers.length > 0
+          ? ` AND m.mtrsup IN (${this.searchConfig.selectedSuppliers.join(',')})`
+          : ''
+      };
+
+      if (!config.salesHistoryMonths || !config.currentDate) {
+        throw new Error('Invalid configuration: salesHistoryMonths and currentDate are required.');
+      }
+
+      console.log('Config object:', config);
+
+      //add those three properties to the data obj
+      const data = {
+        isSingle: false,
+        mtrlInput,
+        config
+      };
+
+      const response = await client.service('top-abc').getCalculatedNeeds(data);
+
+      console.log('Response from getCalculatedNeeds:', response);
 
       if (response.success) {
         this.calculatedResults = response.items || [];
@@ -240,6 +331,19 @@ export class TopAbc extends LitElement {
     this.selectedItems = this.filteredItems.filter(item => item.selected);
   }
 
+  storeSearchConfig() {
+    // Store the search configuration for use in subsequent steps
+    this.searchConfig = {
+      selectedBranches: [...this.selectedBranches],
+      selectedSuppliers: [...this.selectedSuppliers],
+      filterColumnName: this.filterColumnName,
+      doarStocZero: this.doarStocZero,
+      doarDeblocate: this.doarDeblocate,
+      valTxt: this.valTxt,
+      signTxt: this.signTxt
+    };
+  }
+
   resetToStep1() {
     this.step = 1;
     this.filteredItems = [];
@@ -262,11 +366,11 @@ export class TopAbc extends LitElement {
 
     // Create a worksheet
     const worksheet = XLSX.utils.json_to_sheet(this.calculatedResults);
-    
+
     // Create a workbook
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Top ABC Results');
-    
+
     // Generate Excel file
     const filename = `top_abc_export_${new Date().toISOString().split('T')[0]}.xlsx`;
     XLSX.writeFile(workbook, filename);
@@ -274,11 +378,11 @@ export class TopAbc extends LitElement {
 
   get filteredItemsList() {
     if (!this.searchTerm) return this.filteredItems;
-    
+
     const term = this.searchTerm.toLowerCase();
-    return this.filteredItems.filter(item => 
-      (item.CODE?.toLowerCase().includes(term) || 
-       item.NAME?.toLowerCase().includes(term))
+    return this.filteredItems.filter(item =>
+    (item.CODE?.toLowerCase().includes(term) ||
+      item.NAME?.toLowerCase().includes(term))
     );
   }
 
@@ -318,15 +422,547 @@ export class TopAbc extends LitElement {
     `;
   }
 
+  renderSupplierDropdown() {
+    const filteredSuppliers = this.supplierSearchTerm
+      ? this.suppliers.filter(supplier =>
+        supplier.CODE.toLowerCase().includes(this.supplierSearchTerm.toLowerCase()) ||
+        supplier.NAME.toLowerCase().includes(this.supplierSearchTerm.toLowerCase())
+      )
+      : this.suppliers;
+
+    return html`
+      <div class="fancy-dropdown-menu" @click="${this.handleDropdownClick}">
+        <div class="fancy-dropdown-header">
+          <div class="input-group input-group-sm">
+            <input type="text" class="form-control" placeholder="Search suppliers..." 
+                   .value="${this.supplierSearchTerm}" 
+                   @input="${e => this.supplierSearchTerm = e.target.value}" />
+          </div>
+        </div>
+        <div class="fancy-dropdown-actions">
+          <button class="btn btn-sm btn-link" @click="${() => this.selectedSuppliers = this.suppliers.map(s => s.TRDR)}">Select All</button>
+          <button class="btn btn-sm btn-link" @click="${() => this.selectedSuppliers = []}">Clear All</button>
+        </div>
+        <div class="fancy-dropdown-content">
+          ${filteredSuppliers.map(supplier => html`
+            <div class="fancy-dropdown-item">
+              <label class="d-flex align-items-center">
+                <input type="checkbox" 
+                       ?checked="${this.selectedSuppliers.includes(supplier.TRDR)}"
+                       @change="${(e) => {
+        const index = this.selectedSuppliers.indexOf(supplier.TRDR);
+        if (e.target.checked && index === -1) {
+          this.selectedSuppliers = [...this.selectedSuppliers, supplier.TRDR];
+        } else if (!e.target.checked && index !== -1) {
+          this.selectedSuppliers = this.selectedSuppliers.filter(id => id !== supplier.TRDR);
+        }
+      }}" />
+                <span class="ms-2">${supplier.CODE} - ${supplier.NAME}</span>
+              </label>
+            </div>
+          `)}
+        </div>
+      </div>
+    `;
+  }
+
+  async fetchSuppliers() {
+    try {
+      const token = await new Promise((resolve, reject) => {
+        connectToS1((token) => {
+          if (!token) {
+            reject(new Error('Failed to get token'));
+            return;
+          }
+          resolve(token);
+        });
+      });
+
+      const response = await client.service('top-abc').getSuppliers({ token });
+      this.suppliers = response || [];
+    } catch (error) {
+      console.error('Error fetching suppliers:', error);
+      this.error = error.message || 'Failed to fetch suppliers';
+    }
+  }
+
+  updated(changedProperties) {
+    // Load suppliers when the component is first rendered
+    if (changedProperties.has('step')) {
+      if (this.suppliers.length === 0) {
+        this.fetchSuppliers();
+      }
+    }
+
+    // Initialize chart when the modal is shown
+    if (changedProperties.has('showSalesHistoryModal')) {
+      if (this.showSalesHistoryModal) {
+        // When modal is shown
+        this.initializeChart();
+        // Prevent scrolling of the background content
+        document.body.style.overflow = 'hidden';
+      } else {
+        // When modal is closed
+        // Allow scrolling again
+        document.body.style.overflow = '';
+
+        // If we have a chart instance, destroy it to free up resources
+        if (this.chart) {
+          this.chart.destroy();
+          this.chart = null;
+        }
+      }
+    }
+  }
+
+  async fetchSalesHistory(material) {
+    // Set loading state
+    this.salesHistoryLoading = true;
+    this.currentMaterial = material;
+    this.error = '';
+
+    try {
+      const token = await new Promise((resolve, reject) => {
+        connectToS1((token) => {
+          if (!token) {
+            reject(new Error('Failed to get token'));
+            return;
+          }
+          resolve(token);
+        });
+      });
+
+      // Create the SQL IN condition for branches
+      const sucursalaSqlInCondition = this.selectedBranches.length > 0
+        ? this.selectedBranches.join(',')
+        : '';
+
+      // Call the backend service to get sales history
+      const response = await client.service('top-abc').getSalesHistory({
+        token,
+        mtrl: material.MTRL,
+        lastNMonths: this.salesHistoryMonths || 12,
+        sucursalaSqlInCondition
+      });
+
+      console.log('Response from getSalesHistory:', response);
+
+      // Process the response data for chart display
+      this.salesHistoryData = this.processSalesHistoryData(response, material);
+
+      // Show the modal
+      this.showSalesHistoryModal = true;
+    } catch (error) {
+      console.error('Error fetching sales history:', error);
+      this.error = error.message || 'Failed to fetch sales history';
+    } finally {
+      this.salesHistoryLoading = false;
+    }
+  }
+
+  processSalesHistoryData(data, material) {
+    // If no data or not successful, return a basic structure with empty arrays
+    if (!data || !data.success || !data.items || data.items.length === 0) {
+      return {
+        materialInfo: material || {},
+        labels: [],
+        values: []
+      };
+    }
+
+    // Use the material info from the response if available, otherwise use the provided material
+    const materialInfo = data.material || material;
+
+    // Aggregate sales by (year, month)
+    const monthMap = new Map();
+    data.items.forEach(item => {
+      const key = `${item.FISCPRD}-${item.PERIOD}`;
+      if (!monthMap.has(key)) {
+        monthMap.set(key, { year: item.FISCPRD, month: item.PERIOD, qty: 0 });
+      }
+      monthMap.get(key).qty += item.SALQTY || 0;
+    });
+
+    // Sort by year and month
+    const aggregated = Array.from(monthMap.values()).sort((a, b) => {
+      if (a.year !== b.year) return a.year - b.year;
+      return a.month - b.month;
+    });
+
+    // Prepare labels and values
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const labels = aggregated.map(item => `${monthNames[item.month - 1]} ${item.year}`);
+    const values = aggregated.map(item => item.qty);
+
+    return {
+      materialInfo,
+      labels,
+      values
+    };
+  }
+
+  renderSalesHistoryModal() {
+    if (!this.showSalesHistoryModal) {
+      // Clear the modal container when not showing
+      const modalContainer = document.getElementById('salesHistoryChartModalContainer');
+      if (modalContainer) {
+        modalContainer.innerHTML = '';
+      }
+      return '';
+    }
+
+    const material = this.currentMaterial || {};
+    const chartData = this.salesHistoryData || { labels: [], values: [] };
+
+    // Create the modal HTML content
+    const modalHTML = `
+      <div class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" tabindex="-1" id="salesHistoryModal">
+        <div class="modal-dialog modal-lg">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Sales History</h5>
+              <button type="button" class="btn-close" id="closeChartModal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              ${this.salesHistoryLoading ?
+                `<div class="d-flex justify-content-center p-5">
+                  <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                  </div>
+                </div>` : 
+                chartData.labels.length > 0 ?
+                `<div class="chart-container" style="position: relative; height:400px; width:100%;">
+                   <canvas id="salesHistoryChart" width="800" height="400" style="display:block; background-color:#ffffff;"></canvas>
+                 </div>` :
+                `<div class="alert alert-info">No sales history data available for this item.</div>`
+              }
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" id="closeChartModalFooter">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;``
+
+    // Render the modal into the dedicated container element in the main document
+    const modalContainer = document.getElementById('salesHistoryChartModalContainer');
+    if (modalContainer) {
+      modalContainer.innerHTML = modalHTML;
+      
+      // Add event listeners to close button
+      const closeButton = document.getElementById('closeChartModal');
+      if (closeButton) {
+        closeButton.addEventListener('click', () => this.closeSalesHistoryModal());
+      }
+      
+      const closeButtonFooter = document.getElementById('closeChartModalFooter');
+      if (closeButtonFooter) {
+        closeButtonFooter.addEventListener('click', () => this.closeSalesHistoryModal());
+      }
+      
+      // Initialize the chart immediately if data is available
+      if (chartData.labels.length > 0 && !this.salesHistoryLoading) {
+        this.initializeChart();
+      }
+    }
+
+    return ''; // Return empty string since we're rendering directly to DOM
+  }
+
+  closeSalesHistoryModal() {
+  this.showSalesHistoryModal = false;
+  const modalContainer = document.getElementById('salesHistoryChartModalContainer');
+  if (modalContainer) {
+    modalContainer.innerHTML = ''; // Clear modal content
+  }
+}
+
+  // Method to initialize or update the chart after the modal is rendered
+  initializeChart() {
+    if (!this.showSalesHistoryModal || !this.salesHistoryData || !this.salesHistoryData.labels.length) return;
+
+    console.log('Initializing chart with data:', this.salesHistoryData);
+
+    // Load Chart.js first - then find the canvas
+    this.loadChartLibrary();
+  }
+
+  loadChartLibrary() {
+    // If Chart.js is already loaded, just setup the chart
+    if (typeof window.Chart !== 'undefined') {
+      console.log('Chart.js already loaded, setting up chart');
+      this.setupChartWhenReady();
+      return;
+    }
+
+    console.log('Loading Chart.js library...');
+
+    // Use Chart.js v3 which is more stable
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js';
+    script.crossOrigin = 'anonymous';
+
+    script.onload = () => {
+      console.log('Chart.js loaded successfully');
+      this.setupChartWhenReady();
+    };
+
+    script.onerror = (error) => {
+      console.error('Error loading Chart.js:', error);
+      this.loadChartJSFallback();
+    };
+
+    document.head.appendChild(script);
+  }
+
+  setupChartWhenReady() {
+    // Use a longer delay to ensure the modal is fully rendered with canvas
+    setTimeout(() => {
+      // Look for the canvas in the document, not in the component's shadow DOM
+      const canvas = document.getElementById('salesHistoryChart');
+      if (!canvas) {
+        console.error('Chart canvas element not found - retrying...');
+        // Try again in a moment - sometimes the canvas isn't ready yet
+        setTimeout(() => this.setupChartWhenReady(), 200);
+        return;
+      }
+
+      console.log('Canvas element found, dimensions:', canvas.width, canvas.height);
+
+      // Force canvas to take the full width and height of its container
+      if (canvas.parentElement) {
+        canvas.parentElement.style.display = 'block';
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+      }
+
+      // Create the chart
+      this.createChart(canvas);
+    }, 300);
+  }
+
+  // Fallback method to try another CDN if the first one fails
+  loadChartJSFallback() {
+    console.log('Trying fallback Chart.js source...');
+    const script = document.createElement('script');
+    // Try a different CDN with the same version
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js';
+    script.integrity = 'sha512-ElRFoEQdI5Ht6kZvyzXhYG9NqjtkmlkfYk0wr6wHxU9JEHakS7UJZNeml5ALk+8IKlU6jDgMabC3vkumRokgJA==';
+    script.crossOrigin = 'anonymous';
+
+    script.onload = () => {
+      console.log('Chart.js loaded successfully from fallback');
+      this.setupChartWhenReady();
+    };
+
+    script.onerror = () => {
+      console.error('Error loading Chart.js from fallback source');
+      // Final fallback - try without integrity
+      const lastScript = document.createElement('script');
+      lastScript.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+      lastScript.crossOrigin = 'anonymous';
+
+      lastScript.onload = () => {
+        console.log('Chart.js loaded successfully from last fallback');
+        this.setupChartWhenReady();
+      };
+
+      lastScript.onerror = () => {
+        console.error('All Chart.js loading attempts failed');
+        // Display a message to the user that the chart couldn't be loaded
+        if (this.querySelector('.modal-body')) {
+          const errorMessage = document.createElement('div');
+          errorMessage.className = 'alert alert-danger';
+          errorMessage.textContent = 'Failed to load chart library. Please try again later.';
+          this.querySelector('.modal-body').appendChild(errorMessage);
+        }
+      };
+
+      document.head.appendChild(lastScript);
+    };
+
+    document.head.appendChild(script);
+  }
+
+  // Create the actual chart
+  createChart(canvas) {
+    const data = this.salesHistoryData;
+    console.log('Creating chart with data:', data);
+
+    // If there's an existing chart, destroy it first
+    if (this.chart) {
+      this.chart.destroy();
+      this.chart = null;
+    }
+
+    try {
+      // Check if Chart is defined
+      if (typeof Chart === 'undefined') {
+        console.error('Chart library not available');
+        return;
+      }
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        console.error('Could not get canvas 2d context');
+        return;
+      }
+
+      // Force a redraw of the canvas with explicit dimensions
+      canvas.style.display = 'block';
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+      canvas.style.backgroundColor = '#ffffff'; // Add white background
+      
+      // Force redraw by changing dimensions slightly
+      const width = canvas.width;
+      canvas.width = 1;
+      canvas.width = width;
+
+      // Make values and labels explicit (not references)
+      const labels = [...data.labels];
+      const values = [...data.values];
+      
+      // Add background color to chart
+      this.chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Sales Quantity',
+            data: values,
+            backgroundColor: 'rgba(54, 162, 235, 0.9)', // Much more opaque
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 3, // Thicker border
+            barThickness: 60, // Make bars thicker and easier to see
+            minBarLength: 10 // Ensure even small values are visible
+          }]
+        },
+        options: {
+          maintainAspectRatio: false,
+          responsive: true,
+          backgroundColor: 'white', // Add chart background
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: {
+                color: '#ddd', // Make grid more visible
+                borderColor: '#999', // Make axis more visible
+                lineWidth: 2 // Thicker grid lines
+              },
+              ticks: {
+                font: {
+                  size: 14 // Larger tick font
+                },
+                color: '#333' // Darker tick color
+              },
+              title: {
+                display: true,
+                text: 'Quantity',
+                font: {
+                  weight: 'bold',
+                  size: 16
+                },
+                color: '#333'
+              }
+            },
+            x: {
+              grid: {
+                color: '#ddd',
+                borderColor: '#999',
+                lineWidth: 2
+              },
+              ticks: {
+                font: {
+                  size: 14
+                },
+                color: '#333'
+              },
+              title: {
+                display: true,
+                text: 'Month',
+                font: {
+                  weight: 'bold',
+                  size: 16
+                },
+                color: '#333'
+              }
+            }
+          },
+          plugins: {
+            // Make title more prominent
+            title: {
+              display: true,
+              text: `${data.materialInfo?.CODE || ''} - ${data.materialInfo?.NAME || ''}`,
+              font: {
+                size: 18, // Larger font
+                weight: 'bold'
+              },
+              color: '#333', // Darker color
+              padding: {
+                top: 20,
+                bottom: 20
+              }
+            },
+            legend: {
+              display: true,
+              position: 'top',
+              labels: {
+                font: {
+                  size: 12
+                }
+              }
+            },
+            tooltip: {
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              titleFont: {
+                size: 14
+              },
+              bodyFont: {
+                size: 13
+              },
+              callbacks: {
+                label: function (context) {
+                  return `Quantity: ${context.parsed.y}`;
+                }
+              }
+            }
+          },
+          animation: {
+            duration: 1000
+          }
+        }
+      });
+
+      // Debug: Force multiple redraws to ensure visibility
+      const redrawChart = () => {
+        if (this.chart) {
+          console.log('Forcing chart update...');
+          this.chart.update();
+        }
+      };
+      
+      // Try multiple redraws at different intervals
+      setTimeout(redrawChart, 100);
+      setTimeout(redrawChart, 500);
+      setTimeout(redrawChart, 1000);
+      
+      console.log('Chart created successfully');
+    } catch (error) {
+      console.error('Error creating chart:', error);
+    }
+  }
+
   renderStep1() {
     return html`
-      <div class="card mb-3 border-light shadow-sm">
-        <div class="card-body p-3">
-          <h5 class="card-title mb-3">Step 1: Search Articles</h5>
+      <div class="card mb-2 border-light shadow-sm">
+        <div class="card-body p-2">
+          <h5 class="card-title mb-2">Step 1: Search Articles</h5>
           
-          <div class="row mb-3">
+          <div class="row mb-2">
             <div class="col-md-6">
-              <div class="input-group input-group-sm fancy-dropdown mb-3">
+              <div class="input-group input-group-sm fancy-dropdown mb-2">
                 <span class="input-group-text">Branches</span>
                 <button class="form-select fancy-dropdown-toggle text-start" 
                         @click="${this.toggleBranchDropdown}"
@@ -338,7 +974,21 @@ export class TopAbc extends LitElement {
             </div>
             
             <div class="col-md-6">
-              <div class="input-group input-group-sm mb-3">
+              <div class="input-group input-group-sm fancy-dropdown mb-2">
+                <span class="input-group-text">Suppliers</span>
+                <button class="form-select fancy-dropdown-toggle text-start" 
+                        @click="${this.toggleSupplierDropdown}"
+                        ?disabled="${this.loading}">
+                  ${this.getSupplierDisplayText()}
+                </button>
+                ${this.showSupplierDropdown ? this.renderSupplierDropdown() : ''}
+              </div>
+            </div>
+          </div>
+          
+          <div class="row mb-2">            
+            <div class="col-md-6">
+              <div class="input-group input-group-sm mb-2">
                 <span class="input-group-text">Filter Column</span>
                 <select class="form-select" 
                         .value="${this.filterColumnName}"
@@ -349,11 +999,8 @@ export class TopAbc extends LitElement {
                 </select>
               </div>
             </div>
-          </div>
-          
-          <div class="row mb-3">            
             <div class="col-md-6">
-              <div class="input-group input-group-sm mb-3">
+              <div class="input-group input-group-sm mb-2">
                 <span class="input-group-text">Search Type</span>
                 <select class="form-select" 
                         .value="${this.signTxt}"
@@ -365,8 +1012,11 @@ export class TopAbc extends LitElement {
                 </select>
               </div>
             </div>
+          </div>
+          
+          <div class="row mb-2">
             <div class="col-md-6">
-              <div class="input-group input-group-sm mb-3">
+              <div class="input-group input-group-sm mb-2">
                 <span class="input-group-text">Search Value</span>
                 <input type="text" class="form-control" placeholder="Enter search value"
                        .value="${this.valTxt}" 
@@ -374,11 +1024,9 @@ export class TopAbc extends LitElement {
                        ?disabled="${this.loading}" />
               </div>
             </div>
-          </div>
-          
-          <div class="row mb-3">
-            <div class="col">
-              <div class="form-check form-check-inline">
+            
+            <div class="col-md-6">
+              <div class="form-check-sm form-check-inline">
                 <input class="form-check-input" type="checkbox" id="doarStocZero"
                        ?checked="${this.doarStocZero}"
                        @change="${e => this.doarStocZero = e.target.checked}"
@@ -386,7 +1034,12 @@ export class TopAbc extends LitElement {
                 <label class="form-check-label" for="doarStocZero">Zero Stock Only</label>
               </div>
               
-              <div class="form-check form-check-inline">
+              <div class="form-check-sm form-check-inline">
+                <input class="form-check-input" type="checkbox" id="doarDeblocate"
+                       ?checked="${this.doarDeblocate}"
+              </div>
+              
+              <div class="form-check-sm form-check-inline">
                 <input class="form-check-input" type="checkbox" id="doarDeblocate"
                        ?checked="${this.doarDeblocate}"
                        @change="${e => this.doarDeblocate = e.target.checked}"
@@ -395,26 +1048,52 @@ export class TopAbc extends LitElement {
               </div>
             </div>
           </div>
-          
-          <button class="btn btn-primary" 
-                  @click="${this.searchArticles}" 
-                  ?disabled="${this.loading}">
-            ${this.loading ? html`<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Searching...` : 'Search Articles'}
-          </button>
         </div>
+        <div class="row mb-2">
+            <div class="col-md-6">
+              <button class="btn btn-primary btn-sm w-50" 
+                      @click="${this.searchArticles}" 
+                      ?disabled="${this.loading}">
+                ${this.loading ? html`<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Searching...` : 'Search Articles'}
+              </button>
+            </div>
+          </div>
       </div>
     `;
   }
 
   renderStep2() {
+    // Prepare items for data-table, including the select checkbox
+    const itemsForDataTableStep2 = this.filteredItemsList.map(item => ({
+      CODE: item.CODE,
+      NAME: item.NAME,
+      _select: html`
+        <div class="form-check-sm d-flex justify-content-center">
+          <input 
+            class="form-check-input" 
+            type="checkbox" 
+            .checked="${item.selected}"
+            @change="${() => this.toggleItemSelection(item.MTRL)}" />
+        </div>`
+    }));
+
     return html`
-      <div class="card mb-3 border-light shadow-sm">
-        <div class="card-body p-3">
-          <h5 class="card-title mb-3">Step 2: Select Items for Calculation</h5>
+      <div class="card mb-2 border-light shadow-sm">
+        <div class="card-body p-2">
+          <h5 class="card-title mb-2">Step 2: Select Items for Calculation</h5>
           
-          <div class="row mb-3">
+          <div class="mb-2 small">
+            <span class="badge bg-light text-dark me-2">Branches: 
+              ${this.searchConfig.selectedBranches?.length || 0} selected
+            </span>
+            <span class="badge bg-light text-dark">Suppliers: 
+              ${this.searchConfig.selectedSuppliers?.length || 0} selected
+            </span>
+          </div>
+          
+          <div class="row mb-2">
             <div class="col-md-6">
-              <div class="input-group input-group-sm mb-3">
+              <div class="input-group input-group-sm mb-2">
                 <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
                 <input type="text" class="form-control" placeholder="Search by code or name..."
                        .value="${this.searchTerm}" 
@@ -428,14 +1107,16 @@ export class TopAbc extends LitElement {
             
             <div class="col-md-6">
               <div class="d-flex align-items-center justify-content-end">
-                <div class="form-check form-check-inline">
+                <div class="form-check-sm form-check-inline">
                   <input class="form-check-input" type="checkbox" id="selectAll"
                          ?checked="${this.filteredItems.length > 0 && this.selectedItems.length === this.filteredItems.length}"
                          @change="${e => {
-                           const checked = e.target.checked;
-                           this.filteredItems = this.filteredItems.map(item => ({...item, selected: checked}));
-                           this.selectedItems = checked ? [...this.filteredItems] : [];
-                         }}" />
+        const checked = e.target.checked;
+        this.filteredItems = this.filteredItems.map(item => ({ ...item, selected: checked }));
+        this.selectedItems = checked ? [...this.filteredItems] : [];
+        // Ensure data-table updates if its items prop depends on this.filteredItems directly
+        this.requestUpdate();
+      }}" />
                   <label class="form-check-label" for="selectAll">Select All</label>
                 </div>
                 
@@ -447,30 +1128,12 @@ export class TopAbc extends LitElement {
           </div>
           
           <div class="table-responsive">
-            <table class="table table-sm table-hover">
-              <thead class="table-light">
-                <tr>
-                  <th>Select</th>
-                  <th>Code</th>
-                  <th>Name</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${this.filteredItemsList.map(item => html`
-                  <tr class="${item.selected ? 'table-active' : ''}">
-                    <td>
-                      <div class="form-check">
-                        <input class="form-check-input" type="checkbox" 
-                               ?checked="${item.selected}"
-                               @change="${() => this.toggleItemSelection(item.MTRL)}" />
-                      </div>
-                    </td>
-                    <td>${item.CODE}</td>
-                    <td>${item.NAME}</td>
-                  </tr>
-                `)}
-              </tbody>
-            </table>
+            <data-table 
+              .items="${itemsForDataTableStep2}"
+              .skipNr="${0}" 
+              class="table table-sm table-hover">
+            </data-table>
+            ${this.filteredItemsList.length === 0 && !this.loading ? html`<p class="text-center text-muted mt-3">No items found based on your search criteria.</p>` : ''}
           </div>
           
           <div class="mt-3 d-flex justify-content-between">
@@ -478,7 +1141,7 @@ export class TopAbc extends LitElement {
               Back to Step 1
             </button>
             <div>
-              <h6 class="mb-3">Calculation Settings</h6>
+              <h6 class="mb-2">Calculation Settings</h6>
               <div class="input-group input-group-sm mb-2">
                 <span class="input-group-text">Sales History Months</span>
                 <input type="number" class="form-control" min="1" max="36"
@@ -496,14 +1159,14 @@ export class TopAbc extends LitElement {
                 </select>
               </div>
               
-              <div class="form-check mb-3">
+              <div class="form-check-sm mb-2">
                 <input class="form-check-input" type="checkbox" id="adjustOrderWithPending"
                        ?checked="${this.adjustOrderWithPending}"
                        @change="${e => this.adjustOrderWithPending = e.target.checked}" />
                 <label class="form-check-label" for="adjustOrderWithPending">Adjust Order with Pending</label>
               </div>
               
-              <button class="btn btn-primary" 
+              <button class="btn btn-sm btn-primary" 
                       @click="${this.calculateNeeds}"
                       ?disabled="${this.loading || this.selectedItems.length === 0}">
                 ${this.loading ? html`<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Calculating...` : 'Calculate Needs'}
@@ -516,59 +1179,46 @@ export class TopAbc extends LitElement {
   }
 
   renderStep3() {
+    // Process items to add action buttons
+    const itemsWithActions = this.calculatedResults.map(item => {
+      return {
+        ...item,
+        _actions: html`
+          <button class="btn btn-sm btn-outline-primary" 
+                  @click="${(e) => { e.stopPropagation(); this.fetchSalesHistory(item); }}">
+            <i class="bi bi-graph-up"></i> Sales History
+          </button>
+        `
+      };
+    });
+
     return html`
-      <div class="card mb-3 border-light shadow-sm">
-        <div class="card-body p-3">
-          <h5 class="card-title mb-3">Step 3: Calculation Results</h5>
+      <div class="card mb-2 border-light shadow-sm">
+        <div class="card-body p-2">
+          <h5 class="card-title mb-2">Step 3: Calculation Results</h5>
           
-          <div class="mb-3 d-flex justify-content-between">
-            <button class="btn btn-outline-secondary" @click="${this.backToStep2}">
+          <div class="mb-2 d-flex justify-content-between">
+            <button class="btn btn-sm btn-outline-secondary" @click="${this.backToStep2}">
               Back to Step 2
             </button>
             
-            <button class="btn btn-success" @click="${this.exportToExcel}">
+            <button class="btn btn-sm btn-success" @click="${this.exportToExcel}" ?disabled="${!this.calculatedResults.length}">
               <i class="bi bi-file-earmark-excel"></i> Export to Excel
             </button>
           </div>
           
           <div class="table-responsive">
-            <table class="table table-sm table-hover">
-              <thead class="table-light sticky-top">
-                <tr>
-                  <th>Code</th>
-                  <th>Name</th>
-                  <th>Stock</th>
-                  <th>Reserved</th>
-                  <th>Pending</th>
-                  <th>Min Need</th>
-                  <th>Max Need</th>
-                  <th>Order Min</th>
-                  <th>Order Max</th>
-                  <th>Sales History</th>
-                  <th>Coverage (Months)</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${this.calculatedResults.map(item => html`
-                  <tr>
-                    <td>${item.CODE}</td>
-                    <td>${item.NAME}</td>
-                    <td>${item.CCCQTYSTOC}</td>
-                    <td>${item.CCCQTYREZERVAT}</td>
-                    <td>${item.CCCQTYASTEPTAT}</td>
-                    <td>${item.CCCQTY1}</td>
-                    <td>${item.CCCQTY2}</td>
-                    <td>${item.CCCORDERMIN}</td>
-                    <td>${item.CCCORDERMAX}</td>
-                    <td>${item.CCC3MSALES}</td>
-                    <td>${item.CCCACOPLUN}</td>
-                  </tr>
-                `)}
-              </tbody>
-            </table>
+            <data-table
+              .items="${itemsWithActions}"
+              .skipNr="${0}"
+              class="table table-sm table-hover">
+            </data-table>
+            ${this.calculatedResults.length === 0 && !this.loading ? html`<p class="text-center text-muted mt-3">No calculation results to display.</p>` : ''}
           </div>
         </div>
       </div>
+      
+      ${this.renderSalesHistoryModal()}
     `;
   }
 
@@ -620,14 +1270,63 @@ export class TopAbc extends LitElement {
           background: white;
           z-index: 10;
         }
+        
+        /* Sales History Modal Styles */
+        .modal {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 1050;
+          outline: 0;
+          background-color: rgba(0,0,0,0.5);
+        }
+        .modal-dialog {
+          position: relative;
+          margin: 1.75rem auto;
+          max-width: 800px;
+          z-index: 1051;
+        }
+        .modal-content {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          width: 100%;
+          pointer-events: auto;
+          background-color: #fff;
+          border: 1px solid rgba(0,0,0,.2);
+          border-radius: .3rem;
+          outline: 0;
+          box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        }
+        .modal-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 1rem;
+          border-bottom: 1px solid #dee2e6;
+        }
+        .modal-body {
+          position: relative;
+          flex: 1 1 auto;
+          padding: 1rem;
+        }
+        .modal-footer {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          padding: 0.75rem;
+          border-top: 1px solid #dee2e6;
+        }
       </style>
       
       <div class="container-fluid">
-        <h3 class="mb-3">Top ABC Analysis</h3>
+        <h3 class="mb-2">Top ABC Analysis</h3>
         
         ${this.error ? html`<div class="alert alert-danger">${this.error}</div>` : ''}
         
-        <div class="progress mb-3" style="${this.step > 1 ? '' : 'display: none;'}">
+        <div class="progress mb-2" style="${this.step > 1 ? '' : 'display: none;'}">
           <div class="progress-bar" role="progressbar" style="width: ${(this.step - 1) * 50}%"></div>
         </div>
         
@@ -635,6 +1334,9 @@ export class TopAbc extends LitElement {
         ${this.step === 2 ? this.renderStep2() : ''}
         ${this.step === 3 ? this.renderStep3() : ''}
       </div>
+      
+      <!-- Show the modal if it's active -->
+      ${this.renderSalesHistoryModal()}
     `;
   }
 }
