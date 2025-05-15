@@ -550,6 +550,9 @@ export class TopAbc extends LitElement {
       // Process the response data for chart display
       this.salesHistoryData = this.processSalesHistoryData(response, material);
 
+      // Make this component instance available globally for chart tooltip access
+      window.topAbcComponent = this;
+
       // Show the modal
       this.showSalesHistoryModal = true;
     } catch (error) {
@@ -566,38 +569,62 @@ export class TopAbc extends LitElement {
       return {
         materialInfo: material || {},
         labels: [],
-        values: []
+        values: [],
+        branchData: {}
       };
     }
 
     // Use the material info from the response if available, otherwise use the provided material
     const materialInfo = data.material || material;
 
-    // Aggregate sales by (year, month)
-    const monthMap = new Map();
-    data.items.forEach(item => {
-      const key = `${item.FISCPRD}-${item.PERIOD}`;
-      if (!monthMap.has(key)) {
-        monthMap.set(key, { year: item.FISCPRD, month: item.PERIOD, qty: 0 });
-      }
-      monthMap.get(key).qty += item.SALQTY || 0;
-    });
-
-    // Sort by year and month
-    const aggregated = Array.from(monthMap.values()).sort((a, b) => {
-      if (a.year !== b.year) return a.year - b.year;
-      return a.month - b.month;
-    });
-
-    // Prepare labels and values
+    // Get unique months (as strings) to use as labels
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const labels = aggregated.map(item => `${monthNames[item.month - 1]} ${item.year}`);
-    const values = aggregated.map(item => item.qty);
+    const uniqueMonths = new Set();
+    data.items.forEach(item => {
+      const monthLabel = `${monthNames[item.PERIOD - 1]} ${item.FISCPRD}`;
+      uniqueMonths.add(monthLabel);
+    });
+
+    // Convert to array and sort by year and month
+    const sortedMonths = Array.from(uniqueMonths).sort((a, b) => {
+      const [monthA, yearA] = a.split(' ');
+      const [monthB, yearB] = b.split(' ');
+      if (yearA !== yearB) return parseInt(yearA) - parseInt(yearB);
+      return monthNames.indexOf(monthA) - monthNames.indexOf(monthB);
+    });
+
+    // Aggregate sales by branch and month
+    const branchData = {};
+    data.items.forEach(item => {
+      const branchId = item.BRANCH.toString();
+      const monthLabel = `${monthNames[item.PERIOD - 1]} ${item.FISCPRD}`;
+      
+      // Initialize branch data structure if it doesn't exist
+      if (!branchData[branchId]) {
+        branchData[branchId] = {};
+      }
+      
+      // Add sales data to branch for specific month
+      if (!branchData[branchId][monthLabel]) {
+        branchData[branchId][monthLabel] = 0;
+      }
+      branchData[branchId][monthLabel] += item.SALQTY || 0;
+    });
+
+    // For backward compatibility, still calculate the total values
+    const values = sortedMonths.map(month => {
+      let total = 0;
+      Object.values(branchData).forEach(branch => {
+        total += branch[month] || 0;
+      });
+      return total;
+    });
 
     return {
       materialInfo,
-      labels,
-      values
+      labels: sortedMonths,
+      values, // Keep the total values for backward compatibility
+      branchData // Add the branch-specific data
     };
   }
 
@@ -671,12 +698,17 @@ export class TopAbc extends LitElement {
   }
 
   closeSalesHistoryModal() {
-  this.showSalesHistoryModal = false;
-  const modalContainer = document.getElementById('salesHistoryChartModalContainer');
-  if (modalContainer) {
-    modalContainer.innerHTML = ''; // Clear modal content
+    this.showSalesHistoryModal = false;
+    const modalContainer = document.getElementById('salesHistoryChartModalContainer');
+    if (modalContainer) {
+      modalContainer.innerHTML = ''; // Clear modal content
+    }
+    
+    // Clean up the global reference
+    if (window.topAbcComponent === this) {
+      window.topAbcComponent = null;
+    }
   }
-}
 
   // Method to initialize or update the chart after the modal is rendered
   initializeChart() {
@@ -822,40 +854,82 @@ export class TopAbc extends LitElement {
 
       // Make values and labels explicit (not references)
       const labels = [...data.labels];
-      const values = [...data.values];
+      
+      // Define a color palette for branches
+      const colorPalette = [
+        'rgba(54, 162, 235, 0.9)', // Blue
+        'rgba(255, 99, 132, 0.9)', // Red
+        'rgba(75, 192, 192, 0.9)', // Green
+        'rgba(255, 159, 64, 0.9)', // Orange
+        'rgba(153, 102, 255, 0.9)', // Purple
+        'rgba(255, 205, 86, 0.9)', // Yellow
+        'rgba(201, 203, 207, 0.9)', // Grey
+        'rgba(54, 94, 77, 0.9)',    // Dark Green
+        'rgba(255, 69, 0, 0.9)',    // Red-Orange
+        'rgba(0, 128, 128, 0.9)',   // Teal
+        'rgba(128, 0, 128, 0.9)',   // Purple
+        'rgba(0, 0, 139, 0.9)',     // Dark Blue
+        'rgba(139, 69, 19, 0.9)',   // Brown
+        'rgba(0, 139, 139, 0.9)',   // Dark Cyan
+        'rgba(178, 34, 34, 0.9)'    // Firebrick
+      ];
+      
+      // Prepare datasets for each branch
+      const datasets = [];
+      
+      // Only use branch IDs for labels (no branch names)
+      if (data.branchData) {
+        // Create a dataset for each branch
+        Object.keys(data.branchData).forEach((branchId, index) => {
+          const branchValues = labels.map(month => data.branchData[branchId][month] || 0);
+          
+          datasets.push({
+            label: branchId,
+            data: branchValues,
+            backgroundColor: colorPalette[index % colorPalette.length],
+            borderColor: colorPalette[index % colorPalette.length].replace('0.9', '1'),
+            borderWidth: 1,
+            barPercentage: 0.9,
+            categoryPercentage: 0.9,
+            minBarLength: 5
+          });
+        });
+      } else {
+        // Fallback to old format if branchData isn't available
+        datasets.push({
+          label: 'Sales Quantity',
+          data: [...data.values],
+          backgroundColor: colorPalette[0],
+          borderColor: colorPalette[0].replace('0.9', '1'),
+          borderWidth: 3,
+          barThickness: 60,
+          minBarLength: 10
+        });
+      }
       
       // Add background color to chart
       this.chart = new Chart(ctx, {
         type: 'bar',
         data: {
           labels: labels,
-          datasets: [{
-            label: 'Sales Quantity',
-            data: values,
-            backgroundColor: 'rgba(54, 162, 235, 0.9)', // Much more opaque
-            borderColor: 'rgba(54, 162, 235, 1)',
-            borderWidth: 3, // Thicker border
-            barThickness: 60, // Make bars thicker and easier to see
-            minBarLength: 10 // Ensure even small values are visible
-          }]
+          datasets: datasets
         },
         options: {
           maintainAspectRatio: false,
           responsive: true,
-          backgroundColor: 'white', // Add chart background
+          backgroundColor: 'white',
           scales: {
             y: {
               beginAtZero: true,
+              stacked: true, // Enable stacking on the y-axis
               grid: {
-                color: '#ddd', // Make grid more visible
-                borderColor: '#999', // Make axis more visible
-                lineWidth: 2 // Thicker grid lines
+                color: '#ddd',
+                borderColor: '#999',
+                lineWidth: 2
               },
               ticks: {
-                font: {
-                  size: 14 // Larger tick font
-                },
-                color: '#333' // Darker tick color
+                font: { size: 14 },
+                color: '#333'
               },
               title: {
                 display: true,
@@ -868,15 +942,14 @@ export class TopAbc extends LitElement {
               }
             },
             x: {
+              stacked: true, // Enable stacking on the x-axis
               grid: {
                 color: '#ddd',
                 borderColor: '#999',
                 lineWidth: 2
               },
               ticks: {
-                font: {
-                  size: 14
-                },
+                font: { size: 14 },
                 color: '#333'
               },
               title: {
@@ -891,15 +964,14 @@ export class TopAbc extends LitElement {
             }
           },
           plugins: {
-            // Make title more prominent
             title: {
               display: true,
               text: `${data.materialInfo?.CODE || ''} - ${data.materialInfo?.NAME || ''}`,
               font: {
-                size: 18, // Larger font
+                size: 18,
                 weight: 'bold'
               },
-              color: '#333', // Darker color
+              color: '#333',
               padding: {
                 top: 20,
                 bottom: 20
@@ -909,22 +981,34 @@ export class TopAbc extends LitElement {
               display: true,
               position: 'top',
               labels: {
-                font: {
-                  size: 12
-                }
+                font: { size: 12 }
               }
             },
             tooltip: {
-              backgroundColor: 'rgba(0, 0, 0, 0.7)',
-              titleFont: {
-                size: 14
-              },
-              bodyFont: {
-                size: 13
-              },
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              titleFont: { size: 14 },
+              bodyFont: { size: 13 },
               callbacks: {
-                label: function (context) {
-                  return `Quantity: ${context.parsed.y}`;
+                label: function(context) {
+                  return `${context.dataset.label}: ${context.parsed.y}`;
+                },
+                afterLabel: function(context) {
+                  // Show percentage of total for this month
+                  const dataIndex = context.dataIndex;
+                  const datasetIndex = context.datasetIndex;
+                  const month = context.chart.data.labels[dataIndex];
+                  
+                  // Calculate total for this month across all branches
+                  let total = 0;
+                  context.chart.data.datasets.forEach(dataset => {
+                    total += dataset.data[dataIndex] || 0;
+                  });
+                  
+                  const value = context.chart.data.datasets[datasetIndex].data[dataIndex] || 0;
+                  
+                  // Prevent division by zero which would result in Infinity
+                  const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
+                  return `${percentage}% of total`;
                 }
               }
             }

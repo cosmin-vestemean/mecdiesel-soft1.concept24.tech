@@ -843,7 +843,7 @@ function getSalesHistory(params) {
 
         // Query to get monthly sales data
         var q =
-            "SELECT FISCPRD, PERIOD, SUM(ISNULL(SALQTY, 0)) AS SALQTY, " +
+            "SELECT FISCPRD, PERIOD, WHOUSE AS BRANCH, SUM(ISNULL(SALQTY, 0)) AS SALQTY, " +
             "CONCAT(CASE PERIOD " +
             "WHEN 1 THEN 'Jan' " +
             "WHEN 2 THEN 'Feb' " +
@@ -864,8 +864,8 @@ function getSalesHistory(params) {
             " AND PERIOD != 0" +
             " AND (FISCPRD > " + startYear + " OR (FISCPRD = " + startYear + " AND PERIOD >= " + startMonth + "))" +
             branchQry +
-            " GROUP BY FISCPRD, PERIOD " +
-            "ORDER BY FISCPRD, PERIOD"
+            " GROUP BY FISCPRD, PERIOD, WHOUSE " +
+            "ORDER BY FISCPRD, PERIOD, WHOUSE"
 
         var salesData = X.GETSQLDATASET(q, null);
 
@@ -877,7 +877,8 @@ function getSalesHistory(params) {
                 FISCPRD: salesData.FISCPRD,
                 PERIOD: salesData.PERIOD,
                 SALQTY: salesData.SALQTY,
-                MONTH_LABEL: salesData.MONTH_LABEL
+                MONTH_LABEL: salesData.MONTH_LABEL,
+                BRANCH: salesData.BRANCH
             });
             salesData.NEXT
         }
