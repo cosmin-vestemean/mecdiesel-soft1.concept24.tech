@@ -45,7 +45,8 @@ export class TopAbc extends LitElement {
       showSalesHistoryModal: { type: Boolean },
       salesHistoryData: { type: Object },
       currentMaterial: { type: Object },
-      salesHistoryLoading: { type: Boolean }
+      salesHistoryLoading: { type: Boolean },
+      chartType: { type: String }
     };
   }
 
@@ -104,6 +105,7 @@ export class TopAbc extends LitElement {
     this.salesHistoryData = null;
     this.currentMaterial = null;
     this.salesHistoryLoading = false;
+    this.chartType = 'sideBySide'; // Default chart type (options: 'total', 'stacked', 'sideBySide')
   }
 
   // Get branches as a comma separated string
@@ -595,19 +597,32 @@ export class TopAbc extends LitElement {
 
     // Aggregate sales by branch and month
     const branchData = {};
+    
+    // First, initialize all known branches from this.branches (even those with no data)
+    // This ensures consistent branch ordering and color assignment
+    Object.keys(this.branches).forEach(branchId => {
+      branchData[branchId] = {};
+      // Initialize all months with zero values
+      sortedMonths.forEach(month => {
+        branchData[branchId][month] = 0;
+      });
+    });
+    
+    // Then add the actual data from the response
     data.items.forEach(item => {
       const branchId = item.BRANCH.toString();
       const monthLabel = `${monthNames[item.PERIOD - 1]} ${item.FISCPRD}`;
       
-      // Initialize branch data structure if it doesn't exist
+      // Initialize branch data structure if it doesn't exist (for branches not in this.branches)
       if (!branchData[branchId]) {
         branchData[branchId] = {};
+        // Initialize all months with zero values for this new branch
+        sortedMonths.forEach(month => {
+          branchData[branchId][month] = 0;
+        });
       }
       
       // Add sales data to branch for specific month
-      if (!branchData[branchId][monthLabel]) {
-        branchData[branchId][monthLabel] = 0;
-      }
       branchData[branchId][monthLabel] += item.SALQTY || 0;
     });
 
@@ -647,8 +662,20 @@ export class TopAbc extends LitElement {
         <div class="modal-dialog modal-lg">
           <div class="modal-content">
             <div class="modal-header">
-              <h5 class="modal-title">Sales History</h5>
-              <button type="button" class="btn-close" id="closeChartModal" aria-label="Close"></button>
+              <div class="d-flex justify-content-between align-items-center w-100">
+                <div class="d-flex align-items-center">
+                  <h5 class="modal-title me-3 mb-0">Sales History</h5>
+                  <div class="dropdown-container d-flex align-items-center">
+                    <label for="chartTypeSelector" class="me-2 small">View:</label>
+                    <select class="form-select form-select-sm" id="chartTypeSelector">
+                      <option value="total">Total Sales</option>
+                      <option value="stacked">Stacked by Branch</option>
+                      <option value="sideBySide">Side by Side</option>
+                    </select>
+                  </div>
+                </div>
+                <button type="button" class="btn-close" id="closeChartModal" aria-label="Close"></button>
+              </div>
             </div>
             <div class="modal-body">
               ${this.salesHistoryLoading ?
@@ -686,6 +713,21 @@ export class TopAbc extends LitElement {
       const closeButtonFooter = document.getElementById('closeChartModalFooter');
       if (closeButtonFooter) {
         closeButtonFooter.addEventListener('click', () => this.closeSalesHistoryModal());
+      }
+      
+      // Add event listener for chart type selector
+      const chartTypeSelector = document.getElementById('chartTypeSelector');
+      if (chartTypeSelector) {
+        // Set the initial value based on the component's property
+        chartTypeSelector.value = this.chartType;
+        console.log('Setting chart type selector to:', this.chartType);
+        
+        // Add event listener for changes
+        chartTypeSelector.addEventListener('change', (e) => {
+          this.chartType = e.target.value;
+          console.log('Chart type changed to:', this.chartType);
+          this.updateChartType();
+        });
       }
       
       // Initialize the chart immediately if data is available
@@ -817,6 +859,96 @@ export class TopAbc extends LitElement {
     document.head.appendChild(script);
   }
 
+  // Update the chart based on selected chart type
+  updateChartType() {
+    console.log('Changing chart type to:', this.chartType);
+    // Recreate the chart with the new chart type
+    const canvas = document.getElementById('salesHistoryChart');
+    if (canvas) {
+      this.createChart(canvas);
+    } else {
+      console.error('Canvas not found when updating chart type');
+    }
+  }
+  
+  // Creates a single dataset showing total sales
+  createTotalDataset(data, labels, colorPalette) {
+    // Calculate totals from the branch data
+    const totalValues = labels.map(month => {
+      let total = 0;
+      if (data.branchData) {
+        Object.values(data.branchData).forEach(branch => {
+          total += branch[month] || 0;
+        });
+      } else if (data.values) {
+        // Fallback to pre-calculated values
+        const index = data.labels.indexOf(month);
+        if (index >= 0) {
+          total = data.values[index] || 0;
+        }
+      }
+      return total;
+    });
+
+    return [{
+      label: 'Total Sales',
+      data: totalValues,
+      backgroundColor: colorPalette[0],
+      borderColor: colorPalette[0].replace('0.9', '1'),
+      borderWidth: 1,
+      barPercentage: 0.6,  // Make total bars wider
+      categoryPercentage: 0.9,
+      minBarLength: 5
+    }];
+  }
+
+  // Creates datasets for each branch
+  createBranchDatasets(data, labels, colorPalette, stacked) {
+    const datasets = [];
+    
+    if (data.branchData) {
+      // Get branch IDs and sort them numerically for consistent ordering and coloring
+      const branchIds = Object.keys(data.branchData).sort((a, b) => parseInt(a) - parseInt(b));
+      
+      // Create a dataset for each branch
+      branchIds.forEach((branchId, index) => {
+        const branchValues = labels.map(month => data.branchData[branchId][month] || 0);
+        
+        // Only include branches that have data if we're not stacking
+        const hasData = branchValues.some(val => val > 0);
+        if (!stacked && !hasData) {
+          return; // Skip branches with no data for side-by-side view
+        }
+        
+        // Use only branch ID for the label to save space
+        datasets.push({
+          label: branchId, // Use just the branch ID without the name
+          data: branchValues,
+          backgroundColor: colorPalette[index % colorPalette.length],
+          borderColor: colorPalette[index % colorPalette.length].replace('0.9', '1'),
+          borderWidth: 1,
+          barPercentage: stacked ? 0.9 : 0.8,
+          categoryPercentage: stacked ? 0.9 : 0.8,
+          minBarLength: 5
+        });
+      });
+    } else if (data.values) {
+      // Fallback for when no branch data is available
+      datasets.push({
+        label: 'Sales Quantity',
+        data: [...data.values],
+        backgroundColor: colorPalette[0],
+        borderColor: colorPalette[0].replace('0.9', '1'),
+        borderWidth: 1,
+        barPercentage: 0.8,
+        categoryPercentage: 0.8,
+        minBarLength: 5
+      });
+    }
+    
+    return datasets;
+  }
+  
   // Create the actual chart
   createChart(canvas) {
     const data = this.salesHistoryData;
@@ -874,37 +1006,30 @@ export class TopAbc extends LitElement {
         'rgba(178, 34, 34, 0.9)'    // Firebrick
       ];
       
-      // Prepare datasets for each branch
-      const datasets = [];
+      // Prepare datasets based on the selected chart type
+      let datasets = [];
+      let isStacked = false;
+      let chartTitle = `${data.materialInfo?.CODE || ''} - ${data.materialInfo?.NAME || ''}`;
       
-      // Only use branch IDs for labels (no branch names)
-      if (data.branchData) {
-        // Create a dataset for each branch
-        Object.keys(data.branchData).forEach((branchId, index) => {
-          const branchValues = labels.map(month => data.branchData[branchId][month] || 0);
-          
-          datasets.push({
-            label: branchId,
-            data: branchValues,
-            backgroundColor: colorPalette[index % colorPalette.length],
-            borderColor: colorPalette[index % colorPalette.length].replace('0.9', '1'),
-            borderWidth: 1,
-            barPercentage: 0.9,
-            categoryPercentage: 0.9,
-            minBarLength: 5
-          });
-        });
-      } else {
-        // Fallback to old format if branchData isn't available
-        datasets.push({
-          label: 'Sales Quantity',
-          data: [...data.values],
-          backgroundColor: colorPalette[0],
-          borderColor: colorPalette[0].replace('0.9', '1'),
-          borderWidth: 3,
-          barThickness: 60,
-          minBarLength: 10
-        });
+      console.log('Creating chart with type:', this.chartType);
+      
+      switch (this.chartType) {
+        case 'total':
+          datasets = this.createTotalDataset(data, labels, colorPalette);
+          isStacked = false;
+          chartTitle += ' (Total Sales)';
+          break;
+        case 'stacked':
+          datasets = this.createBranchDatasets(data, labels, colorPalette, true);
+          isStacked = true;
+          chartTitle += ' (Stacked by Branch)';
+          break;
+        case 'sideBySide':
+        default:
+          datasets = this.createBranchDatasets(data, labels, colorPalette, false);
+          isStacked = false;
+          chartTitle += ' (Side by Side)';
+          break;
       }
       
       // Add background color to chart
@@ -921,7 +1046,7 @@ export class TopAbc extends LitElement {
           scales: {
             y: {
               beginAtZero: true,
-              stacked: true, // Enable stacking on the y-axis
+              stacked: isStacked, // Set stacked based on chart type
               grid: {
                 color: '#ddd',
                 borderColor: '#999',
@@ -942,7 +1067,7 @@ export class TopAbc extends LitElement {
               }
             },
             x: {
-              stacked: true, // Enable stacking on the x-axis
+              stacked: isStacked, // Set stacked based on chart type
               grid: {
                 color: '#ddd',
                 borderColor: '#999',
@@ -966,7 +1091,7 @@ export class TopAbc extends LitElement {
           plugins: {
             title: {
               display: true,
-              text: `${data.materialInfo?.CODE || ''} - ${data.materialInfo?.NAME || ''}`,
+              text: chartTitle,
               font: {
                 size: 18,
                 weight: 'bold'
@@ -990,13 +1115,24 @@ export class TopAbc extends LitElement {
               bodyFont: { size: 13 },
               callbacks: {
                 label: function(context) {
-                  return `${context.dataset.label}: ${context.parsed.y}`;
+                  // Extract just the branch ID from the dataset label (which is in format "1200 - CLUJ")
+                  const branchId = context.dataset.label.split(' - ')[0];
+                  return `${branchId}: ${context.parsed.y}`;
                 },
                 afterLabel: function(context) {
-                  // Show percentage of total for this month
+                  // Show percentage for this month
                   const dataIndex = context.dataIndex;
                   const datasetIndex = context.datasetIndex;
                   const month = context.chart.data.labels[dataIndex];
+                  
+                  // Get a reference to the component for the chart type
+                  const component = window.topAbcComponent;
+                  const chartType = component ? component.chartType : 'sideBySide';
+                  
+                  // For total view, don't show percentage
+                  if (chartType === 'total') {
+                    return '';
+                  }
                   
                   // Calculate total for this month across all branches
                   let total = 0;
@@ -1008,7 +1144,7 @@ export class TopAbc extends LitElement {
                   
                   // Prevent division by zero which would result in Infinity
                   const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
-                  return `${percentage}% of total`;
+                  return `${percentage}%`;
                 }
               }
             }

@@ -843,7 +843,7 @@ function getSalesHistory(params) {
 
         // Query to get monthly sales data
         var q =
-            "SELECT FISCPRD, PERIOD, WHOUSE AS BRANCH, SUM(ISNULL(SALQTY, 0)) AS SALQTY, " +
+            "SELECT FISCPRD, PERIOD, WHOUSE AS BRANCH, ISNULL(SUM(ISNULL(SALQTY, 0)), 0) AS SALQTY, " +
             "CONCAT(CASE PERIOD " +
             "WHEN 1 THEN 'Jan' " +
             "WHEN 2 THEN 'Feb' " +
