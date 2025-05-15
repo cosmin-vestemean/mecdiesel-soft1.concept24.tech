@@ -1,5 +1,5 @@
 /**
- * Top ABC Stock Analysis and Replenishment Module
+ * Necesar achizitie Module
  * =============================================
  * 
  * This module is executed within the Softone ERP environment to analyze and manage stock levels.

@@ -20,7 +20,7 @@ class DataTable extends LitElement {
   // Helper function to determine if content might contain HTML
   containsHtml(str) {
     if (typeof str !== 'string') return false;
-    
+
     // More comprehensive test for HTML content
     const htmlRegex = /<(?=.*? .*?\/ ?>|br|hr|input|!--|wbr)[a-z]+.*?>|<([a-z]+).*?<\/\1>/i;
     return htmlRegex.test(str);
@@ -44,7 +44,7 @@ class DataTable extends LitElement {
         </div>
       </div>
     `;
-    
+
     const toastContainer = document.getElementById('toast-container');
     if (!toastContainer) {
       const container = document.createElement('div');
@@ -52,7 +52,7 @@ class DataTable extends LitElement {
       container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
       document.body.appendChild(container);
     }
-    
+
     document.getElementById('toast-container').insertAdjacentHTML('beforeend', toastHtml);
     const toastElement = document.getElementById(toastId);
     const toast = new bootstrap.Toast(toastElement, { delay: delay });
@@ -118,6 +118,12 @@ class DataTable extends LitElement {
           }
           break;
         case "is_signaled":
+          // Skip this field
+          break;
+        case "mtrl":
+          // Skip this field
+          break;
+        case "trdr":
           // Skip this field
           break;
         default:

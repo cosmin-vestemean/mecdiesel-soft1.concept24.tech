@@ -974,20 +974,6 @@ export class TopAbc extends LitElement {
             </div>
             
             <div class="col-md-6">
-              <div class="input-group input-group-sm fancy-dropdown mb-2">
-                <span class="input-group-text">Suppliers</span>
-                <button class="form-select fancy-dropdown-toggle text-start" 
-                        @click="${this.toggleSupplierDropdown}"
-                        ?disabled="${this.loading}">
-                  ${this.getSupplierDisplayText()}
-                </button>
-                ${this.showSupplierDropdown ? this.renderSupplierDropdown() : ''}
-              </div>
-            </div>
-          </div>
-          
-          <div class="row mb-2">            
-            <div class="col-md-6">
               <div class="input-group input-group-sm mb-2">
                 <span class="input-group-text">Filter Column</span>
                 <select class="form-select" 
@@ -997,6 +983,21 @@ export class TopAbc extends LitElement {
                   <option value="CODE">Code</option>
                   <option value="NAME">Name</option>
                 </select>
+              </div>
+            </div>
+            
+          </div>
+          
+          <div class="row mb-2">            
+            <div class="col-md-6">
+              <div class="input-group input-group-sm fancy-dropdown mb-2">
+                <span class="input-group-text">Suppliers</span>
+                <button class="form-select fancy-dropdown-toggle text-start" 
+                        @click="${this.toggleSupplierDropdown}"
+                        ?disabled="${this.loading}">
+                  ${this.getSupplierDisplayText()}
+                </button>
+                ${this.showSupplierDropdown ? this.renderSupplierDropdown() : ''}
               </div>
             </div>
             <div class="col-md-6">
@@ -1014,7 +1015,36 @@ export class TopAbc extends LitElement {
             </div>
           </div>
           
-          <div class="row mb-2">
+          <div class="row mb-2">            
+            <div class="col-md-6">
+              <div class="row">
+                <div class="col-md-4">
+                  <div class="form-check-sm form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="doarStocZero"
+                          ?checked="${this.doarStocZero}"
+                          @change="${e => this.doarStocZero = e.target.checked}"
+                          ?disabled="${this.loading}" />
+                    <label class="form-check-label" for="doarStocZero">Zero Stock Only</label>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="form-check-sm form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="doarDeblocate"
+                          ?checked="${this.doarDeblocate}"
+                          @change="${e => this.doarDeblocate = e.target.checked}"
+                          ?disabled="${this.loading}" />
+                    <label class="form-check-label" for="doarDeblocate">Unblocked Items Only</label>
+                  </div>
+              </div>
+            <div class="col-md-4">
+              <button class="btn btn-primary btn-sm" 
+                      @click="${this.searchArticles}" 
+                      ?disabled="${this.loading}">
+                ${this.loading ? html`<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Searching...` : 'Search Articles'}
+              </button>
+            </div>
+            </div>
+          </div>
             <div class="col-md-6">
               <div class="input-group input-group-sm mb-2">
                 <span class="input-group-text">Search Value</span>
@@ -1022,42 +1052,9 @@ export class TopAbc extends LitElement {
                        .value="${this.valTxt}" 
                        @input="${e => this.valTxt = e.target.value}"
                        ?disabled="${this.loading}" />
-              </div>
-            </div>
-            
-            <div class="col-md-6">
-              <div class="form-check-sm form-check-inline">
-                <input class="form-check-input" type="checkbox" id="doarStocZero"
-                       ?checked="${this.doarStocZero}"
-                       @change="${e => this.doarStocZero = e.target.checked}"
-                       ?disabled="${this.loading}" />
-                <label class="form-check-label" for="doarStocZero">Zero Stock Only</label>
-              </div>
-              
-              <div class="form-check-sm form-check-inline">
-                <input class="form-check-input" type="checkbox" id="doarDeblocate"
-                       ?checked="${this.doarDeblocate}"
-              </div>
-              
-              <div class="form-check-sm form-check-inline">
-                <input class="form-check-input" type="checkbox" id="doarDeblocate"
-                       ?checked="${this.doarDeblocate}"
-                       @change="${e => this.doarDeblocate = e.target.checked}"
-                       ?disabled="${this.loading}" />
-                <label class="form-check-label" for="doarDeblocate">Unblocked Items Only</label>
-              </div>
             </div>
           </div>
         </div>
-        <div class="row mb-2">
-            <div class="col-md-6">
-              <button class="btn btn-primary btn-sm w-50" 
-                      @click="${this.searchArticles}" 
-                      ?disabled="${this.loading}">
-                ${this.loading ? html`<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Searching...` : 'Search Articles'}
-              </button>
-            </div>
-          </div>
       </div>
     `;
   }
@@ -1322,8 +1319,7 @@ export class TopAbc extends LitElement {
       </style>
       
       <div class="container-fluid">
-        <h3 class="mb-2">Top ABC Analysis</h3>
-        
+       
         ${this.error ? html`<div class="alert alert-danger">${this.error}</div>` : ''}
         
         <div class="progress mb-2" style="${this.step > 1 ? '' : 'display: none;'}">
