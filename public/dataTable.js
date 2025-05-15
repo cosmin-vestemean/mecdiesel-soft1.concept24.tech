@@ -70,7 +70,8 @@ class DataTable extends LitElement {
   renderHeader(item) {
     const headerCells = [html`<th>Row</th>`];
     for (let key of Object.keys(item)) {
-      if (key.toLowerCase() !== "is_signaled" || key.toLowerCase() !== "mtrl" || key.toLowerCase() !== "trdr") {
+      if (key.toLowerCase() !== "is_signaled" && key.toLowerCase() !== "mtrl" && key.toLowerCase() !== "trdr") {
+        // Skip certain fields
         headerCells.push(html`<th>${key}</th>`);
       }
     }
