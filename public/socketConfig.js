@@ -29,7 +29,7 @@ client.use("s1", socketClient.service("s1"), {
   ],
 });
 
-client.use("top-abc", socketClient.service("top-abc"), {
+client.use("necesar-achizitii", socketClient.service("necesar-achizitii"), {
   methods: [
     "getArticoleCfFiltre",
     "getCalculatedNeeds",

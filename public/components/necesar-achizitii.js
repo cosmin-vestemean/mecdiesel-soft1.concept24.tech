@@ -230,7 +230,7 @@ export class TopAbc extends LitElement {
         });
       });
 
-      const response = await client.service('top-abc').getArticoleCfFiltre({
+      const response = await client.service('necesar-achizitii').getArticoleCfFiltre({
         token,
         filterColumnName: this.filterColumnName,
         doarStocZero: this.doarStocZero,
@@ -305,7 +305,7 @@ export class TopAbc extends LitElement {
         config
       };
 
-      const response = await client.service('top-abc').getCalculatedNeeds(data);
+      const response = await client.service('necesar-achizitii').getCalculatedNeeds(data);
 
       console.log('Response from getCalculatedNeeds:', response);
 
@@ -480,7 +480,7 @@ export class TopAbc extends LitElement {
         });
       });
 
-      const response = await client.service('top-abc').getSuppliers({ token });
+      const response = await client.service('necesar-achizitii').getSuppliers({ token });
       this.suppliers = response || [];
     } catch (error) {
       console.error('Error fetching suppliers:', error);
@@ -540,7 +540,7 @@ export class TopAbc extends LitElement {
         : '';
 
       // Call the backend service to get sales history
-      const response = await client.service('top-abc').getSalesHistory({
+      const response = await client.service('necesar-achizitii').getSalesHistory({
         token,
         mtrl: material.MTRL,
         lastNMonths: this.salesHistoryMonths || 12,
@@ -1557,4 +1557,4 @@ export class TopAbc extends LitElement {
   }
 }
 
-customElements.define('top-abc', TopAbc);
+customElements.define('necesar-achizitii', TopAbc);

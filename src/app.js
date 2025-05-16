@@ -560,7 +560,7 @@ class TopAbcService {
 }
 
 // Register the TopAbc service
-app.use("/top-abc", new TopAbcService(), {
+app.use("/necesar-achizitii", new TopAbcService(), {
   methods: [
     "getArticoleCfFiltre",
     "getCalculatedNeeds",

@@ -49,7 +49,7 @@ class DataTable extends LitElement {
     if (!toastContainer) {
       const container = document.createElement('div');
       container.id = 'toast-container';
-      container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+      container.className = 'toast-container position-fixed bottom-0 start-0 p-3';
       document.body.appendChild(container);
     }
 
