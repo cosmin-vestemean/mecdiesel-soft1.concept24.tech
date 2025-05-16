@@ -503,10 +503,14 @@ export class TopAbc extends LitElement {
         this.initializeChart();
         // Prevent scrolling of the background content
         document.body.style.overflow = 'hidden';
+        // Add ESC key listener
+        document.addEventListener('keydown', this.handleEscKey);
       } else {
         // When modal is closed
         // Allow scrolling again
         document.body.style.overflow = '';
+        // Remove ESC key listener
+        document.removeEventListener('keydown', this.handleEscKey);
 
         // If we have a chart instance, destroy it to free up resources
         if (this.chart) {
@@ -514,6 +518,12 @@ export class TopAbc extends LitElement {
           this.chart = null;
         }
       }
+    }
+  }
+
+  handleEscKey = (event) => {
+    if (event.key === 'Escape') {
+      this.closeSalesHistoryModal();
     }
   }
 
@@ -659,7 +669,7 @@ export class TopAbc extends LitElement {
     // Create the modal HTML content
     const modalHTML = `
       <div class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" tabindex="-1" id="salesHistoryModal">
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog modal-fullscreen">
           <div class="modal-content">
             <div class="modal-header">
               <div class="d-flex justify-content-between align-items-center w-100">

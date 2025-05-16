@@ -602,3 +602,5 @@ branch-replenishment .stock-high::before {
 .tooltip.bs-tooltip-end .tooltip-arrow::before {
   border-right-color: #446e9b;
 }
+
+/* Styling moved to components/necesar-achizitii.css */
