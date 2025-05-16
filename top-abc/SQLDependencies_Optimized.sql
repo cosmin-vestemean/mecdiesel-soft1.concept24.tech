@@ -1,3 +1,5 @@
+--Cod specific S1 - SQL
+--este folosit la scriere min max calculat
 CREATE OR ALTER FUNCTION dbo.ufn_vanzariWksOptimized (
     @dataReferinta VARCHAR(max) = NULL,
     @nrSaptamani INT = 0,
