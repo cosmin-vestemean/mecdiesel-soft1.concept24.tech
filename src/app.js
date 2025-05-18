@@ -428,7 +428,7 @@ app.use("/s1", new s1Service(), {
 });
 
 // TopABC service for ABC Analysis and Branch Replenishment
-class TopAbcService {
+class NecesarAchizitii {
   constructor(options) {
     this.options = options || {};
   }
@@ -560,7 +560,7 @@ class TopAbcService {
 }
 
 // Register the TopAbc service
-app.use("/necesar-achizitii", new TopAbcService(), {
+app.use("/necesar-achizitii", new NecesarAchizitii(), {
   methods: [
     "getArticoleCfFiltre",
     "getCalculatedNeeds",

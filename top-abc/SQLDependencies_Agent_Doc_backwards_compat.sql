@@ -168,3 +168,182 @@ BEGIN
     RETURN;
 END;
 GO
+CREATE OR ALTER PROCEDURE dbo.sp_TopAbcAnalysis
+    @dataReferinta VARCHAR(max) = NULL,
+    @nrSaptamani INT = 0,
+    @seriesL VARCHAR(max) = '',
+    @branch VARCHAR(max) = '',
+    @supplier INT = NULL,           -- Will be mapped to 72235 if NULL (ALL suppliers)
+    @mtrl INT = NULL,               -- Will be mapped to 2606178 if NULL (ALL products)
+    @cod VARCHAR(max) = '',
+    @searchType INT = 1,            -- 1-starts with, 2-contains, 3-ends with
+    @modFiltrareBranch VARCHAR(10) = 'AGENT',
+    @thresholdA DECIMAL(5,2) = 80.00,
+    @thresholdB DECIMAL(5,2) = 15.00
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    -- Handle NULL values from UI by mapping to special sentinel values
+    SET @supplier = ISNULL(@supplier, 72235)
+    SET @mtrl = ISNULL(@mtrl, 2606178)
+    
+    -- Format the search pattern based on searchType
+    DECLARE @searchPattern VARCHAR(255) = @cod
+    IF @searchType = 1 -- starts with
+    BEGIN
+        SET @searchPattern = @cod + '%'
+    END
+    ELSE IF @searchType = 2 -- contains
+    BEGIN
+        SET @searchPattern = '%' + @cod + '%'
+    END
+    ELSE IF @searchType = 3 -- ends with
+    BEGIN
+        SET @searchPattern = '%' + @cod
+    END
+    
+    -- Get base sales data from the existing function
+    DECLARE @salesData TABLE (
+        MTRL INT,
+        MTRSUP INT,
+        CODARTICOL VARCHAR(MAX),
+        DENUMARTICOL VARCHAR(MAX),
+        branch SMALLINT,
+        pcswk DECIMAL(18,4),
+        wk INT,
+        wkflag SMALLINT
+    );
+    
+    -- Use the existing function
+    INSERT INTO @salesData
+    SELECT * FROM dbo.ufn_vanzariWksOptimized(
+        @dataReferinta,
+        @nrSaptamani,
+        @seriesL,
+        @branch,
+        @supplier,
+        @mtrl,
+        @searchPattern,   -- Pass the formatted search pattern 
+        @modFiltrareBranch
+    );
+    
+    -- Create results table for ABC analysis
+    DECLARE @abcResults TABLE (
+        MTRL INT,
+        MTRSUP INT,
+        CODARTICOL VARCHAR(MAX),
+        DENUMARTICOL VARCHAR(MAX),
+        branch SMALLINT,
+        totalSales DECIMAL(18,4),
+        salesPercentage DECIMAL(8,4),
+        cumulativePercentage DECIMAL(8,4),
+        abcClass CHAR(1)
+    );
+    
+    -- Group by product and sum quantities
+    WITH ProductSales AS (
+        SELECT
+            MTRL,
+            MTRSUP,
+            CODARTICOL,
+            DENUMARTICOL,
+            branch,
+            SUM(pcswk) AS totalSales
+        FROM @salesData
+        GROUP BY
+            MTRL,
+            MTRSUP,
+            CODARTICOL,
+            DENUMARTICOL,
+            branch
+    ),
+    -- Calculate total positive sales
+    Totals AS (
+        SELECT SUM(CASE WHEN totalSales > 0 THEN totalSales ELSE 0 END) AS totalPositiveSales
+        FROM ProductSales
+    ),
+    -- Calculate percentages and rankings
+    RankedSales AS (
+        SELECT
+            p.MTRL,
+            p.MTRSUP,
+            p.CODARTICOL,
+            p.DENUMARTICOL,
+            p.branch,
+            p.totalSales,
+            CASE 
+                WHEN p.totalSales > 0 THEN (p.totalSales / NULLIF(t.totalPositiveSales, 0)) * 100
+                ELSE 0 
+            END AS salesPercentage,
+            ROW_NUMBER() OVER (ORDER BY 
+                              CASE WHEN p.totalSales > 0 THEN p.totalSales ELSE 0 END DESC) AS salesRank
+        FROM ProductSales p
+        CROSS JOIN Totals t
+    ),
+    -- Add cumulative percentages
+    CumulativeSales AS (
+        SELECT
+            MTRL,
+            MTRSUP,
+            CODARTICOL,
+            DENUMARTICOL,
+            branch,
+            totalSales,
+            salesPercentage,
+            SUM(salesPercentage) OVER (ORDER BY salesRank ROWS UNBOUNDED PRECEDING) AS cumulativePercentage
+        FROM RankedSales
+    )
+    -- Insert final result with ABC classification
+    INSERT INTO @abcResults
+    SELECT
+        MTRL,
+        MTRSUP,
+        CODARTICOL,
+        DENUMARTICOL,
+        branch,
+        totalSales,
+        salesPercentage,
+        cumulativePercentage,
+        CASE
+            WHEN cumulativePercentage <= @thresholdA THEN 'A'
+            WHEN cumulativePercentage <= (@thresholdA + @thresholdB) THEN 'B'
+            ELSE 'C'
+        END AS abcClass
+    FROM CumulativeSales
+    ORDER BY salesPercentage DESC;
+    
+    -- Return the ABC analysis results
+    SELECT * FROM @abcResults;
+    
+    -- Also return summary statistics in a second result set
+    WITH AbcSummary AS (
+        SELECT
+            abcClass,
+            COUNT(*) AS itemCount,
+            SUM(CASE WHEN totalSales > 0 THEN totalSales ELSE 0 END) AS classTotal
+        FROM @abcResults
+        GROUP BY abcClass
+    ),
+    TotalItems AS (
+        SELECT 
+            COUNT(*) AS totalItems,
+            SUM(CASE WHEN totalSales > 0 THEN totalSales ELSE 0 END) AS grandTotal
+        FROM @abcResults
+    )
+    SELECT 
+        ac.abcClass,
+        ac.itemCount,
+        ac.classTotal,
+        (ac.itemCount * 100.0 / NULLIF(ti.totalItems, 0)) AS itemPercentage,
+        (ac.classTotal * 100.0 / NULLIF(ti.grandTotal, 0)) AS valuePercentage
+    FROM AbcSummary ac
+    CROSS JOIN TotalItems ti
+    ORDER BY ac.abcClass;
+    
+    -- Return the total sales number in a third result set
+    -- This value can be displayed prominently in the UI
+    SELECT SUM(CASE WHEN totalSales > 0 THEN totalSales ELSE 0 END) AS totalPositiveSales 
+    FROM @abcResults;
+END;
+GO

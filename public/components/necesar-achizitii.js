@@ -768,36 +768,13 @@ export class TopAbc extends LitElement {
 
     console.log('Initializing chart with data:', this.salesHistoryData);
 
-    // Load Chart.js first - then find the canvas
-    this.loadChartLibrary();
-  }
-
-  loadChartLibrary() {
-    // If Chart.js is already loaded, just setup the chart
+    // Check if Chart.js is loaded globally
     if (typeof window.Chart !== 'undefined') {
-      console.log('Chart.js already loaded, setting up chart');
+      console.log('Chart.js is loaded globally, setting up chart');
       this.setupChartWhenReady();
-      return;
+    } else {
+      console.error('Chart.js is not loaded. Make sure it is included in index.html');
     }
-
-    console.log('Loading Chart.js library...');
-
-    // Use Chart.js v3 which is more stable
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js';
-    script.crossOrigin = 'anonymous';
-
-    script.onload = () => {
-      console.log('Chart.js loaded successfully');
-      this.setupChartWhenReady();
-    };
-
-    script.onerror = (error) => {
-      console.error('Error loading Chart.js:', error);
-      this.loadChartJSFallback();
-    };
-
-    document.head.appendChild(script);
   }
 
   setupChartWhenReady() {
@@ -824,49 +801,6 @@ export class TopAbc extends LitElement {
       // Create the chart
       this.createChart(canvas);
     }, 300);
-  }
-
-  // Fallback method to try another CDN if the first one fails
-  loadChartJSFallback() {
-    console.log('Trying fallback Chart.js source...');
-    const script = document.createElement('script');
-    // Try a different CDN with the same version
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js';
-    script.integrity = 'sha512-ElRFoEQdI5Ht6kZvyzXhYG9NqjtkmlkfYk0wr6wHxU9JEHakS7UJZNeml5ALk+8IKlU6jDgMabC3vkumRokgJA==';
-    script.crossOrigin = 'anonymous';
-
-    script.onload = () => {
-      console.log('Chart.js loaded successfully from fallback');
-      this.setupChartWhenReady();
-    };
-
-    script.onerror = () => {
-      console.error('Error loading Chart.js from fallback source');
-      // Final fallback - try without integrity
-      const lastScript = document.createElement('script');
-      lastScript.src = 'https://cdn.jsdelivr.net/npm/chart.js';
-      lastScript.crossOrigin = 'anonymous';
-
-      lastScript.onload = () => {
-        console.log('Chart.js loaded successfully from last fallback');
-        this.setupChartWhenReady();
-      };
-
-      lastScript.onerror = () => {
-        console.error('All Chart.js loading attempts failed');
-        // Display a message to the user that the chart couldn't be loaded
-        if (this.querySelector('.modal-body')) {
-          const errorMessage = document.createElement('div');
-          errorMessage.className = 'alert alert-danger';
-          errorMessage.textContent = 'Failed to load chart library. Please try again later.';
-          this.querySelector('.modal-body').appendChild(errorMessage);
-        }
-      };
-
-      document.head.appendChild(lastScript);
-    };
-
-    document.head.appendChild(script);
   }
 
   // Update the chart based on selected chart type
@@ -1162,8 +1096,7 @@ export class TopAbc extends LitElement {
           animation: {
             duration: 1000
           }
-        }
-      });
+        }});
 
       // Debug: Force multiple redraws to ensure visibility
       const redrawChart = () => {
