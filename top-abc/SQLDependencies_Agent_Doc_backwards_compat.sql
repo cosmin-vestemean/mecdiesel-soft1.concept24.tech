@@ -22,6 +22,10 @@ CREATE OR ALTER FUNCTION dbo.ufn_vanzariWksOptimized (
     wkflag SMALLINT
 ) AS 
 BEGIN
+     -- Handle NULL values from UI by mapping to special sentinel values
+    SET @supplier = ISNULL(@supplier, 72235)
+    SET @mtrl = ISNULL(@mtrl, 2606178)
+    
     -- Pre-determine whether we're dealing with company or branch mode
     DECLARE @isCompanyMode BIT = 0;
     IF (CHARINDEX('1000', @branch) > 0)

@@ -559,7 +559,7 @@ class NecesarAchizitii {
   }
 }
 
-// Register the TopAbc service
+// Register the NecesarAchizitii service
 app.use("/necesar-achizitii", new NecesarAchizitii(), {
   methods: [
     "getArticoleCfFiltre",
@@ -569,6 +569,61 @@ app.use("/necesar-achizitii", new NecesarAchizitii(), {
     "test_getCalculatedNeeds",
     "getSuppliers",
     "getSalesHistory"
+  ],
+});
+
+// TOP ABC Analysis service for sales analysis and ABC classification
+class TopAbcAnalysis {
+  constructor(options) {
+    this.options = options || {};
+  }
+
+  async getTopAbcAnalysis(data, params) {
+    try {
+      let messages = [];
+      //validate data
+      if (!data.token || !data.dataReferinta) {
+        messages.push("Missing required parameters: token and dataReferinta");
+      }
+
+      if (messages.length > 0) {
+        return {
+          success: false,
+          messages: messages,
+        };
+      }
+      // Call the external API to get the top ABC analysis
+      return await request({
+        method: "POST",
+        uri: "/JS/TopAbcAnalysis/getTopAbcAnalysis",
+        body: {
+          clientID: data.token,
+          dataReferinta: data.dataReferinta,
+          nrSaptamani: data.nrSaptamani || 52,
+          seriesL: data.seriesL,
+          branch: data.branch,
+          agent: data.agent,
+          supplier: data.supplier,
+          mtrl: data.mtrl,
+          cod: data.cod || "",
+          searchType: data.searchType || 1, // 1-starts with, 2-contains, 3-ends with
+          modFiltrareBranch: data.modFiltrareBranch || "AGENT",
+          thresholdA: data.thresholdA || 80, // Default ABC threshold A (80%)
+          thresholdB: data.thresholdB || 15, // Default ABC threshold B (15%)
+        },
+        json: true,
+        gzip: true
+      });
+    } catch (error) {
+      messages.push("Error in getTopAbcAnalysis: " + error.message);
+    }
+  }
+}
+
+// Register the TopAbcAnalysis service
+app.use("/top-abc", new TopAbcAnalysis(), {
+  methods: [
+    "getTopAbcAnalysis"
   ],
 });
 

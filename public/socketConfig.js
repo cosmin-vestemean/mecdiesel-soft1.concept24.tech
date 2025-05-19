@@ -1,3 +1,5 @@
+import { cli } from "winston/lib/winston/config";
+
 const socket = io();
 const client = feathers();
 const socketClient = feathers.socketio(socket);
@@ -38,6 +40,12 @@ client.use("necesar-achizitii", socketClient.service("necesar-achizitii"), {
     "test_getCalculatedNeeds",
     "getSuppliers",
     "getSalesHistory"
+  ],
+});
+
+client.use("top-abc", socketClient.service("top-abc"), {
+  methods: [
+    "getTopAbcAnalysis",
   ],
 });
 

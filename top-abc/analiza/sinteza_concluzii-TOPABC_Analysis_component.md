@@ -4,10 +4,10 @@
 
 ## 1. Arhitectura soluției
 
-### Backend
+- **Fișier de referință**: `SQLDependencies_Agent_Doc_backwards_compat.sql` – documentează dependențele SQL relevante pentru compatibilitatea inversă între filtrarea pe agent și pe document. Acest fișier va fi păstrat în documentația backend pentru referințe viitoare.
 - **Funcția SQL existentă**: `dbo.ufn_vanzariWksOptimized` - recuperează date de vânzări cu opțiuni de filtrare, inclusiv noua opțiune `@modFiltrareBranch` care permite filtrarea pe branch-ul agentului sau al documentului.
 - **Procedura stocată nouă**: `dbo.sp_TopAbcAnalysis` - va folosi funcția existentă pentru a obține date brute și va calcula clasificarea ABC direct în SQL.
-- **Serviciu FeathersJS**: Va apela procedura stocată și va returna datele în format adecvat pentru interfața utilizator.
+- **Serviciu FeathersJS**: Va apela procedura stocată și va returna datele în format adecvat pentru interfața utilizator. Se va implementa ca seviciu/clasa in fisierul /src/app.js, ca restul serviciilor custom.
 
 ### Frontend
 - **Component LitElement**: Va gestiona parametrii, afișarea rezultatelor și vizualizările.
