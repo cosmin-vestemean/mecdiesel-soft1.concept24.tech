@@ -140,7 +140,7 @@ export function initializeUserInteractions() {
     "stockChangesLabel",
     "stockChangesCheckboxVerbose",
     "stockChangesLabelVerbose",
-    "topAbcContent",
+    "necesarAchizitiiContent",
   ];
 
   function hideAllButArray(arr) {
@@ -290,11 +290,11 @@ export function initializeUserInteractions() {
     paginationManager.setActiveTab("branchReplenishButton");
   });
 
-  //topAbcButton
-  $("#topAbcButton").click(() => {
-    hideAllButArray(["topAbcContent"]);
+  //necesarAchizitiiButton
+  $("#necesarAchizitiiButton").click(() => {
+    hideAllButArray(["necesarAchizitiiContent"]);
     // Update active tab in pagination manager
-    paginationManager.setActiveTab("topAbcButton");
+    paginationManager.setActiveTab("necesarAchizitiiButton");
   });
 
   $("#mappingsButton").click();

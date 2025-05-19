@@ -2,7 +2,7 @@ import { LitElement, html, css } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/al
 import { connectToS1 } from '../dataFetching.js';
 import { client } from '../socketConfig.js';
 
-export class TopAbc extends LitElement {
+export class NecesarAchizitii extends LitElement {
   static get properties() {
     return {
       // Filter parameters
@@ -563,7 +563,7 @@ export class TopAbc extends LitElement {
       this.salesHistoryData = this.processSalesHistoryData(response, material);
 
       // Make this component instance available globally for chart tooltip access
-      window.topAbcComponent = this;
+      window.necesarAchizitiiComponent = this;
 
       // Show the modal
       this.showSalesHistoryModal = true;
@@ -757,8 +757,8 @@ export class TopAbc extends LitElement {
     }
     
     // Clean up the global reference
-    if (window.topAbcComponent === this) {
-      window.topAbcComponent = null;
+    if (window.necesarAchizitiiComponent === this) {
+      window.necesarAchizitiiComponent = null;
     }
   }
 
@@ -1070,7 +1070,7 @@ export class TopAbc extends LitElement {
                   const month = context.chart.data.labels[dataIndex];
                   
                   // Get a reference to the component for the chart type
-                  const component = window.topAbcComponent;
+                  const component = window.necesarAchizitiiComponent;
                   const chartType = component ? component.chartType : 'sideBySide';
                   
                   // For total view, don't show percentage
@@ -1500,4 +1500,4 @@ export class TopAbc extends LitElement {
   }
 }
 
-customElements.define('necesar-achizitii', TopAbc);
+customElements.define('necesar-achizitii', NecesarAchizitii);

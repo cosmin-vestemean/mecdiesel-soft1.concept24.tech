@@ -1,5 +1,3 @@
-import { cli } from "winston/lib/winston/config";
-
 const socket = io();
 const client = feathers();
 const socketClient = feathers.socketio(socket);
