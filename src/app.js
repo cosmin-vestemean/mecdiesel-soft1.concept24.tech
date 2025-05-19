@@ -579,8 +579,9 @@ class TopAbcAnalysis {
   }
 
   async getTopAbcAnalysis(data, params) {
+    // Initialize messages array for validation and error handling
+    let messages = [];
     try {
-      let messages = [];
       //validate data
       if (!data.token || !data.dataReferinta) {
         messages.push("Missing required parameters: token and dataReferinta");
@@ -595,12 +596,12 @@ class TopAbcAnalysis {
       // Call the external API to get the top ABC analysis
       return await request({
         method: "POST",
-        uri: "/JS/TopAbcAnalysis/getTopAbcAnalysis",
+        uri: "/JS/TopAbcAnalysis/getTopAbcAnalysis_combined",
         body: {
           clientID: data.token,
           // If dataReferinta already has quotes, use it as is; otherwise wrap it in quotes
           dataReferinta: data.dataReferinta.startsWith("'") ? data.dataReferinta : `'${data.dataReferinta}'`,
-          nrSaptamani: data.nrSaptamani || 52,
+          nrSaptamani: data.nrSaptamani || 24,
           seriesL: data.seriesL,
           branch: data.branch,
           agent: data.agent,
@@ -616,7 +617,30 @@ class TopAbcAnalysis {
         gzip: true
       });
     } catch (error) {
+      // Capture unexpected errors
       messages.push("Error in getTopAbcAnalysis: " + error.message);
+      return {
+        success: false,
+        messages,
+      };
+    }
+  }
+
+  async getSuppliers(data, params) {
+    try {
+      // Fetch suppliers via S1 service endpoint
+      return await request({
+        method: "POST",
+        uri: "/JS/NecesarAchizitie/getSuppliers",
+        body: {
+          clientID: data.token
+        },
+        json: true,
+        gzip: true
+      });
+    } catch (error) {
+      // Return failure structure
+      return { success: false, messages: ["Error fetching suppliers: " + error.message] };
     }
   }
 }
@@ -624,7 +648,8 @@ class TopAbcAnalysis {
 // Register the TopAbcAnalysis service
 app.use("/top-abc", new TopAbcAnalysis(), {
   methods: [
-    "getTopAbcAnalysis"
+    "getTopAbcAnalysis",
+    "getSuppliers"
   ],
 });
 

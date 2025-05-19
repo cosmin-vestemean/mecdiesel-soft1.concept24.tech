@@ -44,6 +44,7 @@ client.use("necesar-achizitii", socketClient.service("necesar-achizitii"), {
 client.use("top-abc", socketClient.service("top-abc"), {
   methods: [
     "getTopAbcAnalysis",
+    "getSuppliers"
   ],
 });
 

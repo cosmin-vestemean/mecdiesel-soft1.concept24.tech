@@ -1,6 +1,7 @@
 // Top ABC Analysis Control Panel Component
 import { LitElement, html, css } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
 import { client } from '../../socketConfig.js';
+import '../fancy-dropdown.js';
 
 export class TopAbcControlPanel extends LitElement {
   static get properties() {
@@ -10,6 +11,8 @@ export class TopAbcControlPanel extends LitElement {
       nrSaptamani: { type: Number },
       seriesL: { type: String },
       branch: { type: String },
+      selectedBranches: { type: Array }, // Added for fancy-dropdown
+      selectedSuppliers: { type: Array }, // for fancy-dropdown
       supplier: { type: Number },
       mtrl: { type: Number },
       cod: { type: String },
@@ -23,13 +26,19 @@ export class TopAbcControlPanel extends LitElement {
     };
   }
 
+  createRenderRoot() {
+    return this; // Render in light DOM to use global styles
+  }
+
   constructor() {
     super();
     this.token = '';
     this.dataReferinta = new Date().toISOString().slice(0, 10);
-    this.nrSaptamani = 52;
+    this.nrSaptamani = 24;
     this.seriesL = '';
     this.branch = '';
+    this.selectedBranches = [];
+    this.selectedSuppliers = []; // initialize supplier selection
     this.supplier = null;
     this.mtrl = null;
     this.cod = '';
@@ -67,6 +76,13 @@ export class TopAbcControlPanel extends LitElement {
     this.loadInitialData();
   }
 
+  // Initialize selectedBranches from branch string if it exists
+  initializeBranchSelection() {
+    if (this.branch && this.branch.trim() !== '') {
+      this.selectedBranches = this.branch.split(',').map(b => b.trim());
+    }
+  }
+
   async loadInitialData() {
     this.token = sessionStorage.getItem('s1Token');
     if (!this.token) {
@@ -81,9 +97,12 @@ export class TopAbcControlPanel extends LitElement {
         token: this.token
       });
       
-      if (suppliersResponse && suppliersResponse.rows) {
-        this.suppliers = suppliersResponse.rows;
+      if (suppliersResponse) {
+        this.suppliers = suppliersResponse || [];
       }
+      
+      // Initialize branch selection if needed
+      this.initializeBranchSelection();
     } catch (error) {
       console.error('Error loading initial data:', error);
     } finally {
@@ -115,6 +134,37 @@ export class TopAbcControlPanel extends LitElement {
     }));
   }
 
+  // Handler for branch selection from fancy-dropdown
+  handleBranchSelectionChanged(e) {
+    // Instead of replacing the array, mutate it in place to avoid Lit re-rendering the dropdown
+    this.selectedBranches.length = 0;
+    this.selectedBranches.push(...e.detail.value);
+    // Update the branch string for API compatibility
+    this.branch = this.selectedBranches.join(',');
+    // Dispatch event with updated parameters
+    this.dispatchEvent(new CustomEvent('params-changed', {
+      detail: this.getParameters(),
+      bubbles: true,
+      composed: true
+    }));
+  }
+
+  // Add supplierItems getter and selection handler
+  get supplierItems() {
+    const items = {};
+    this.suppliers.forEach(s => { items[s.TRDR] = s.CODE + ' - ' + s.NAME; });
+    return items;
+  }
+
+  handleSupplierSelectionChanged(e) {
+    // single-select: take first value
+    this.selectedSuppliers = [...e.detail.value];
+    this.supplier = this.selectedSuppliers.length ? Number(this.selectedSuppliers[0]) : null;
+    this.dispatchEvent(new CustomEvent('params-changed', {
+      detail: this.getParameters(), bubbles: true, composed: true
+    }));
+  }
+
   getParameters() {
     // Ensure the date is properly formatted for SQL - quoted in the API call
     return {
@@ -133,6 +183,12 @@ export class TopAbcControlPanel extends LitElement {
   }
 
   handleApplyFilters() {
+    // Validate that branch is selected before allowing filter application
+    if (!this.branch || this.branch.trim() === '') {
+      alert('Please select a branch. Branch selection is mandatory.');
+      return;
+    }
+    
     this.dispatchEvent(new CustomEvent('apply-filters', {
       detail: this.getParameters(),
       bubbles: true,
@@ -142,146 +198,117 @@ export class TopAbcControlPanel extends LitElement {
 
   render() {
     return html`
-      <style>
-        .control-panel {
-          background-color: #f8f9fa;
-          border-radius: 5px;
-          padding: 15px;
-          margin-bottom: 20px;
-          border: 1px solid #ddd;
-        }
-        .form-row {
-          display: flex;
-          flex-wrap: wrap;
-          margin-bottom: 10px;
-          gap: 15px;
-          align-items: center;
-        }
-        .form-group {
-          flex: 1 1 200px;
-          margin-bottom: 10px;
-        }
-        .form-group label {
-          display: block;
-          margin-bottom: 5px;
-          font-weight: 500;
-        }
-        .form-control {
-          width: 100%;
-          padding: 8px;
-          border: 1px solid #ced4da;
-          border-radius: 4px;
-          box-sizing: border-box;
-        }
-        .btn {
-          padding: 8px 16px;
-          border-radius: 4px;
-          border: none;
-          cursor: pointer;
-          font-weight: 500;
-          transition: background-color 0.3s;
-        }
-        .btn-primary {
-          background-color: #007bff;
-          color: white;
-        }
-        .btn-primary:hover {
-          background-color: #0069d9;
-        }
-        .btn-secondary {
-          background-color: #6c757d;
-          color: white;
-        }
-        .btn-secondary:hover {
-          background-color: #5a6268;
-        }
-        .actions {
-          margin-top: 15px;
-          display: flex;
-          justify-content: flex-end;
-          gap: 10px;
-        }
-      </style>
+      <div class="card mb-2 border-light shadow-sm">
+        <div class="card-body p-3">
+          <h5 class="card-title mb-3">Settings for Top ABC Analysis</h5>
+          
+          <!-- Row 1 - Primary Controls -->
+          <div class="row mb-3">
+            <div class="col-md-3">
+              <div class="input-group input-group-sm mb-2">
+                <span class="input-group-text">Date</span>
+                <input type="date" id="dataReferinta" name="dataReferinta" class="form-control form-control-sm" .value=${this.dataReferinta} @change=${this.handleInputChange}>
+              </div>
+            </div>
+            
+            <div class="col-md-2">
+              <div class="input-group input-group-sm mb-2">
+                <span class="input-group-text">Weeks behind</span>
+                <input type="number" id="nrSaptamani" name="nrSaptamani" class="form-control form-control-sm" min="1" max="260" .value=${this.nrSaptamani} @change=${this.handleInputChange}>
+              </div>
+            </div>
+            
+            <div class="col-md-3">
+              <div class="input-group input-group-sm mb-2">
+                <span class="input-group-text">Mode</span>
+                <select id="modFiltrareBranch" name="modFiltrareBranch" class="form-select form-select-sm" @change=${this.handleInputChange}>
+                  <option value="AGENT" ?selected=${this.modFiltrareBranch === 'AGENT'}>Agent</option>
+                  <option value="DOCUMENT" ?selected=${this.modFiltrareBranch === 'DOCUMENT'}>Document</option>
+                </select>
+              </div>
+            </div>
+            
+            <div class="col-md-4">
+              <div class="input-group input-group-sm mb-2">
+                <span class="input-group-text">Exclude</span>
+                <input type="text" id="seriesL" name="seriesL" class="form-control" .value=${this.seriesL} @input=${this.handleInputChange}
+                       placeholder="Comma separated">
+              </div>
+            </div>
+          </div>
+          
+          <!-- Row 2 - Combined row with all selections -->
+          <div class="row mb-3">
+            <!-- Branch Selection (Required) -->
+            <div class="col-md-3">
+              <div class="input-group input-group-sm mb-2">
+                <span class="input-group-text">Branch<span class="text-danger ms-1">*</span></span>
+                <div class="form-control p-0">
+                  <fancy-dropdown
+                    .items=${this.branches}
+                    .selectedItems=${this.selectedBranches}
+                    .multiSelect=${false}
+                    placeholder="Select branch (required)"
+                    searchPlaceholder="Search branch..."
+                    @selection-changed=${this.handleBranchSelectionChanged}
+                    ?disabled=${this.loading}
+                    class="${!this.branch || this.branch.trim() === '' ? 'required-field' : ''}"
+                  ></fancy-dropdown>
+                </div>
+              </div>
+            </div>
 
-      <div class="control-panel">
-        <div class="form-row">
-          <div class="form-group">
-            <label for="dataReferinta">Reference Date</label>
-            <input type="date" id="dataReferinta" name="dataReferinta" class="form-control" .value=${this.dataReferinta} @change=${this.handleInputChange}>
+            <!-- Supplier Selection -->
+            <div class="col-md-3">
+              <div class="input-group input-group-sm mb-2">
+                <span class="input-group-text">Supplier</span>
+                <div class="form-control p-0">
+                  <fancy-dropdown
+                    .items=${this.supplierItems}
+                    .selectedItems=${this.selectedSuppliers}
+                    .multiSelect=${false}
+                    placeholder="Select supplier"
+                    searchPlaceholder="Search supplier..."
+                    @selection-changed=${this.handleSupplierSelectionChanged}
+                    ?disabled=${this.loading}
+                  ></fancy-dropdown>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Product Search -->
+            <div class="col-md-3">
+              <div class="input-group input-group-sm mb-2">
+                <span class="input-group-text">Product</span>
+                <select id="searchType" name="searchType" class="form-select" style="max-width: 95px" @change=${this.handleInputChange}>
+                  <option value="1" ?selected=${this.searchType === 1}>Starts</option>
+                  <option value="2" ?selected=${this.searchType === 2}>Contains</option>
+                  <option value="3" ?selected=${this.searchType === 3}>Ends</option>
+                </select>
+                <input type="text" id="cod" name="cod" class="form-control" .value=${this.cod} @input=${this.handleInputChange}
+                      placeholder="Code" title="Product code to filter">
+              </div>
+            </div>
+            
+            <!-- ABC Thresholds -->
+            <div class="col-md-3">
+              <div class="input-group input-group-sm mb-2">
+                <span class="input-group-text">A(%)</span>
+                <input type="number" id="thresholdA" name="thresholdA" class="form-control" min="0" max="100" step="0.1" .value=${this.thresholdA} @input=${this.handleInputChange}>
+                <span class="input-group-text">B(%)</span>
+                <input type="number" id="thresholdB" name="thresholdB" class="form-control" min="0" max="100" step="0.1" .value=${this.thresholdB} @input=${this.handleInputChange}>
+              </div>
+            </div>
           </div>
           
-          <div class="form-group">
-            <label for="nrSaptamani">Number of Weeks</label>
-            <input type="number" id="nrSaptamani" name="nrSaptamani" class="form-control" min="1" max="260" .value=${this.nrSaptamani} @change=${this.handleInputChange}>
+          <!-- Row 3 - Apply Filters button -->
+          <div class="row">
+            <div class="col-12 text-end">
+              <button class="btn btn-sm btn-primary" @click=${this.handleApplyFilters} ?disabled=${this.loading}>
+                ${this.loading ? html`<span class="spinner-border spinner-border-sm me-1"></span> Loading...` : 'Apply Filters'}
+              </button>
+            </div>
           </div>
-          
-          <div class="form-group">
-            <label for="supplier">Supplier</label>
-            <select id="supplier" name="supplier" class="form-control" @change=${this.handleInputChange}>
-              <option value="">All Suppliers</option>
-              ${this.suppliers.map(supplier => html`
-                <option value=${supplier.PARTNERID} ?selected=${this.supplier === supplier.PARTNERID}>
-                  ${supplier.NAME}
-                </option>
-              `)}
-            </select>
-          </div>
-        </div>
-        
-        <div class="form-row">
-          <div class="form-group">
-            <label for="branch">Branches (comma separated)</label>
-            <input type="text" id="branch" name="branch" class="form-control" .value=${this.branch} @input=${this.handleInputChange} 
-                  placeholder="e.g. 1200,1300,1400">
-          </div>
-          
-          <div class="form-group">
-            <label for="seriesL">Series to Exclude (comma separated)</label>
-            <input type="text" id="seriesL" name="seriesL" class="form-control" .value=${this.seriesL} @input=${this.handleInputChange}>
-          </div>
-          
-          <div class="form-group">
-            <label for="cod">Product Code</label>
-            <input type="text" id="cod" name="cod" class="form-control" .value=${this.cod} @input=${this.handleInputChange}
-                  placeholder="Product code to filter">
-          </div>
-        </div>
-        
-        <div class="form-row">
-          <div class="form-group">
-            <label for="searchType">Search Type</label>
-            <select id="searchType" name="searchType" class="form-control" @change=${this.handleInputChange}>
-              <option value="1" ?selected=${this.searchType === 1}>Starts with</option>
-              <option value="2" ?selected=${this.searchType === 2}>Contains</option>
-              <option value="3" ?selected=${this.searchType === 3}>Ends with</option>
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label for="modFiltrareBranch">Branch Filter Mode</label>
-            <select id="modFiltrareBranch" name="modFiltrareBranch" class="form-control" @change=${this.handleInputChange}>
-              <option value="AGENT" ?selected=${this.modFiltrareBranch === 'AGENT'}>Agent</option>
-              <option value="DOCUMENT" ?selected=${this.modFiltrareBranch === 'DOCUMENT'}>Document</option>
-            </select>
-          </div>
-        </div>
-        
-        <div class="form-row">
-          <div class="form-group">
-            <label for="thresholdA">Threshold A (%)</label>
-            <input type="number" id="thresholdA" name="thresholdA" class="form-control" min="0" max="100" step="0.1" .value=${this.thresholdA} @input=${this.handleInputChange}>
-          </div>
-          
-          <div class="form-group">
-            <label for="thresholdB">Threshold B (%)</label>
-            <input type="number" id="thresholdB" name="thresholdB" class="form-control" min="0" max="100" step="0.1" .value=${this.thresholdB} @input=${this.handleInputChange}>
-          </div>
-        </div>
-        
-        <div class="actions">
-          <button class="btn btn-primary" @click=${this.handleApplyFilters} ?disabled=${this.loading}>
-            ${this.loading ? 'Loading...' : 'Apply Filters'}
-          </button>
         </div>
       </div>
     `;

@@ -22,6 +22,62 @@ export class TopAbcChart extends LitElement {
     };
   }
 
+  // Use Shadow DOM instead of Light DOM for proper style encapsulation
+  static get styles() {
+    return css`
+      :host {
+        display: block;
+        font-family: var(--bs-font-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif);
+      }
+      .chart-container {
+        position: relative;
+        height: 500px;
+        width: 100%;
+        margin-top: 20px;
+      }
+      .controls {
+        margin-bottom: 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .error-message {
+        color: #dc3545;
+        margin: 10px 0;
+        padding: 0.75rem 1.25rem;
+        border: 1px solid #f5c6cb;
+        border-radius: 0.25rem;
+        background-color: #f8d7da;
+      }
+      .loading {
+        text-align: center;
+        margin: 20px 0;
+        color: #6c757d;
+      }
+      select, button {
+        padding: 8px;
+        border-radius: 4px;
+        border: 1px solid #ced4da;
+      }
+      button {
+        background-color: #0d6efd;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-weight: 400;
+        text-align: center;
+        padding: 0.375rem 0.75rem;
+      }
+      button:hover {
+        background-color: #0b5ed7;
+      }
+      select {
+        background-color: #fff;
+        padding: 0.375rem 0.75rem;
+      }
+    `;
+  }
+
   constructor() {
     super();
     this.data = [];
@@ -31,7 +87,7 @@ export class TopAbcChart extends LitElement {
     this.selectedChart = 'pareto';
     this.params = {
       dataReferinta: new Date().toISOString().slice(0, 10),
-      nrSaptamani: 52,
+      nrSaptamani: 24,
       seriesL: '',
       branch: '',
       supplier: null,
@@ -44,75 +100,77 @@ export class TopAbcChart extends LitElement {
     };
     this.chartInstance = null;
     this.chartType = 'pareto';
+    
+    // Ensure Chart.js is available
+    if (typeof window !== 'undefined' && !window.Chart) {
+      this.loadChartJS();
+    }
+  }
+  
+  loadChartJS() {
+    console.log('Loading Chart.js dynamically...');
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+    script.async = true;
+    script.onload = () => {
+      console.log('Chart.js loaded successfully');
+      if (this.data && this.data.length > 0) {
+        this.renderChart();
+      }
+    };
+    script.onerror = () => {
+      console.error('Failed to load Chart.js');
+      this.error = 'Failed to load chart library. Please try refreshing the page.';
+    };
+    document.head.appendChild(script);
   }
 
   connectedCallback() {
     super.connectedCallback();
-    // Load Chart.js dynamically
+    
+    // Check if Chart.js is available
     if (!window.Chart) {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
-      script.onload = () => {
-        // Once Chart.js is loaded, we can fetch data
-        this.fetchData();
-      };
-      document.head.appendChild(script);
-    } else {
-      this.fetchData();
+      this.loadChartJS();
+    } else if (this.data && this.data.length > 0) {
+      // Chart.js is already loaded, try to render
+      this.renderChart();
     }
   }
-
-  async fetchData() {
-    if (!this.token) {
-      this.token = sessionStorage.getItem('s1Token');
-      if (!this.token) {
-        this.error = 'No token found. Please log in.';
-        return;
+  
+  // This is now triggered from data changes via property change callback
+  updated(changedProps) {
+    super.updated(changedProps);
+    if (changedProps.has('data')) {
+      console.log('Data property changed:', this.data ? this.data.length : 0, 'items');
+      if (this.data && this.data.length > 0) {
+        // Log the first item to see its structure
+        console.log('First item properties:', Object.keys(this.data[0]));
+        console.log('Sample data item:', this.data[0]);
+        
+        if (window.Chart) {
+          this.renderChart();
+        }
       }
-    }
-
-    try {
-      this.loading = true;
-      this.error = '';
-
-      // Create a copy of params and ensure date is properly quoted for SQL
-      const params = { ...this.params };
-      
-      // Ensure dataReferinta is correctly formatted for SQL (needs to be quoted)
-      if (params.dataReferinta) {
-        // Make sure we're sending the date in quotes (SQL format)
-        params.dataReferinta = `'${params.dataReferinta}'`;
-      }
-      
-      const response = await client.service('top-abc').getTopAbcAnalysis({
-        token: this.token,
-        ...params
-      });
-
-        console.log('API Response:', response);
-
-      if (response.success) {
-        this.data = response.rows || [];
-        this.renderChart();
-      } else {
-        this.error = response.message || 'An error occurred while fetching data';
-        console.error('Error fetching data:', response);
-      }
-    } catch (error) {
-      this.error = `Error: ${error.message}`;
-      console.error('Exception:', error);
-    } finally {
-      this.loading = false;
     }
   }
 
   renderChart() {
-    if (!this.data || this.data.length === 0) return;
+    if (!this.data || this.data.length === 0) {
+      console.log('No data available for chart rendering');
+      return;
+    }
+    
+    console.log('Rendering chart with', this.data.length, 'items');
+    console.log('Chart type:', this.chartType);
+    console.log('Sample item:', this.data[0]);
     
     // Wait for the DOM to be updated
     setTimeout(() => {
-      const canvas = this.renderRoot.querySelector('#abcChart');
-      if (!canvas) return;
+      const canvas = this.shadowRoot.querySelector('#abcChart'); // Use shadowRoot for shadow DOM
+      if (!canvas) {
+        console.error('Canvas element not found for chart rendering');
+        return;
+      }
 
       // Destroy previous chart instance if it exists
       if (this.chartInstance) {
@@ -132,16 +190,18 @@ export class TopAbcChart extends LitElement {
   }
 
   renderParetoChart(ctx) {
-    // Sort data by Value in descending order
-    const sortedData = [...this.data].sort((a, b) => b.Value - a.Value);
+    // Sort data by VALUE in descending order (using exact column names from SQL)
+    const sortedData = [...this.data].sort((a, b) => {
+      return b.VALUE - a.VALUE;
+    });
     
     const labels = [];
     const values = [];
     
     // Take only the top 30 items for better readability
     sortedData.slice(0, 30).forEach(item => {
-      labels.push(item.Code || item.Cod); // Adjust property name as needed
-      values.push(item.Value);
+      labels.push(item.CODE || ''); // Use exact SQL column name
+      values.push(item.VALUE || 0);
     });
 
     // Use our helper function to create the chart configuration
@@ -159,6 +219,7 @@ export class TopAbcChart extends LitElement {
   renderDistributionChart(ctx) {
     // Count items in each ABC class
     const abcCounts = this.data.reduce((counts, item) => {
+      // Use exact SQL column name
       const abc = item.ABC || 'Unknown';
       counts[abc] = (counts[abc] || 0) + 1;
       return counts;
@@ -214,7 +275,7 @@ export class TopAbcChart extends LitElement {
     // Calculate total value by ABC class
     const abcValues = this.data.reduce((values, item) => {
       const abc = item.ABC || 'Unknown';
-      values[abc] = (values[abc] || 0) + (item.Value || 0);
+      values[abc] = (values[abc] || 0) + (item.VALUE || 0);
       return values;
     }, {});
 
@@ -269,50 +330,16 @@ export class TopAbcChart extends LitElement {
     this.renderChart();
   }
 
-  async handleRefreshData() {
-    await this.fetchData();
+  handleRefreshData() {
+    // Dispatch an event to the parent to request data refresh
+    this.dispatchEvent(new CustomEvent('refresh-data', {
+      bubbles: true,
+      composed: true
+    }));
   }
 
   render() {
     return html`
-      <style>
-        .chart-container {
-          position: relative;
-          height: 500px;
-          width: 100%;
-          margin-top: 20px;
-        }
-        .controls {
-          margin-bottom: 15px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-        .error-message {
-          color: red;
-          margin: 10px 0;
-        }
-        .loading {
-          text-align: center;
-          margin: 20px 0;
-        }
-        select, button {
-          padding: 8px;
-          border-radius: 4px;
-          border: 1px solid #ccc;
-        }
-        button {
-          background-color: #4CAF50;
-          color: white;
-          border: none;
-          cursor: pointer;
-          transition: background-color 0.3s;
-        }
-        button:hover {
-          background-color: #45a049;
-        }
-      </style>
-      
       <div class="controls">
         <div>
           <label for="chartType">Chart Type:</label>
@@ -326,7 +353,7 @@ export class TopAbcChart extends LitElement {
       </div>
       
       ${this.error ? html`<div class="error-message">${this.error}</div>` : ''}
-      ${this.loading ? html`<div class="loading">Loading data...</div>` : ''}
+      ${this.loading ? html`<div class="loading">Loading...</div>` : ''}
       
       <div class="chart-container">
         <canvas id="abcChart"></canvas>

@@ -17,7 +17,7 @@ CREATE OR ALTER FUNCTION dbo.ufn_vanzariWksOptimized (
     CODARTICOL VARCHAR(MAX),
     DENUMARTICOL VARCHAR(MAX),
     branch SMALLINT,
-    pcswk INT,
+    pcswk DECIMAL(18,8),
     wk INT,
     wkflag SMALLINT
 ) AS 
@@ -214,7 +214,7 @@ BEGIN
         CODARTICOL VARCHAR(MAX),
         DENUMARTICOL VARCHAR(MAX),
         branch SMALLINT,
-        pcswk DECIMAL(18,4),
+        pcswk DECIMAL(18,8),
         wk INT,
         wkflag SMALLINT
     );
@@ -239,9 +239,9 @@ BEGIN
         CODARTICOL VARCHAR(MAX),
         DENUMARTICOL VARCHAR(MAX),
         branch SMALLINT,
-        totalSales DECIMAL(18,4),
-        salesPercentage DECIMAL(8,4),
-        cumulativePercentage DECIMAL(8,4),
+        totalSales FLOAT,
+        salesPercentage FLOAT,
+        cumulativePercentage FLOAT,
         abcClass CHAR(1)
     );
     
@@ -315,17 +315,28 @@ BEGIN
             ELSE 'C'
         END AS abcClass
     FROM CumulativeSales
-    ORDER BY salesPercentage DESC;
+    ORDER BY salesPercentage DESC, totalSales DESC;
     
-    -- Return the ABC analysis results
-    SELECT * FROM @abcResults;
+    -- Return the ABC analysis results with uppercase column names
+    SELECT 
+        MTRL,
+        MTRSUP,
+        CODARTICOL AS "CODE",
+        DENUMARTICOL AS "DESCRIPTION",
+        branch AS "BRANCH",
+        totalSales AS "VALUE",
+        salesPercentage AS "SALESPERC",
+        cumulativePercentage AS "CUMULATIVEPERC",
+        abcClass AS "ABC"
+    FROM @abcResults
+    ORDER BY salesPercentage DESC;
     
     -- Also return summary statistics in a second result set
     WITH AbcSummary AS (
         SELECT
-            abcClass,
-            COUNT(*) AS itemCount,
-            SUM(CASE WHEN totalSales > 0 THEN totalSales ELSE 0 END) AS classTotal
+            abcClass AS "ABC",
+            COUNT(*) AS "ITEMCOUNT",
+            SUM(CASE WHEN totalSales > 0 THEN totalSales ELSE 0 END) AS "CLASSTOTAL"
         FROM @abcResults
         GROUP BY abcClass
     ),
@@ -336,18 +347,168 @@ BEGIN
         FROM @abcResults
     )
     SELECT 
-        ac.abcClass,
-        ac.itemCount,
-        ac.classTotal,
-        (ac.itemCount * 100.0 / NULLIF(ti.totalItems, 0)) AS itemPercentage,
-        (ac.classTotal * 100.0 / NULLIF(ti.grandTotal, 0)) AS valuePercentage
+        ac.ABC,
+        ac.ITEMCOUNT,
+        ac.CLASSTOTAL,
+        (ac.ITEMCOUNT * 100.0 / NULLIF(ti.totalItems, 0)) AS "ITEMSPERC",
+        (ac.CLASSTOTAL * 100.0 / NULLIF(ti.grandTotal, 0)) AS "VALUEPERC"
     FROM AbcSummary ac
     CROSS JOIN TotalItems ti
-    ORDER BY ac.abcClass;
+    ORDER BY ac.ABC;
     
     -- Return the total sales number in a third result set
     -- This value can be displayed prominently in the UI
     SELECT SUM(CASE WHEN totalSales > 0 THEN totalSales ELSE 0 END) AS totalPositiveSales 
     FROM @abcResults;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_TopAbcAnalysis_CombinedJson
+    @dataReferinta VARCHAR(max) = NULL,
+    @nrSaptamani INT = 0,
+    @seriesL VARCHAR(max) = '',
+    @branch VARCHAR(max) = '',
+    @supplier INT = NULL,
+    @mtrl INT = NULL,
+    @cod VARCHAR(max) = '',
+    @searchType INT = 1,
+    @modFiltrareBranch VARCHAR(10) = 'AGENT', -- 'AGENT' or 'DOCUMENT'
+    @thresholdA DECIMAL(5,2) = 80.00,
+    @thresholdB DECIMAL(5,2) = 15.00
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Handle NULL values from UI by mapping to special sentinel values
+    SET @supplier = ISNULL(@supplier, 72235) -- Assuming 72235 means ALL suppliers
+    SET @mtrl = ISNULL(@mtrl, 2606178)     -- Assuming 2606178 means ALL products
+
+    -- Format the search pattern based on searchType
+    DECLARE @searchPattern VARCHAR(255) = @cod
+    IF @searchType = 1 -- starts with
+    BEGIN
+        SET @searchPattern = @cod + '%'
+    END
+    ELSE IF @searchType = 2 -- contains
+    BEGIN
+        SET @searchPattern = '%' + @cod + '%'
+    END
+    ELSE IF @searchType = 3 -- ends with
+    BEGIN
+        SET @searchPattern = '%' + @cod
+    END
+
+    -- Temporary table to store detailed results
+    CREATE TABLE #DetailedRows (
+        MTRL INT,
+        MTRSUP INT,
+        CODE VARCHAR(MAX),
+        DESCRIPTION VARCHAR(MAX),
+        BRANCH SMALLINT,
+        VALUE FLOAT,
+        SALESPERC FLOAT,
+        CUMULATIVEPERC FLOAT,
+        ABC CHAR(1)
+    );
+
+    -- Temporary table to store summary results
+    CREATE TABLE #SummaryRows (
+        ABC CHAR(1),
+        ITEMCOUNT INT,
+        CLASSTOTAL FLOAT,
+        ITEMSPERC FLOAT,
+        VALUEPERC FLOAT
+    );
+    
+    -- Get base sales data using the function that supports @modFiltrareBranch
+    DECLARE @salesData TABLE (
+        MTRL INT,
+        MTRSUP INT,
+        CODARTICOL VARCHAR(MAX),
+        DENUMARTICOL VARCHAR(MAX),
+        branch SMALLINT,
+        pcswk DECIMAL(18,8), -- Ensure this matches the function's return type
+        wk INT,
+        wkflag SMALLINT
+    );
+    
+    INSERT INTO @salesData
+    SELECT * FROM dbo.ufn_vanzariWksOptimized( -- This is the version from SQLDependencies_Agent_Doc_backwards_compat.sql
+        @dataReferinta,
+        @nrSaptamani,
+        @seriesL,
+        @branch,
+        @supplier,
+        @mtrl,
+        @searchPattern,
+        @modFiltrareBranch -- Pass the new parameter
+    );
+
+    -- Perform ABC Analysis
+    DECLARE @abcResults TABLE (
+        MTRL INT, MTRSUP INT, CODARTICOL VARCHAR(MAX), DENUMARTICOL VARCHAR(MAX), branch SMALLINT,
+        totalSales FLOAT, salesPercentage FLOAT, cumulativePercentage FLOAT, abcClass CHAR(1)
+    );
+
+    WITH ProductSales AS (
+        SELECT MTRL, MTRSUP, CODARTICOL, DENUMARTICOL, branch, SUM(pcswk) AS totalSales
+        FROM @salesData GROUP BY MTRL, MTRSUP, CODARTICOL, DENUMARTICOL, branch
+    ),
+    Totals AS (
+        SELECT SUM(CASE WHEN totalSales > 0 THEN totalSales ELSE 0 END) AS totalPositiveSales FROM ProductSales
+    ),
+    RankedSales AS (
+        SELECT p.*, 
+               CASE WHEN p.totalSales > 0 THEN (p.totalSales / NULLIF(t.totalPositiveSales,0)) * 100 ELSE 0 END AS salesPercentage,
+               ROW_NUMBER() OVER (ORDER BY CASE WHEN p.totalSales > 0 THEN p.totalSales ELSE 0 END DESC) AS salesRank
+        FROM ProductSales p CROSS JOIN Totals t
+    ),
+    CumulativeSales AS (
+        SELECT *, SUM(salesPercentage) OVER (ORDER BY salesRank ROWS UNBOUNDED PRECEDING) AS cumulativePercentage
+        FROM RankedSales
+    )
+    INSERT INTO @abcResults
+    SELECT MTRL, MTRSUP, CODARTICOL, DENUMARTICOL, branch, totalSales, salesPercentage, cumulativePercentage,
+           CASE 
+               WHEN cumulativePercentage <= @thresholdA THEN 'A'
+               WHEN cumulativePercentage <= (@thresholdA + @thresholdB) THEN 'B'
+               ELSE 'C' 
+           END
+    FROM CumulativeSales ORDER BY salesPercentage DESC, totalSales DESC;
+
+    -- Populate #DetailedRows
+    INSERT INTO #DetailedRows (MTRL, MTRSUP, CODE, DESCRIPTION, BRANCH, VALUE, SALESPERC, CUMULATIVEPERC, ABC)
+    SELECT MTRL, MTRSUP, CODARTICOL, DENUMARTICOL, branch, totalSales, salesPercentage, cumulativePercentage, abcClass
+    FROM @abcResults ORDER BY salesPercentage DESC;
+
+    -- Populate #SummaryRows
+    WITH AbcSummary AS (
+        SELECT abcClass, COUNT(*) AS ITEMCOUNT, SUM(CASE WHEN totalSales > 0 THEN totalSales ELSE 0 END) AS CLASSTOTAL
+        FROM @abcResults GROUP BY abcClass
+    ),
+    TotalCounts AS (
+        SELECT COUNT(*) AS totalItems, SUM(CASE WHEN totalSales > 0 THEN totalSales ELSE 0 END) AS grandTotal
+        FROM @abcResults
+    )
+    INSERT INTO #SummaryRows (ABC, ITEMCOUNT, CLASSTOTAL, ITEMSPERC, VALUEPERC)
+    SELECT ac.abcClass, ac.ITEMCOUNT, ac.CLASSTOTAL,
+           (ac.ITEMCOUNT * 100.0 / NULLIF(tc.totalItems,0)),
+           (ac.CLASSTOTAL * 100.0 / NULLIF(tc.grandTotal,0))
+    FROM AbcSummary ac CROSS JOIN TotalCounts tc ORDER BY ac.abcClass;
+
+    -- Prepare JSON output
+    DECLARE @jsonOutput NVARCHAR(MAX);
+    SET @jsonOutput = (
+        SELECT 
+            (SELECT * FROM #DetailedRows ORDER BY SALESPERC DESC FOR JSON PATH) AS DetailedRows,
+            (SELECT * FROM #SummaryRows ORDER BY ABC FOR JSON PATH) AS SummaryRows,
+            (SELECT SUM(CASE WHEN VALUE > 0 THEN VALUE ELSE 0 END) FROM #DetailedRows) AS TotalPositiveSales
+        FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+    );
+
+    SELECT @jsonOutput AS CombinedJsonOutput;
+
+    DROP TABLE #DetailedRows;
+    DROP TABLE #SummaryRows;
 END;
 GO
