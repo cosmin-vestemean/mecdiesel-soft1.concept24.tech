@@ -141,6 +141,7 @@ export function initializeUserInteractions() {
     "stockChangesCheckboxVerbose",
     "stockChangesLabelVerbose",
     "necesarAchizitiiContent",
+    "topAbcContent",
   ];
 
   function hideAllButArray(arr) {
@@ -295,6 +296,12 @@ export function initializeUserInteractions() {
     hideAllButArray(["necesarAchizitiiContent"]);
     // Update active tab in pagination manager
     paginationManager.setActiveTab("necesarAchizitiiButton");
+  });
+
+  $("#topAbcButton").click(() => {
+    hideAllButArray(["topAbcContent"]);
+    // Update active tab in pagination manager
+    paginationManager.setActiveTab("topAbcButton");
   });
 
   $("#mappingsButton").click();
@@ -687,6 +694,23 @@ export function initializeUserInteractions() {
     button.addEventListener('click', () => {
       paginationManager.setActiveTab(button.id);
     });
+  });
+  
+  // Handle Top ABC Analysis tab
+  document.getElementById('topAbcButton').addEventListener('click', function() {
+    // Hide all content divs
+    document.querySelectorAll('#mainContent > div').forEach(div => {
+      div.style.display = 'none';
+    });
+    // Show only Top ABC content
+    document.getElementById('topAbcContent').style.display = 'block';
+    
+    // Clear the active class from all tabs
+    document.querySelectorAll('.nav-link').forEach(tab => {
+      tab.classList.remove('active');
+    });
+    // Set this tab as active
+    this.classList.add('active');
   });
 
   // Global pagination controls

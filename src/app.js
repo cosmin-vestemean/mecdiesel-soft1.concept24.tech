@@ -598,7 +598,8 @@ class TopAbcAnalysis {
         uri: "/JS/TopAbcAnalysis/getTopAbcAnalysis",
         body: {
           clientID: data.token,
-          dataReferinta: data.dataReferinta,
+          // If dataReferinta already has quotes, use it as is; otherwise wrap it in quotes
+          dataReferinta: data.dataReferinta.startsWith("'") ? data.dataReferinta : `'${data.dataReferinta}'`,
           nrSaptamani: data.nrSaptamani || 52,
           seriesL: data.seriesL,
           branch: data.branch,

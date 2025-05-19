@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TOP ABC Analysis</title>
+    <link rel="stylesheet" href="../bootstrap.css">
+    <link rel="stylesheet" href="../custom.css">
+    <link rel="stylesheet" href="top-abc.css">
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+    </style>
+    <script type="module">
+        import { client } from '../socketConfig.js';
+        import './top-abc-container.js';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check if the user is logged in
+            const token = sessionStorage.getItem('s1Token');
+            if (!token) {
+                window.location.href = '../login/index.html';
+                return;
+            }
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <p>View and analyze your product sales using ABC classification</p>
+        </div>
+
+        <top-abc-container></top-abc-container>
+    </div>
+</body>
+</html>

@@ -19,6 +19,7 @@
     <link rel="stylesheet" href="components/fancy-dropdown.css" />
     <link rel="stylesheet" href="components/replenishment-data-table.css" />
     <link rel="stylesheet" href="components/necesar-achizitii.css" />
+    <link rel="stylesheet" href="components/top-abc/top-abc.css" />
     
     <!-- Custom overrides last -->
     <link rel="stylesheet" href="custom.css" />
@@ -128,6 +129,11 @@
             <li class="nav-item" role="presentation">
               <button class="nav-link" id="necesarAchizitiiButton" data-bs-toggle="tab" type="button" role="tab">
                 Necesar achizitii</i>
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="topAbcButton" data-bs-toggle="tab" type="button" role="tab">
+                TOP ABC Analysis</i>
               </button>
             </li>
           </ul>
@@ -272,6 +278,9 @@
         <div id="necesarAchizitiiContent">
           <necesar-achizitii></necesar-achizitii>
         </div>
+        <div id="topAbcContent">
+          <top-abc-container></top-abc-container>
+        </div>
       </div>
       <!--footer-->
       <div id="footer">
@@ -393,8 +402,10 @@
     <script type="module" src="components/branch-replenishment-container.js"></script>
     <!-- Original component kept for backward compatibility -->
     <!-- <script type="module" src="components/branch-replenishment.js"></script> -->
-    <!-- Top ABC component -->
+    <!-- Necesar Achizitii component -->
     <script type="module" src="components/necesar-achizitii.js"></script>
+    <!-- Top ABC Analysis component -->
+    <script type="module" src="components/top-abc/top-abc-container.js"></script>
     <!-- Load print_config content via JavaScript instead of inline script -->
     <script>
       $(function() {

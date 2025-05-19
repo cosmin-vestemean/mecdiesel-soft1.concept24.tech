@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TOP ABC Analysis Test</title>
+    <link rel="stylesheet" href="../../bootstrap.css">
+    <link rel="stylesheet" href="../../custom.css">
+    <link rel="stylesheet" href="top-abc.css">
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        .test-controls {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        #testOutput {
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f8f8f8;
+            font-family: monospace;
+            white-space: pre-wrap;
+            overflow-x: auto;
+            min-height: 200px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+    </style>
+    <script type="module">
+        import { client } from '../../socketConfig.js';
+        import './top-abc-container.js';
+        import './test.js';
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check if the user is logged in
+            const token = sessionStorage.getItem('s1Token');
+            if (!token) {
+                document.getElementById('loginWarning').classList.remove('d-none');
+            }
+            
+            // Test button handler
+            document.getElementById('runTest').addEventListener('click', async () => {
+                const outputElement = document.getElementById('testOutput');
+                outputElement.textContent = 'Running test...\n';
+                
+                try {
+                    // Redirect console.log to the output element
+                    const originalConsoleLog = console.log;
+                    const originalConsoleError = console.error;
+                    const originalConsoleTable = console.table;
+                    
+                    console.log = function() {
+                        const output = Array.from(arguments).join(' ');
+                        outputElement.textContent += output + '\n';
+                        originalConsoleLog.apply(console, arguments);
+                    };
+                    
+                    console.error = function() {
+                        const output = Array.from(arguments).join(' ');
+                        outputElement.textContent += 'ERROR: ' + output + '\n';
+                        originalConsoleError.apply(console, arguments);
+                    };
+                    
+                    console.table = function(data) {
+                        try {
+                            outputElement.textContent += JSON.stringify(data, null, 2) + '\n';
+                        } catch(e) {
+                            outputElement.textContent += 'Error displaying table data\n';
+                        }
+                        originalConsoleTable.apply(console, arguments);
+                    };
+                    
+                    // Run the test
+                    await window.testTopAbcAnalysis();
+                    
+                    // Restore console functions
+                    console.log = originalConsoleLog;
+                    console.error = originalConsoleError;
+                    console.table = originalConsoleTable;
+                } catch(error) {
+                    outputElement.textContent += 'Exception: ' + error.message + '\n';
+                    console.error(error);
+                }
+            });
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>TOP ABC Analysis Test</h1>
+            <p>This page allows testing the TopAbcAnalysis components</p>
+        </div>
+        
+        <div id="loginWarning" class="alert alert-warning d-none">
+            <strong>Warning:</strong> No authentication token found. Please <a href="../../login/index.html">log in</a> first.
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="test-controls">
+                    <h3>Test Controls</h3>
+                    <button id="runTest" class="btn btn-primary">Run TopAbcAnalysis API Test</button>
+                    <p class="mt-2">This will test the TopAbcAnalysis API with default parameters.</p>
+                </div>
+                
+                <div class="mb-4">
+                    <h3>Test Output</h3>
+                    <div id="testOutput">Click 'Run Test' to see results...</div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <h3>Component Preview</h3>
+                <div class="component-preview">
+                    <top-abc-container></top-abc-container>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

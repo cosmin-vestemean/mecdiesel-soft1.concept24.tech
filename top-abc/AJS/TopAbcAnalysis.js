@@ -29,8 +29,8 @@ function getTopAbcAnalysis(apiObj) {
     var nrSaptamani = apiObj.hasOwnProperty('nrSaptamani') ? apiObj.nrSaptamani : 52;
     var seriesL = apiObj.hasOwnProperty('seriesL') ? apiObj.seriesL : '';
     var branch = apiObj.hasOwnProperty('branch') ? apiObj.branch : '';
-    var supplier = apiObj.hasOwnProperty('supplier') ? apiObj.supplier : 72235
-    var mtrl = apiObj.hasOwnProperty('mtrl') ? apiObj.mtrl : 2606178;
+    var supplier = apiObj.hasOwnProperty('supplier') ? apiObj.supplier && apiObj.supplier : 72235
+    var mtrl = apiObj.hasOwnProperty('mtrl') ? apiObj.mtrl && apiObj.mtrl : 2606178;
     var cod = apiObj.hasOwnProperty('cod') ? apiObj.cod : '';
     var searchType = apiObj.hasOwnProperty('searchType') ? apiObj.searchType : 1;
     var modFiltrareBranch = apiObj.hasOwnProperty('modFiltrareBranch') ? apiObj.modFiltrareBranch : 'AGENT';
@@ -70,7 +70,9 @@ function getTopAbcAnalysis(apiObj) {
         jsonResult = jsonResult.replace(/"null"/g, '""');
 
         // Parse the JSON and add performance metrics
-        var result = JSON.parse(jsonResult); // This can also throw an error
+        var result = {};
+        
+        result.rows = JSON.parse(jsonResult); // This can also throw an error
 
         // Add execution duration to the result
         result.duration = duration;
