@@ -340,6 +340,15 @@ export class ReplenishmentDataTable extends LitElement {
     // Start with all data
     let filtered = [...this.tableData];
     
+    // Apply destination filter if set and not 'all'
+    if (this.destinationFilter && this.destinationFilter !== 'all') {
+      // Find the destination column key
+      const destColumn = this.columnConfig.find(col => col.isHeaderFilter && col.type === 'string');
+      if (destColumn) {
+        filtered = filtered.filter(item => item[destColumn.key] === this.destinationFilter);
+      }
+    }
+    
     // Apply all number filters
     if (this.columnConfig) {
       this.columnConfig

@@ -362,11 +362,8 @@ export class BranchReplenishmentContainer extends LitElement {
       });
     }
 
-    // Apply destination filter (from header dropdown)
-    if (this.destinationFilter !== 'all') {
-      const destColKey = columnConfig.find(c => c.isHeaderFilter)?.key || 'Destinatie';
-      filtered = filtered.filter(item => item[destColKey] === this.destinationFilter);
-    }
+    // Note: Destination filtering is now handled by the data table's getFilteredData() method
+    // to avoid double-filtering issues with the header filter dropdowns
 
     console.log('Filtered results:', filtered.length);
     return filtered;
