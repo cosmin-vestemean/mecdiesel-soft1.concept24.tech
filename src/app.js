@@ -601,7 +601,7 @@ class TopAbcAnalysis {
           clientID: data.token,
           // If dataReferinta already has quotes, use it as is; otherwise wrap it in quotes
           dataReferinta: data.dataReferinta.startsWith("'") ? data.dataReferinta : `'${data.dataReferinta}'`,
-          nrSaptamani: data.nrSaptamani || 24,
+          nrSaptamani: data.nrSaptamani || 52,
           seriesL: data.seriesL,
           branch: data.branch,
           agent: data.agent,

@@ -34,7 +34,7 @@ export class TopAbcContainer extends LitElement {
     this.error = '';
     this.params = {
       dataReferinta: new Date().toISOString().slice(0, 10),
-      nrSaptamani: 24,
+      nrSaptamani: 52,
       seriesL: '',
       branch: '',
       supplier: null,

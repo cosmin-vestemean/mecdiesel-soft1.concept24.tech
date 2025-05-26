@@ -26,7 +26,7 @@ function getTopAbcAnalysis(apiObj) {
     var dataReferinta = apiObj.hasOwnProperty('dataReferinta') && apiObj.dataReferinta
         ? apiObj.dataReferinta
         : "'" + (new Date()).toISOString().slice(0, 10) + "'";
-    var nrSaptamani = apiObj.hasOwnProperty('nrSaptamani') ? apiObj.nrSaptamani : 24;
+    var nrSaptamani = apiObj.hasOwnProperty('nrSaptamani') ? apiObj.nrSaptamani : 52;
     var seriesL = apiObj.hasOwnProperty('seriesL') ? apiObj.seriesL : '';
     var branch = apiObj.hasOwnProperty('branch') ? apiObj.branch : '';
     var supplier = apiObj.hasOwnProperty('supplier') ? apiObj.supplier && apiObj.supplier : 72235
@@ -157,7 +157,7 @@ function getTopAbcAnalysis_combined(apiObj) {
     var dataReferinta = apiObj.hasOwnProperty('dataReferinta') && apiObj.dataReferinta
         ? apiObj.dataReferinta
         : "'" + (new Date()).toISOString().slice(0, 10) + "'";
-    var nrSaptamani = apiObj.hasOwnProperty('nrSaptamani') ? apiObj.nrSaptamani : 24;
+    var nrSaptamani = apiObj.hasOwnProperty('nrSaptamani') ? apiObj.nrSaptamani : 52;
     var seriesL = apiObj.hasOwnProperty('seriesL') ? apiObj.seriesL : '';
     var branch = apiObj.hasOwnProperty('branch') ? apiObj.branch : '';
     var supplier = apiObj.hasOwnProperty('supplier') && apiObj.supplier ? apiObj.supplier : 72235;

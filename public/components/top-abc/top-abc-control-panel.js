@@ -34,7 +34,7 @@ export class TopAbcControlPanel extends LitElement {
     super();
     this.token = '';
     this.dataReferinta = new Date().toISOString().slice(0, 10);
-    this.nrSaptamani = 24;
+    this.nrSaptamani = 52;
     this.seriesL = '';
     this.branch = '';
     this.selectedBranches = [];
