@@ -135,8 +135,8 @@ export class TopAbcChart extends LitElement {
     };
     this.chartInstance = null;
     this.chartType = 'pareto';
-    this.paretoDisplayMode = 'smart'; // 'top30', 'smart', 'classA', 'to80percent', 'to95percent', 'adaptive'
-    this.maxDisplayItems = 50; // Maximum items to display
+    this.paretoDisplayMode = 'smart'; // 'top30', 'smart', 'classA', 'adaptive', 'valueThreshold', 'topPercentile'
+    this.maxDisplayItems = 1000; // Maximum items to display - increased for large datasets
     
     // Ensure Chart.js is available
     if (typeof window !== 'undefined' && !window.Chart) {
@@ -507,12 +507,12 @@ export class TopAbcChart extends LitElement {
       'top30': () => 30,
       'smart': () => this.calculateSmartDisplayCount(sortedData),
       'classA': () => this.getClassACount(sortedData),
-      //'to80percent': () => this.getItemsToPercentage(sortedData, 80),
-      //'to95percent': () => this.getItemsToPercentage(sortedData, 95),
-      'adaptive': () => this.calculateAdaptiveDisplayCount(sortedData)
+      'adaptive': () => this.calculateAdaptiveDisplayCount(sortedData),
+      'valueThreshold': () => this.calculateValueThresholdCount(sortedData),
+      'topPercentile': () => this.calculateTopPercentileCount(sortedData)
     };
     
-    const count = strategies[this.pareto] ? strategies[this.paretoDisplayMode]() : strategies['smart']();
+    const count = strategies[this.paretoDisplayMode] ? strategies[this.paretoDisplayMode]() : strategies['smart']();
     const finalCount = Math.min(count, this.maxDisplayItems, sortedData.length);
     
     console.log(`📊 Display Strategy: ${this.paretoDisplayMode}, Items: ${finalCount}/${sortedData.length} (${(finalCount/sortedData.length*100).toFixed(1)}%)`);
@@ -520,7 +520,7 @@ export class TopAbcChart extends LitElement {
   }
 
   // Adaptive algorithm that combines multiple strategies
-  calculateAdaptiveDisplayCount(sortedData) {DisplayMode
+  calculateAdaptiveDisplayCount(sortedData) {
     const totalItems = sortedData.length;
     const to80Count = this.getItemsToPercentage(sortedData, 80);
     const to95Count = this.getItemsToPercentage(sortedData, 95);
@@ -585,6 +585,45 @@ export class TopAbcChart extends LitElement {
     return sortedData.filter(item => item.ABC === 'A').length;
   }
 
+  // Calculate display count based on value threshold (items with significant value)
+  calculateValueThresholdCount(sortedData) {
+    if (!sortedData.length) return 0;
+    
+    const totalValue = sortedData.reduce((sum, item) => sum + (item.VALUE || 0), 0);
+    const valueThreshold = totalValue * 0.001; // 0.1% of total value as threshold
+    
+    // Count items with value above threshold
+    const significantItems = sortedData.filter(item => (item.VALUE || 0) >= valueThreshold);
+    const count = significantItems.length;
+    
+    // Ensure reasonable bounds - minimum 50 items, maximum based on dataset size
+    const minItems = Math.min(50, sortedData.length);
+    const maxItems = Math.min(500, Math.ceil(sortedData.length * 0.1)); // Max 10% of dataset
+    
+    const finalCount = Math.max(minItems, Math.min(count, maxItems));
+    
+    console.log(`💰 Value Threshold Strategy: threshold=${valueThreshold.toFixed(2)}, significant=${count}, final=${finalCount}`);
+    return finalCount;
+  }
+
+  // Calculate display count based on top percentile (top 5% most valuable items)
+  calculateTopPercentileCount(sortedData) {
+    if (!sortedData.length) return 0;
+    
+    // Calculate top 5% of items by count
+    const percentile = 0.05; // 5%
+    const topPercentileCount = Math.ceil(sortedData.length * percentile);
+    
+    // Ensure reasonable bounds
+    const minItems = Math.min(25, sortedData.length);
+    const maxItems = Math.min(350, sortedData.length);
+    
+    const finalCount = Math.max(minItems, Math.min(topPercentileCount, maxItems));
+    
+    console.log(`📈 Top Percentile Strategy: ${(percentile*100)}% of ${sortedData.length} = ${topPercentileCount}, final=${finalCount}`);
+    return finalCount;
+  }
+
   // Get number of items needed to reach a specific cumulative percentage
   getItemsToPercentage(sortedData, targetPercentage) {
     for (let i = 0; i < sortedData.length; i++) {
@@ -603,14 +642,16 @@ export class TopAbcChart extends LitElement {
     const classACount = this.getClassACount(sortedData);
     const smartCount = this.calculateSmartDisplayCount(sortedData);
     const adaptiveCount = this.calculateAdaptiveDisplayCount(sortedData);
+    const valueThresholdCount = this.calculateValueThresholdCount(sortedData);
+    const topPercentileCount = this.calculateTopPercentileCount(sortedData);
     
     const strategies = {
       'top30': { count: 30, description: 'Fixed top 30 items' },
       'smart': { count: smartCount, description: 'Smart algorithm based on data distribution' },
       'classA': { count: classACount, description: `All Class A items (${classACount})` },
-      'to80percent': { count: to80Count, description: `Items covering 80% of value (${to80Count})` },
-      'to95percent': { count: to95Count, description: `Items covering 95% of value (${to95Count})` },
-      'adaptive': { count: adaptiveCount, description: 'Multi-strategy weighted approach' }
+      'adaptive': { count: adaptiveCount, description: 'Multi-strategy weighted approach' },
+      'valueThreshold': { count: valueThresholdCount, description: 'Items with significant value (≥0.1% of total)' },
+      'topPercentile': { count: topPercentileCount, description: 'Top 5% most valuable items' }
     };
     
     const current = strategies[this.paretoDisplayMode] || strategies['smart'];
@@ -665,12 +706,18 @@ export class TopAbcChart extends LitElement {
           <div>
             <label for="displayMode">Display Strategy:</label>
             <select id="displayMode" .value="${this.paretoDisplayMode}" @change="${this.handleDisplayModeChange}">
-              <option value="smart">Smart (Recommended)</option>
-              <option value="adaptive">Adaptive (Multi-strategy)</option>
-              <option value="to80percent">80% Threshold</option>
-              <option value="classA">Class A Items</option>
-              <option value="to95percent">95% Threshold</option>
-              <option value="top30">Top 30 Items</option>
+              <optgroup label="🎯 Quick Overview">
+                <option value="smart">Smart (Recommended)</option>
+                <option value="adaptive">Adaptive (Multi-strategy)</option>
+                <option value="top30">Top 30 Items</option>
+              </optgroup>
+              <optgroup label="💰 Value-Based">
+                <option value="valueThreshold">Value Threshold (≥0.1%)</option>
+                <option value="topPercentile">Top 5% Items</option>
+              </optgroup>
+              <optgroup label="📊 Classification">
+                <option value="classA">Class A Items</option>
+              </optgroup>
             </select>
           </div>
         ` : ''}
