@@ -176,197 +176,6 @@ BEGIN
     RETURN;
 END;
 GO
-CREATE OR ALTER PROCEDURE dbo.sp_TopAbcAnalysis
-    @dataReferinta VARCHAR(max) = NULL,
-    @nrSaptamani INT = 0,
-    @seriesL VARCHAR(max) = '',
-    @branch VARCHAR(max) = '',
-    @supplier INT = NULL,           -- Will be mapped to 72235 if NULL (ALL suppliers)
-    @mtrl INT = NULL,               -- Will be mapped to 2606178 if NULL (ALL products)
-    @cod VARCHAR(max) = '',
-    @searchType INT = 1,            -- 1-starts with, 2-contains, 3-ends with
-    @modFiltrareBranch VARCHAR(10) = 'AGENT',
-    @thresholdA DECIMAL(5,2) = 80.00,
-    @thresholdB DECIMAL(5,2) = 15.00
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    -- Handle NULL values from UI by mapping to special sentinel values
-    SET @supplier = ISNULL(@supplier, 72235)
-    SET @mtrl = ISNULL(@mtrl, 2606178)
-    
-    -- Format the search pattern based on searchType
-    DECLARE @searchPattern VARCHAR(255) = @cod
-    IF @searchType = 1 -- starts with
-    BEGIN
-        SET @searchPattern = @cod + '%'
-    END
-    ELSE IF @searchType = 2 -- contains
-    BEGIN
-        SET @searchPattern = '%' + @cod + '%'
-    END
-    ELSE IF @searchType = 3 -- ends with
-    BEGIN
-        SET @searchPattern = '%' + @cod
-    END
-    
-    -- Get base sales data from the existing function
-    DECLARE @salesData TABLE (
-        MTRL INT,
-        MTRSUP INT,
-        CODARTICOL VARCHAR(MAX),
-        DENUMARTICOL VARCHAR(MAX),
-        branch SMALLINT,
-        pcswk DECIMAL(18,8),
-        valuewk DECIMAL(18,8), -- Adăugat: valoarea vânzărilor
-        wk INT,
-        wkflag SMALLINT
-    );
-    
-    -- Use the existing function
-    INSERT INTO @salesData
-    SELECT * FROM dbo.ufn_vanzariWksOptimized(
-        @dataReferinta,
-        @nrSaptamani,
-        @seriesL,
-        @branch,
-        @supplier,
-        @mtrl,
-        @searchPattern,   -- Pass the formatted search pattern 
-        @modFiltrareBranch
-    );
-    
-    -- Create results table for ABC analysis
-    DECLARE @abcResults TABLE (
-        MTRL INT,
-        MTRSUP INT,
-        CODARTICOL VARCHAR(MAX),
-        DENUMARTICOL VARCHAR(MAX),
-        branch SMALLINT,
-        totalSales FLOAT,
-        salesPercentage FLOAT,
-        cumulativePercentage FLOAT,
-        abcClass CHAR(1)
-    );
-    
-    -- Group by product and sum VALUES (not quantities)
-    WITH ProductSales AS (
-        SELECT
-            MTRL,
-            MTRSUP,
-            CODARTICOL,
-            DENUMARTICOL,
-            branch,
-            SUM(valuewk) AS totalSales -- Modificat: folosim valoarea în loc de cantitate
-        FROM @salesData
-        GROUP BY
-            MTRL,
-            MTRSUP,
-            CODARTICOL,
-            DENUMARTICOL,
-            branch
-    ),
-    -- Calculate total positive sales
-    Totals AS (
-        SELECT SUM(CASE WHEN totalSales > 0 THEN totalSales ELSE 0 END) AS totalPositiveSales
-        FROM ProductSales
-    ),
-    -- Calculate percentages and rankings
-    RankedSales AS (
-        SELECT
-            p.MTRL,
-            p.MTRSUP,
-            p.CODARTICOL,
-            p.DENUMARTICOL,
-            p.branch,
-            p.totalSales,
-            CASE 
-                WHEN p.totalSales > 0 THEN (p.totalSales / NULLIF(t.totalPositiveSales, 0)) * 100
-                ELSE 0 
-            END AS salesPercentage,
-            ROW_NUMBER() OVER (ORDER BY 
-                              CASE WHEN p.totalSales > 0 THEN p.totalSales ELSE 0 END DESC) AS salesRank
-        FROM ProductSales p
-        CROSS JOIN Totals t
-    ),
-    -- Add cumulative percentages
-    CumulativeSales AS (
-        SELECT
-            MTRL,
-            MTRSUP,
-            CODARTICOL,
-            DENUMARTICOL,
-            branch,
-            totalSales,
-            salesPercentage,
-            SUM(salesPercentage) OVER (ORDER BY salesRank ROWS UNBOUNDED PRECEDING) AS cumulativePercentage
-        FROM RankedSales
-    )
-    -- Insert final result with ABC classification
-    INSERT INTO @abcResults
-    SELECT
-        MTRL,
-        MTRSUP,
-        CODARTICOL,
-        DENUMARTICOL,
-        branch,
-        totalSales,
-        salesPercentage,
-        cumulativePercentage,
-        CASE
-            WHEN cumulativePercentage <= @thresholdA THEN 'A'
-            WHEN cumulativePercentage <= (@thresholdA + @thresholdB) THEN 'B'
-            ELSE 'C'
-        END AS abcClass
-    FROM CumulativeSales
-    ORDER BY salesPercentage DESC, totalSales DESC;
-    
-    -- Return the ABC analysis results with uppercase column names
-    SELECT 
-        MTRL,
-        MTRSUP,
-        CODARTICOL AS "CODE",
-        DENUMARTICOL AS "DESCRIPTION",
-        branch AS "BRANCH",
-        totalSales AS "VALUE",
-        salesPercentage AS "SALESPERC",
-        cumulativePercentage AS "CUMULATIVEPERC",
-        abcClass AS "ABC"
-    FROM @abcResults
-    ORDER BY salesPercentage DESC;
-    
-    -- Also return summary statistics in a second result set
-    WITH AbcSummary AS (
-        SELECT
-            abcClass AS "ABC",
-            COUNT(*) AS "ITEMCOUNT",
-            SUM(CASE WHEN totalSales > 0 THEN totalSales ELSE 0 END) AS "CLASSTOTAL"
-        FROM @abcResults
-        GROUP BY abcClass
-    ),
-    TotalItems AS (
-        SELECT 
-            COUNT(*) AS totalItems,
-            SUM(CASE WHEN totalSales > 0 THEN totalSales ELSE 0 END) AS grandTotal
-        FROM @abcResults
-    )
-    SELECT 
-        ac.ABC,
-        ac.ITEMCOUNT,
-        ac.CLASSTOTAL,
-        (ac.ITEMCOUNT * 100.0 / NULLIF(ti.totalItems, 0)) AS "ITEMSPERC",
-        (ac.CLASSTOTAL * 100.0 / NULLIF(ti.grandTotal, 0)) AS "VALUEPERC"
-    FROM AbcSummary ac
-    CROSS JOIN TotalItems ti
-    ORDER BY ac.ABC;
-    
-    -- Return the total sales number in a third result set
-    -- This value can be displayed prominently in the UI
-    SELECT SUM(CASE WHEN totalSales > 0 THEN totalSales ELSE 0 END) AS totalPositiveSales 
-    FROM @abcResults;
-END;
-GO
 
 CREATE OR ALTER PROCEDURE dbo.sp_TopAbcAnalysis_CombinedJson
     @dataReferinta VARCHAR(max) = NULL,
@@ -518,6 +327,123 @@ BEGIN
     DROP TABLE #SummaryRows;
 END;
 GO
+
+-- Combined JSON version for load saved data
+CREATE OR ALTER PROCEDURE dbo.sp_LoadSavedAbcAnalysis_CombinedJson
+    @branch VARCHAR(max) = ''
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    -- Validate required parameters
+    IF (@branch IS NULL OR LTRIM(RTRIM(@branch)) = '')
+    BEGIN
+        SELECT '{"error": "Branch parameter is required"}' AS CombinedJsonOutput;
+        RETURN;
+    END
+    
+    -- Parse the branch parameter
+    DECLARE @branchId INT;
+    SET @branchId = TRY_CAST(@branch AS INT);
+    
+    IF (@branchId IS NULL)
+    BEGIN
+        SELECT '{"error": "Invalid branch parameter"}' AS CombinedJsonOutput;
+        RETURN;
+    END
+    
+    -- Find the most recent saved analysis
+    DECLARE @latestSummaryId INT;
+    DECLARE @latestDate DATE;
+    
+    SELECT TOP 1 
+        @latestSummaryId = CCCTOPABCSUMMARYID,
+        @latestDate = DATACALCUL
+    FROM CCCTOPABCSUMMARY 
+    WHERE BRANCH = @branchId
+        AND EXISTS (
+            SELECT 1 FROM CCCTOPABC 
+            WHERE CCCTOPABCSUMMARYID = CCCTOPABCSUMMARY.CCCTOPABCSUMMARYID 
+            AND ABC IN ('A', 'B', 'C')
+        )
+    ORDER BY DATACALCUL DESC, CCCTOPABCSUMMARYID DESC;
+    
+    -- Check if we found any saved data
+    IF (@latestSummaryId IS NULL)
+    BEGIN
+        SELECT '{"error": "No saved ABC analysis found for branch ' + @branch + '"}' AS CombinedJsonOutput;
+        RETURN;
+    END
+    
+    -- Create temp tables for JSON generation
+    CREATE TABLE #DetailedRows (
+        MTRL INT,
+        MTRSUP INT,
+        CODE VARCHAR(MAX),
+        DESCRIPTION VARCHAR(MAX),
+        BRANCH SMALLINT,
+        VALUE FLOAT,
+        SALESPERC FLOAT,
+        CUMULATIVEPERC FLOAT,
+        ABC CHAR(1)
+    );
+
+    CREATE TABLE #SummaryRows (
+        ABC CHAR(1),
+        ITEMCOUNT INT,
+        CLASSTOTAL FLOAT,
+        ITEMSPERC FLOAT,
+        VALUEPERC FLOAT
+    );
+    
+    -- Populate detailed rows from saved data
+    INSERT INTO #DetailedRows (MTRL, MTRSUP, CODE, DESCRIPTION, BRANCH, VALUE, SALESPERC, CUMULATIVEPERC, ABC)
+    SELECT 
+        d.MTRL,
+        ISNULL(m.MTRSUP, 0) as MTRSUP,
+        ISNULL(m.code, '') as CODE,
+        ISNULL(m.name, '') as DESCRIPTION,
+        d.BRANCH,
+        0 as VALUE, -- We don't store values in saved data
+        ISNULL(d.SALESPRCNT, 0) as SALESPERC,
+        0 as CUMULATIVEPERC, -- We don't store cumulative percentage
+        ISNULL(d.ABC, '') as ABC
+    FROM CCCTOPABC d
+    LEFT JOIN MTRL m ON d.MTRL = m.MTRL AND m.SODTYPE = 51
+    WHERE d.CCCTOPABCSUMMARYID = @latestSummaryId
+        AND d.ABC IN ('A', 'B', 'C')
+        AND d.BRANCH = @branchId
+    ORDER BY d.SALESPRCNT DESC;
+    
+    -- Populate summary rows from saved data
+    INSERT INTO #SummaryRows (ABC, ITEMCOUNT, CLASSTOTAL, ITEMSPERC, VALUEPERC)
+    SELECT 'A', ISNULL(s.A, 0), 0, 0, 0 FROM CCCTOPABCSUMMARY s WHERE s.CCCTOPABCSUMMARYID = @latestSummaryId
+    UNION ALL
+    SELECT 'B', ISNULL(s.B, 0), 0, 0, 0 FROM CCCTOPABCSUMMARY s WHERE s.CCCTOPABCSUMMARYID = @latestSummaryId
+    UNION ALL
+    SELECT 'C', ISNULL(s.C, 0), 0, 0, 0 FROM CCCTOPABCSUMMARY s WHERE s.CCCTOPABCSUMMARYID = @latestSummaryId;
+    
+    -- Generate JSON using proper SQL Server JSON functions
+    DECLARE @jsonOutput NVARCHAR(MAX);
+    SET @jsonOutput = (
+        SELECT 
+            (SELECT * FROM #DetailedRows ORDER BY SALESPERC DESC FOR JSON PATH) AS DetailedRows,
+            (SELECT * FROM #SummaryRows ORDER BY ABC FOR JSON PATH) AS SummaryRows,
+            0 AS TotalPositiveSales,
+            (SELECT 
+                CONVERT(VARCHAR, @latestDate, 23) AS Date,
+                @branchId AS Branch,
+                'Loaded from saved analysis' AS Message
+             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER) AS LoadedAnalysis
+        FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+    );
+
+    SELECT @jsonOutput AS CombinedJsonOutput;
+
+    DROP TABLE #DetailedRows;
+    DROP TABLE #SummaryRows;
+END;
+GO
 create table CCCTOPABC (
     CCCTOPABCID INT IDENTITY(1,1) PRIMARY KEY,
     CCCTOPABCSUMMARYID INT,
@@ -526,9 +452,8 @@ create table CCCTOPABC (
     SALESPRCNT FLOAT,
     ABC CHAR(1),
     CONSTRAINT FK_CCCTOPABC_CCCTOPABCSUMMARY FOREIGN KEY (CCCTOPABCSUMMARYID) REFERENCES CCCTOPABCSUMMARY(CCCTOPABCSUMMARYID),
-    UNIQUE (MTRL, BRANCH)
 );
-
+GO
 --DATA	BRANCH	PERIOADA	NR SAPTAMANI	SELECTIE MOD.SUC	SERII EXCLUSE	A	B	C
 CREATE TABLE CCCTOPABCSUMMARY (
     CCCTOPABCSUMMARYID INT IDENTITY(1,1) PRIMARY KEY,
@@ -540,6 +465,5 @@ CREATE TABLE CCCTOPABCSUMMARY (
     SERIIEXCL VARCHAR(MAX),
     A INT,
     B INT,
-    C INT,
-    UNIQUE (DATACALCUL, BRANCH)
+    C INT
 );

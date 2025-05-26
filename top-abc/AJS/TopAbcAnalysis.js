@@ -345,6 +345,7 @@ function saveTopAbcAnalysis(apiObj) {
     var queryList = [];
     var totalInserts = 0;
     var summaryInserts = 0;
+    var executedQuery = ""; // Variable to store the executed query
     
     try {
         // Start transaction
@@ -454,8 +455,9 @@ function saveTopAbcAnalysis(apiObj) {
         // Commit transaction
         queryList.push("COMMIT TRAN");
         
+        executedQuery = queryList.join(';'); // Store the query
         // Execute all queries as a single transaction
-        var result = X.RUNSQL(queryList, null);
+        var result = X.RUNSQL(executedQuery, null);
         
         var endT = new Date().getTime();
         var duration = (endT - startT) / 1000;
@@ -468,6 +470,7 @@ function saveTopAbcAnalysis(apiObj) {
                 branches: branchList,
                 totalInserts: totalInserts,
                 summaryInserts: summaryInserts,
+                query: executedQuery, // Add executed query to success response
                 params: {
                     dataReferinta: dataReferinta,
                     nrSaptamani: nrSaptamani,
@@ -484,6 +487,7 @@ function saveTopAbcAnalysis(apiObj) {
             };
         } else {
             // If there was an error, the transaction should have been rolled back
+            // No explicit rollback here, assuming X.RUNSQL handles transaction failure or it's in the catch.
             var errorMessage = "Unknown error";
             if (result && result.message) {
                 errorMessage = result.message;
@@ -492,6 +496,7 @@ function saveTopAbcAnalysis(apiObj) {
                 success: false,
                 message: "Error during save operation: " + errorMessage,
                 duration: duration,
+                query: executedQuery, // Add executed query to error response
                 queryCount: queryList.length
             };
         }
@@ -499,20 +504,454 @@ function saveTopAbcAnalysis(apiObj) {
     } catch (e) {
         // Add rollback in case of exception
         try {
-            X.RUNSQL(["ROLLBACK TRAN"], null);
+            X.RUNSQL("ROLLBACK TRAN", null); // Corrected rollback call
         } catch (rollbackError) {
             // Log rollback error but don't override main error
+            // console.error("Rollback error: ", rollbackError);
         }
         
         var errorTime = new Date().getTime();
         var errorDuration = (errorTime - startT) / 1000;
         
+        // Ensure executedQuery is populated even if the main transaction wasn't formed/run
+        if (queryList.length > 0 && executedQuery === "") {
+            executedQuery = queryList.join(';');
+        }
+
         return {
             success: false,
             message: "Exception during save operation: " + e.message,
             duration: errorDuration,
+            query: executedQuery, // Add executed query to exception response
             queryCount: queryList.length,
             error: e.toString()
+        };
+    }
+}
+
+/**
+ * Save TOP ABC Analysis Results in Chunks API function
+ * This function saves ABC analysis results in chunks to handle large datasets
+ * without hitting request size limits. Uses append-only strategy for chunks.
+ * Endpoint: /JS/TopAbcAnalysis/saveTopAbcAnalysisChunk
+ *
+ * @param {Object} apiObj - Parameters passed from the client
+ * @param {string} apiObj.dataReferinta - Reference date for analysis
+ * @param {number} apiObj.nrSaptamani - Number of weeks to analyze
+ * @param {string} apiObj.branch - Comma-separated list of branches to filter (required)
+ * @param {Array} apiObj.data - Array of ABC analysis result items to save (chunk)
+ * @param {Array} [apiObj.summary] - Array of summary data (only for first chunk)
+ * @param {boolean} apiObj.isChunk - Flag indicating this is a chunk operation
+ * @param {number} apiObj.chunkNumber - Current chunk number (1-based)
+ * @param {number} apiObj.totalChunks - Total number of chunks
+ * @returns {Object} Save operation results with timing information
+ */
+function saveTopAbcAnalysisChunk(apiObj) {
+    var startT = new Date().getTime();
+    
+    // Validate required parameters
+    if (!apiObj.branch || apiObj.branch.trim() === '') {
+        return {
+            success: false,
+            message: "Branch selection is required for saving",
+            duration: 0
+        };
+    }
+    
+    if (!apiObj.data || !Array.isArray(apiObj.data) || apiObj.data.length === 0) {
+        return {
+            success: false,
+            message: "No data provided to save",
+            duration: 0
+        };
+    }
+    
+    if (!apiObj.isChunk || !apiObj.chunkNumber || !apiObj.totalChunks) {
+        return {
+            success: false,
+            message: "Invalid chunk parameters. Use saveTopAbcAnalysis for non-chunked operations.",
+            duration: 0
+        };
+    }
+    
+    // Extract parameters with defaults
+    var dataReferinta = apiObj.dataReferinta || "'" + (new Date()).toISOString().slice(0, 10) + "'";
+    var nrSaptamani = apiObj.nrSaptamani || 52;
+    var seriesL = apiObj.seriesL || '';
+    var branch = apiObj.branch;
+    var supplier = apiObj.supplier || null;
+    var mtrl = apiObj.mtrl || null;
+    var cod = apiObj.cod || '';
+    var searchType = apiObj.searchType || 1;
+    var modFiltrareBranch = apiObj.modFiltrareBranch || 'AGENT';
+    var thresholdA = apiObj.thresholdA || 80.00;
+    var thresholdB = apiObj.thresholdB || 15.00;
+    var chunkNumber = apiObj.chunkNumber;
+    var totalChunks = apiObj.totalChunks;
+    
+    // Parse branch list for iteration
+    var branchSplit = branch.split(',');
+    var branchList = [];
+    for (var i = 0; i < branchSplit.length; i++) {
+        var trimmed = branchSplit[i].trim();
+        if (trimmed !== '') {
+            branchList.push(trimmed);
+        }
+    }
+    
+    if (branchList.length === 0) {
+        return {
+            success: false,
+            message: "No valid branches found in branch parameter",
+            duration: 0
+        };
+    }
+    
+    // Build transaction queries
+    var queryList = [];
+    var totalInserts = 0;
+    var summaryInserts = 0;
+    var executedQuery = ""; // Variable to store the executed query
+    
+    try {
+        // Start transaction
+        queryList.push("BEGIN TRAN");
+        
+        // For first chunk only: handle summary data
+        if (chunkNumber === 1 && apiObj.summary && Array.isArray(apiObj.summary)) {
+            // Process summary insertion for each branch
+            for (var j = 0; j < branchList.length; j++) {
+                var branchCode = branchList[j];
+                var branchNum = parseInt(branchCode);
+                
+                // Calculate summary counts for this branch from ALL data (estimate from chunk 1)
+                var aCount = 0;
+                var bCount = 0;
+                var cCount = 0;
+                
+                // Count ABC classifications in this chunk
+                for (var k = 0; k < apiObj.data.length; k++) {
+                    var item = apiObj.data[k];
+                    if (item.BRANCH == branchNum) {
+                        if (item.ABC === 'A') {
+                            aCount++;
+                        } else if (item.ABC === 'B') {
+                            bCount++;
+                        } else if (item.ABC === 'C') {
+                            cCount++;
+                        }
+                    }
+                }
+                
+                // Scale counts based on total chunks (rough estimate)
+                aCount = Math.round(aCount * totalChunks);
+                bCount = Math.round(bCount * totalChunks);
+                cCount = Math.round(cCount * totalChunks);
+                
+                // Insert summary record
+                queryList.push(
+                    "INSERT INTO CCCTOPABCSUMMARY (" +
+                        "DATACALCUL, BRANCH, PERIOADA, NRSAPT, MODSUC, SERIIEXCL, A, B, C" +
+                    ") VALUES (" +
+                        dataReferinta + ", " + 
+                        branchNum + ", " + 
+                        "DATEDIFF(DAY, " + dataReferinta + ", GETDATE()), " + 
+                        nrSaptamani + ", " + 
+                        "'" + modFiltrareBranch + "', " + 
+                        "'" + seriesL + "', " + 
+                        aCount + ", " + 
+                        bCount + ", " + 
+                        cCount +
+                    ")"
+                );
+                summaryInserts++;
+            }
+        }
+        
+        // For each branch, insert detail records from this chunk
+        for (var j = 0; j < branchList.length; j++) {
+            var branchCode = branchList[j];
+            var branchNum = parseInt(branchCode);
+            
+            // Get the summary ID for this branch (should exist from chunk 1 or reset operation)
+            queryList.push(
+                "DECLARE @SummaryID_" + branchNum + "_" + chunkNumber + " INT;" +
+                "SELECT @SummaryID_" + branchNum + "_" + chunkNumber + " = CCCTOPABCSUMMARYID " +
+                "FROM CCCTOPABCSUMMARY " +
+                "WHERE DATACALCUL = " + dataReferinta + " AND BRANCH = " + branchNum + ";"
+            );
+            
+            // Insert detail records for this branch from the current chunk
+            for (var l = 0; l < apiObj.data.length; l++) {
+                var item = apiObj.data[l];
+                // Filter data for the current branch
+                if (item.BRANCH == branchNum) {
+                    var mtrlValue = item.MTRL || 0;
+                    var salesPrcnt = item.SALESPERC || item.SALESPRCNT || 0; // Use correct field name
+                    var abc = item.ABC || 'C';
+                    
+                    queryList.push(
+                        "INSERT INTO CCCTOPABC (" +
+                            "CCCTOPABCSUMMARYID, MTRL, BRANCH, SALESPRCNT, ABC" +
+                        ") VALUES (" +
+                            "@SummaryID_" + branchNum + "_" + chunkNumber + ", " + 
+                            mtrlValue + ", " + 
+                            branchNum + ", " + 
+                            salesPrcnt + ", " + 
+                            "'" + abc + "'" +
+                        ")"
+                    );
+                    totalInserts++;
+                }
+            }
+        }
+        
+        // Commit transaction
+        queryList.push("COMMIT TRAN");
+        
+        executedQuery = queryList.join(';'); // Store the query
+        // Execute all queries as a single transaction
+        var result = X.RUNSQL(executedQuery, null);
+        
+        var endT = new Date().getTime();
+        var duration = (endT - startT) / 1000;
+        
+        if (result && result.success !== false) {
+            return {
+                success: true,
+                message: "Successfully saved chunk " + chunkNumber + "/" + totalChunks + ". Processed " + totalInserts + " detail records.",
+                duration: duration,
+                chunkNumber: chunkNumber,
+                totalChunks: totalChunks,
+                totalInsertsInChunk: totalInserts,
+                query: executedQuery, // Add executed query to success response
+                params: { // Include relevant params for chunk context
+                    dataReferinta: dataReferinta,
+                    branch: branch,
+                    chunkNumber: chunkNumber,
+                    totalChunks: totalChunks
+                }
+            };
+        } else {
+            var errorMessage = "Unknown error";
+            if (result && result.message) {
+                errorMessage = result.message;
+            }
+            return {
+                success: false,
+                message: "Error saving chunk " + chunkNumber + ": " + errorMessage,
+                duration: duration,
+                query: executedQuery, // Add executed query to error response
+                queryCount: queryList.length
+            };
+        }
+        
+    } catch (e) {
+        // Add rollback in case of exception
+        try {
+            X.RUNSQL("ROLLBACK TRAN", null); // Corrected rollback call
+        } catch (rollbackError) {
+            // Log rollback error but don't override main error
+            // console.error("Rollback error: ", rollbackError);
+        }
+        
+        var errorTime = new Date().getTime();
+        var errorDuration = (errorTime - startT) / 1000;
+
+        // Ensure executedQuery is populated even if the main transaction wasn't formed/run
+        if (queryList.length > 0 && executedQuery === "") {
+            executedQuery = queryList.join(';');
+        }
+        
+        return {
+            success: false,
+            message: "Exception during chunk save operation (chunk " + chunkNumber + "): " + e.message,
+            duration: errorDuration,
+            query: executedQuery, // Add executed query to exception response
+            queryCount: queryList.length,
+            error: e.toString()
+        };
+    }
+}
+
+/**
+ * Reset TOP ABC Analysis Data API function
+ * This function clears existing ABC analysis data for a specific branch
+ * from CCCTOPABC and CCCTOPABCSUMMARY tables.
+ * Endpoint: /JS/TopAbcAnalysis/resetTopAbcAnalysis
+ *
+ * @param {Object} apiObj - Parameters passed from the client
+ * @param {string} apiObj.branch - Comma-separated list of branches to reset (required)
+ * @returns {Object} Reset operation results with timing information
+ */
+function resetTopAbcAnalysis(apiObj) {
+    var startT = new Date().getTime();
+
+    // Validate required parameters
+    if (!apiObj.branch || apiObj.branch.trim() === '') {
+        return {
+            success: false,
+            message: "Branch selection is required for resetting data",
+            duration: 0,
+            query: ""
+        };
+    }
+
+    var branchList = apiObj.branch.split(',').map(function(b) { return b.trim(); });
+    var branchInClause = branchList.map(function(b) { return "'" + b.replace(/'/g, "''") + "'"; }).join(',');
+
+    var queryList = [];
+    var executedQuery = ""; // To store the final query string
+
+    try {
+        X.RUNSQL("BEGIN TRAN", null);
+
+        // Update CCCTOPABC: Set ABC = '0' for audit trail
+        var updateTopAbcSql = "UPDATE CCCTOPABC SET ABC = '0' WHERE BRANCH IN (" + branchInClause + ")";
+        queryList.push(updateTopAbcSql);
+        
+        // Conditionally delete from CCCTOPABCSUMMARY:
+        // Delete summary records for the specified branch(es) only if they are not referenced by any CCCTOPABC record.
+        var deleteOrphanSummarySql = "DELETE CS FROM CCCTOPABCSUMMARY CS WHERE CS.BRANCH IN (" + branchInClause + ") " +
+                                     "AND NOT EXISTS (SELECT 1 FROM CCCTOPABC CD WHERE CD.CCCTOPABCSUMMARYID = CS.CCCTOPABCSUMMARYID)";
+        queryList.push(deleteOrphanSummarySql);
+
+        executedQuery = queryList.join(';');
+
+        if (queryList.length > 0) {
+            var resultDS = X.RUNSQL(executedQuery, null); // Execute the combined SQL
+            // Future enhancement: Check resultDS for errors if X.RUNSQL provides detailed status.
+        }
+
+        X.RUNSQL("COMMIT TRAN", null);
+
+        var endT = new Date().getTime();
+        var duration = (endT - startT) / 1000;
+
+        return {
+            success: true,
+            message: "Reset complete for branch(es) " + apiObj.branch + ": CCCTOPABC items marked for audit (ABC='0'). CCCTOPABCSUMMARY entries without corresponding CCCTOPABC items have been removed.",
+            duration: duration,
+            query: executedQuery // Return the executed query
+        };
+    } catch (e) {
+        try {
+            X.RUNSQL("ROLLBACK TRAN", null);
+        } catch (rollEx) {
+            // Log rollback error if possible, e.g., X.LogWarning("Rollback failed during reset: " + rollEx.message);
+        }
+        var errorTime = new Date().getTime();
+        var errorDuration = (errorTime - startT) / 1000;
+        return {
+            success: false,
+            message: "Error resetting data: " + e.message,
+            duration: errorDuration,
+            query: executedQuery // Return the query attempted, if any
+        };
+    }
+}
+
+/**
+ * Load Saved TOP ABC Analysis Data API function
+ * This function loads the most recent saved ABC analysis data for a specific branch
+ * from CCCTOPABC and CCCTOPABCSUMMARY tables.
+ * Endpoint: /JS/TopAbcAnalysis/loadSavedAnalysis
+ *
+ * @param {Object} apiObj - Parameters passed from the client
+ * @param {string} apiObj.branch - Branch ID to load saved analysis for (required)
+ * @returns {Object} Loaded analysis results with timing information
+ */
+function loadSavedAnalysis(apiObj) {
+    var startT = new Date().getTime();
+    
+    // Validate required parameters
+    if (!apiObj.branch || apiObj.branch.trim() === '') {
+        return {
+            success: false,
+            message: "Branch selection is required for loading saved analysis",
+            duration: 0
+        };
+    }
+    
+    // For simplified single-branch load, take the first branch if multiple provided
+    var branchCode = apiObj.branch.split(',')[0].trim();
+    
+    // Record start time for performance measurement
+    var qry = "EXEC sp_LoadSavedAbcAnalysis_CombinedJson @branch = '" + branchCode + "'";
+    
+    // Execute the query and get results
+    try {
+        var ds = X.GETSQLDATASET(qry, null);
+        
+        // Calculate execution time
+        var endT = new Date().getTime();
+        var duration = (endT - startT) / 1000;
+        
+        // Process the JSON result
+        var rawResultArray = JSON.parse(ds.JSON);
+        
+        if (!rawResultArray || rawResultArray.length === 0 || !rawResultArray[0].CombinedJsonOutput) {
+            return {
+                success: false,
+                message: "No saved analysis data found for branch " + branchCode,
+                duration: duration,
+                query: qry
+            };
+        }
+        
+        var combinedJsonString = rawResultArray[0].CombinedJsonOutput;
+        
+        // Check if it's an error response
+        if (combinedJsonString.indexOf('"error"') > -1) {
+            var errorObj = JSON.parse(combinedJsonString);
+            return {
+                success: false,
+                message: errorObj.error,
+                duration: duration,
+                query: qry
+            };
+        }
+        
+        // Replace null values with empty strings for better client handling
+        combinedJsonString = combinedJsonString.replace(/"null"/g, '""');
+        
+        var parsedCombinedJson = JSON.parse(combinedJsonString);
+        
+        var result = {};
+        result.data = parsedCombinedJson; // Contains DetailedRows, SummaryRows, LoadedAnalysis
+        
+        // Add execution duration to the result
+        result.duration = duration;
+        
+        // Add query to the result
+        result.query = qry;
+        
+        // Add params to the result
+        result.params = {
+            branch: branchCode,
+            loadedFromSaved: true
+        };
+        
+        // Total can be derived from DetailedRows.length
+        result.total = parsedCombinedJson.DetailedRows ? parsedCombinedJson.DetailedRows.length : 0;
+        
+        result.success = true;
+        result.message = "Successfully loaded saved ABC analysis for branch " + branchCode;
+        
+        // Return the final result object
+        return result;
+    } catch (e) {
+        var errorTime = new Date().getTime();
+        var errorDuration = (errorTime - startT) / 1000;
+        
+        return {
+            success: false,
+            message: "Error loading saved analysis: " + e.message,
+            query: qry,
+            params: {
+                branch: branchCode
+            },
+            duration: errorDuration
         };
     }
 }

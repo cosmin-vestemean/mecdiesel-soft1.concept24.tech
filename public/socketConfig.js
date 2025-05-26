@@ -45,7 +45,10 @@ client.use("top-abc", socketClient.service("top-abc"), {
   methods: [
     "getTopAbcAnalysis",
     "saveTopAbcAnalysis",
-    "getSuppliers"
+    "saveTopAbcAnalysisChunk",
+    "resetTopAbcAnalysis",
+    "getSuppliers",
+    "loadSavedAnalysis"
   ],
 });
 

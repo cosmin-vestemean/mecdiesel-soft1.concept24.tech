@@ -78,10 +78,24 @@ export class TopAbcControlPanel extends LitElement {
 
   // Initialize selectedBranches from branch string if it exists
   initializeBranchSelection() {
-    if (this.branch && this.branch.trim() !== '') {
-      this.selectedBranches = this.branch.split(',').map(b => b.trim());
+    // Guard against this.branches not being an array or not populated
+    if (!this.branches || !Array.isArray(this.branches)) {
+      this.selectedBranches = [];
+      return;
     }
-  }
+
+    if (this.branch && this.branch !== "1000") {
+      const branchIds = this.branch.split(",").map(Number);
+      this.selectedBranches = this.branches.filter((b) =>
+        branchIds.includes(b.id)
+      );
+    } else if (this.branch === "1000") {
+      this.selectedBranches = [{ id: 1000, name: "All Branches" }];
+    } else {
+      // Clear selection if this.branch is empty or null
+      this.selectedBranches = [];
+    }
+ }
 
   async loadInitialData() {
     this.token = sessionStorage.getItem('s1Token');
@@ -196,6 +210,38 @@ export class TopAbcControlPanel extends LitElement {
     }));
   }
 
+  willUpdate(changedProperties) {
+    if (changedProperties.has("branch")) {
+      this.initializeBranchSelection();
+      // Ensure the fancy-dropdown re-renders with the new selection
+      if (this.shadowRoot) {
+        const branchDropdown = this.shadowRoot.querySelector('#branch-fancy-dropdown');
+        if (branchDropdown) {
+          branchDropdown.requestUpdate();
+        }
+      }
+    }
+    if (changedProperties.has("supplier")) {
+      if (this.supplier === null) {
+        this.selectedSuppliers = [];
+      } else if (this.supplier && this.suppliers && Array.isArray(this.suppliers)) {
+        // Ensure this.supplier is treated as a number for comparison, as TRDR is likely numeric
+        const supplierIdToFind = Number(this.supplier);
+        const selected = this.suppliers.find(s => s.TRDR === supplierIdToFind);
+        this.selectedSuppliers = selected ? [selected] : [];
+      } else {
+        this.selectedSuppliers = [];
+      }
+      // Ensure the fancy-dropdown re-renders with the new selection
+      if (this.shadowRoot) {
+        const supplierDropdown = this.shadowRoot.querySelector('#supplier-fancy-dropdown');
+        if (supplierDropdown) {
+          supplierDropdown.requestUpdate();
+        }
+      }
+    }
+  }
+
   render() {
     return html`
       <div class="card mb-2 border-light shadow-sm">
@@ -253,6 +299,7 @@ export class TopAbcControlPanel extends LitElement {
                     @selection-changed=${this.handleBranchSelectionChanged}
                     ?disabled=${this.loading}
                     class="${!this.branch || this.branch.trim() === '' ? 'required-field' : ''}"
+                    id="branch-fancy-dropdown"
                   ></fancy-dropdown>
                 </div>
               </div>
@@ -271,6 +318,7 @@ export class TopAbcControlPanel extends LitElement {
                     searchPlaceholder="Search supplier..."
                     @selection-changed=${this.handleSupplierSelectionChanged}
                     ?disabled=${this.loading}
+                    id="supplier-fancy-dropdown"
                   ></fancy-dropdown>
                 </div>
               </div>
@@ -305,7 +353,7 @@ export class TopAbcControlPanel extends LitElement {
           <div class="row">
             <div class="col-12 text-end">
               <button class="btn btn-sm btn-primary" @click=${this.handleApplyFilters} ?disabled=${this.loading}>
-                ${this.loading ? html`<span class="spinner-border spinner-border-sm me-1"></span> Loading...` : 'Apply Filters'}
+                ${this.loading ? html`<span class="spinner-border spinner-border-sm me-1"></span> Loading...` : 'Load data'}
               </button>
             </div>
           </div>

@@ -695,6 +695,138 @@ class TopAbcAnalysis {
       return { success: false, messages: ["Error fetching suppliers: " + error.message] };
     }
   }
+
+  async saveTopAbcAnalysisChunk(data, params) {
+    // Initialize messages array for validation and error handling
+    let messages = [];
+    try {
+      // Validate required data
+      if (!data.token || !data.dataReferinta || !data.branch) {
+        messages.push("Missing required parameters: token, dataReferinta, and branch");
+      }
+      
+      if (!data.data || !Array.isArray(data.data) || data.data.length === 0) {
+        messages.push("No chunk data provided to save");
+      }
+
+      if (!data.isChunk || !data.chunkNumber || !data.totalChunks) {
+        messages.push("Invalid chunk parameters");
+      }
+
+      if (messages.length > 0) {
+        return {
+          success: false,
+          messages: messages,
+        };
+      }
+
+      // Call the external API to save the ABC analysis chunk
+      return await request({
+        method: "POST",
+        uri: "/JS/TopAbcAnalysis/saveTopAbcAnalysisChunk",
+        body: {
+          clientID: data.token,
+          dataReferinta: data.dataReferinta.startsWith("'") ? data.dataReferinta : `'${data.dataReferinta}'`,
+          nrSaptamani: data.nrSaptamani || 52,
+          seriesL: data.seriesL || "",
+          branch: data.branch,
+          supplier: data.supplier,
+          mtrl: data.mtrl,
+          cod: data.cod || "",
+          searchType: data.searchType || 1,
+          modFiltrareBranch: data.modFiltrareBranch || "AGENT",
+          thresholdA: data.thresholdA || 80,
+          thresholdB: data.thresholdB || 15,
+          data: data.data,
+          summary: data.summary || [],
+          isChunk: data.isChunk,
+          chunkNumber: data.chunkNumber,
+          totalChunks: data.totalChunks
+        },
+        json: true,
+        gzip: true
+      });
+    } catch (error) {
+      messages.push("Error in saveTopAbcAnalysisChunk: " + error.message);
+      return {
+        success: false,
+        messages,
+      };
+    }
+  }
+
+  async resetTopAbcAnalysis(data, params) {
+    // Initialize messages array for validation and error handling
+    let messages = [];
+    try {
+      // Validate required data
+      if (!data.token || !data.branch) { // Removed dataReferinta from validation
+        messages.push("Missing required parameters: token and branch");
+      }
+
+      if (messages.length > 0) {
+        return {
+          success: false,
+          messages: messages,
+        };
+      }
+
+      // Call the external API to reset the ABC analysis
+      return await request({
+        method: "POST",
+        uri: "/JS/TopAbcAnalysis/resetTopAbcAnalysis",
+        body: {
+          clientID: data.token,
+          // dataReferinta: data.dataReferinta.startsWith("'") ? data.dataReferinta : `'${data.dataReferinta}'`, // Removed dataReferinta
+          branch: data.branch
+        },
+        json: true,
+        gzip: true
+      });
+    } catch (error) {
+      messages.push("Error in resetTopAbcAnalysis: " + error.message);
+      return {
+        success: false,
+        messages,
+      };
+    }
+  }
+
+  async loadSavedAnalysis(data, params) {
+    // Initialize messages array for validation and error handling
+    let messages = [];
+    try {
+      // Validate required data
+      if (!data.token || !data.branch) {
+        messages.push("Missing required parameters: token and branch");
+      }
+
+      if (messages.length > 0) {
+        return {
+          success: false,
+          messages: messages,
+        };
+      }
+
+      // Call the external API to load saved ABC analysis
+      return await request({
+        method: "POST",
+        uri: "/JS/TopAbcAnalysis/loadSavedAnalysis",
+        body: {
+          clientID: data.token,
+          branch: data.branch
+        },
+        json: true,
+        gzip: true
+      });
+    } catch (error) {
+      messages.push("Error in loadSavedAnalysis: " + error.message);
+      return {
+        success: false,
+        messages,
+      };
+    }
+  }
 }
 
 // Register the TopAbcAnalysis service
@@ -702,7 +834,10 @@ app.use("/top-abc", new TopAbcAnalysis(), {
   methods: [
     "getTopAbcAnalysis",
     "saveTopAbcAnalysis",
-    "getSuppliers"
+    "getSuppliers",
+    "resetTopAbcAnalysis", // Added
+    "saveTopAbcAnalysisChunk", // Added
+    "loadSavedAnalysis" // Added
   ],
 });
 

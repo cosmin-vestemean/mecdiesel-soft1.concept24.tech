@@ -16,7 +16,10 @@ export class TopAbcContainer extends LitElement {
       error: { type: String },
       params: { type: Object },
       activeTab: { type: String },
-      showSettings: { type: Boolean }
+      showSettings: { type: Boolean },
+      progress: { type: Object }, // Added for progress tracking
+      analysisMode: { type: String }, // Added for mode switching: 'calculate' or 'load'
+      loadedAnalysisInfo: { type: Object } // Added for loaded analysis metadata
     };
   }
 
@@ -47,6 +50,16 @@ export class TopAbcContainer extends LitElement {
     };
     this.activeTab = 'table';
     this.showSettings = true;
+    this.analysisMode = 'calculate'; // Default to calculate mode
+    this.loadedAnalysisInfo = null; // Initialize loaded analysis metadata
+    this.progress = {
+      show: false,
+      current: 0,
+      total: 0,
+      percentage: 0,
+      message: '',
+      stage: ''
+    };
   }
 
   connectedCallback() {
@@ -66,6 +79,12 @@ export class TopAbcContainer extends LitElement {
       // Validate that a branch is selected before proceeding
       if (!this.params.branch || this.params.branch.trim() === '') {
         this.error = 'Please select a branch. Branch selection is mandatory.';
+        return;
+      }
+      
+      // Check the analysis mode and call appropriate method
+      if (this.analysisMode === 'load') {
+        await this.loadSavedAnalysis();
         return;
       }
     
@@ -123,6 +142,99 @@ export class TopAbcContainer extends LitElement {
       // Show no data message if there's no error but also no data
       if (!this.error && (!this.data || this.data.length === 0)) {
         this.error = 'No data found for the specified criteria. Try adjusting your filters.';
+      }
+    }
+  }
+
+  async loadSavedAnalysis() {
+    try {
+      // Validate that a branch is selected before proceeding
+      if (!this.params.branch || this.params.branch.trim() === '') {
+        this.error = 'Please select a branch to load saved analysis data.';
+        return;
+      }
+      
+      this.loading = true;
+      this.error = '';
+
+      console.log('Loading saved ABC analysis for branch:', this.params.branch);
+
+      // Call the load saved analysis API
+      const response = await client.service('top-abc').loadSavedAnalysis({
+        token: this.token,
+        branch: this.params.branch
+      });
+
+      console.log('Load saved analysis response:', response);
+
+      if (response.success) {
+        // Handle the loaded data structure
+        if (response.data) {
+          // Check if we have the combined structure with detailed and summary data
+          if (response.data.DetailedRows && response.data.SummaryRows) {
+            this.data = response.data.DetailedRows || [];
+            this.summary = response.data.SummaryRows || [];
+            
+            // Calculate total sales from loaded detailed data (since stored VALUE might be 0)
+            this.totalSales = this.data.reduce((total, item) => {
+              const value = typeof item.VALUE === 'number' ? item.VALUE : parseFloat(item.VALUE || 0);
+              return total + (value > 0 ? value : 0);
+            }, 0);
+            
+            // If calculated total is still 0, try using the stored TotalPositiveSales
+            if (this.totalSales === 0 && response.data.TotalPositiveSales) {
+              this.totalSales = response.data.TotalPositiveSales;
+            }
+            
+            // Update period info from loaded analysis metadata if available
+            if (response.data.LoadedAnalysis) {
+              // Extract date information from loaded analysis
+              const loadedDate = response.data.LoadedAnalysis.Date;
+              if (loadedDate) {
+                // Update params to reflect the loaded analysis period
+                // Note: We don't change the UI filters, just display info
+                this.loadedAnalysisInfo = {
+                  date: loadedDate,
+                  branch: response.data.LoadedAnalysis.Branch,
+                  message: response.data.LoadedAnalysis.Message
+                };
+              }
+            }
+          } else {
+            // Fallback: assume data is directly the detailed rows
+            this.data = Array.isArray(response.data) ? response.data : [];
+            this.summary = [];
+            
+            // Calculate total sales from loaded data
+            this.totalSales = this.data.reduce((total, item) => {
+              const value = typeof item.VALUE === 'number' ? item.VALUE : parseFloat(item.VALUE || 0);
+              return total + (value > 0 ? value : 0);
+            }, 0);
+          }
+
+          // Display success message with loaded data info
+          if (this.data.length > 0) {
+            const totalSalesText = this.totalSales > 0 ? ` (Total Sales: ${this.totalSales.toLocaleString()})` : '';
+            this._showSuccessMessage(`Successfully loaded saved analysis with ${this.data.length} items for branch ${this.getBranchDisplay()}${totalSalesText}.`);
+          } else {
+            this.error = 'No saved analysis data found for the selected branch. Please run a new analysis first.';
+          }
+        } else {
+          this.error = 'No saved analysis data found for the selected branch.';
+        }
+      } else {
+        this.error = response.message || 'An error occurred while loading saved analysis data';
+        console.error('Error loading saved analysis:', response);
+      }
+    } catch (error) {
+      this.error = `Error loading saved analysis: ${error.message || 'Unknown error occurred'}`;
+      console.error('Exception during load saved analysis:', error);
+    } finally {
+      this.loading = false;
+      
+      // Show no data message if there's no error but also no data
+      if (!this.error && (!this.data || this.data.length === 0)) {
+        this.error = 'No saved analysis data found for the selected criteria. Please run a new analysis first.';
       }
     }
   }
@@ -205,50 +317,201 @@ export class TopAbcContainer extends LitElement {
 
       this.loading = true;
       this.error = '';
+      this._hideProgress(); // Clear any existing progress
 
-      // Prepare the save payload
-      const savePayload = {
-        token: this.token,
-        ...this.params,
-        data: this.data,
-        summary: this.summary
-      };
+      // Determine if we need chunking based on data size
+      const CHUNK_SIZE = 2000; // Process in chunks of 2000 items to avoid 413 errors
+      const needsChunking = this.data.length > CHUNK_SIZE;
 
-      console.log('Saving ABC analysis data:', savePayload);
-
-      // Call the save API
-      const response = await client.service('top-abc').saveTopAbcAnalysis(savePayload);
-
-      console.log('Save response:', response);
-
-      if (response.success) {
-        // Show success message
-        this.error = '';
-        // Create a temporary success message element
-        const successAlert = document.createElement('div');
-        successAlert.className = 'alert alert-success alert-dismissible fade show mt-3';
-        successAlert.innerHTML = `
-          <i class="fas fa-check-circle me-2"></i>
-          ${response.message}
-          <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
-        `;
-        
-        // Insert after the header
-        const header = this.querySelector('.abc-header');
-        if (header) {
-          header.parentNode.insertBefore(successAlert, header.nextSibling);
-          // Auto-remove after 5 seconds
-          setTimeout(() => successAlert.remove(), 5000);
-        }
+      if (needsChunking) {
+        console.log(`Large dataset detected (${this.data.length} items). Using chunked save strategy...`);
+        await this._saveDataInChunks(CHUNK_SIZE);
       } else {
-        this.error = response.message || 'An error occurred while saving data';
-        console.error('Error saving data:', response);
+        console.log(`Small dataset (${this.data.length} items). Using direct save...`);
+        await this._saveDataDirect();
       }
+
     } catch (error) {
+      this._hideProgress(); // Ensure progress is hidden on error
       this.error = `Error saving data: ${error.message || 'Unknown error occurred'}`;
       console.error('Exception during save:', error);
     } finally {
       this.loading = false;
+    }
+  }
+
+  async _saveDataDirect() {
+    // Prepare the save payload
+    const savePayload = {
+      token: this.token,
+      ...this.params,
+      data: this.data,
+      summary: this.summary
+    };
+
+    console.log('Saving ABC analysis data:', savePayload);
+
+    // Call the save API
+    const response = await client.service('top-abc').saveTopAbcAnalysis(savePayload);
+
+    console.log('Save response:', response);
+
+    if (response.success) {
+      this._showSuccessMessage(response.message);
+    } else {
+      this.error = response.message || 'An error occurred while saving data';
+      console.error('Error saving data:', response);
+    }
+  }
+
+  async _saveDataInChunks(chunkSize) {
+    try {
+      // Show initial progress for reset stage
+      this._showProgress('reset', 'Preparing to save large dataset...', 0, 3);
+      
+      // First, call the reset operation to clear existing data
+      console.log('Step 1: Resetting existing data for selected branch(es)...');
+      this._showProgress('reset', 'Clearing existing data for selected branch(es) before chunked save...', 1, 3);
+      
+      const resetResponse = await client.service('top-abc').resetTopAbcAnalysis({
+        token: this.token,
+        // dataReferinta: this.params.dataReferinta, // Removed dataReferinta
+        branch: this.params.branch
+      });
+
+      console.log('Reset response:', resetResponse); // Log the entire reset response object
+
+      if (!resetResponse.success) {
+        this._hideProgress();
+        // Log the full response object for better debugging
+        console.error('Failed to reset data. Full response:', resetResponse);
+        throw new Error(`Failed to reset data: ${resetResponse.message}`);
+      }
+
+      // Split data into chunks
+      const chunks = [];
+      for (let i = 0; i < this.data.length; i += chunkSize) {
+        chunks.push(this.data.slice(i, i + chunkSize));
+      }
+
+      console.log(`Step 2: Saving data in ${chunks.length} chunks...`);
+      this._showProgress('chunks', `Preparing ${chunks.length} chunks for sequential processing...`, 0, chunks.length);
+      
+      // Small delay to show preparation message
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // Process chunks sequentially to maintain data integrity
+      let totalProcessed = 0;
+      let chunkNumber = 1;
+      
+      for (const chunk of chunks) {
+        const chunkMessage = `Processing chunk ${chunkNumber}/${chunks.length} (${chunk.length} items)`;
+        console.log(chunkMessage);
+        this._updateProgress(chunkNumber - 1, chunks.length, chunkMessage);
+        
+        const chunkPayload = {
+          token: this.token,
+          ...this.params,
+          data: chunk,
+          summary: chunkNumber === 1 ? this.summary : [], // Only send summary with first chunk
+          isChunk: true,
+          chunkNumber: chunkNumber,
+          totalChunks: chunks.length
+        };
+
+        const chunkResponse = await client.service('top-abc').saveTopAbcAnalysisChunk(chunkPayload);
+        console.log(`Chunk ${chunkNumber} save response:`, chunkResponse); // Log the entire chunk save response object
+
+        if (!chunkResponse.success) {
+          this._hideProgress();
+          // Log the full response object for better debugging
+          console.error(`Failed to save chunk ${chunkNumber}. Full response:`, chunkResponse);
+          throw new Error(`Failed to save chunk ${chunkNumber}: ${chunkResponse.message}`);
+        }
+
+        totalProcessed += chunk.length;
+        
+        // Update progress with completion status
+        const completionMessage = `Completed chunk ${chunkNumber}/${chunks.length} • ${totalProcessed}/${this.data.length} items saved`;
+        console.log(completionMessage);
+        this._updateProgress(chunkNumber, chunks.length, completionMessage);
+        
+        chunkNumber++;
+        
+        // Small delay to allow UI update and show progress
+        await new Promise(resolve => setTimeout(resolve, 150));
+      }
+
+      // Show completion stage
+      this._showProgress('complete', `Successfully saved all ${totalProcessed} items in ${chunks.length} chunks`, chunks.length, chunks.length);
+      
+      // Hide progress after showing completion for a moment and show success message
+      setTimeout(() => {
+        this._hideProgress();
+        this._showSuccessMessage(`Successfully saved ${totalProcessed} ABC analysis items using chunked strategy (${chunks.length} chunks processed).`);
+      }, 2000);
+      
+    } catch (error) {
+      this._hideProgress();
+      throw error;
+    }
+  }
+
+  // Progress tracking methods
+  _showProgress(stage, message, current = 0, total = 0) {
+    this.progress = {
+      show: true,
+      current: current,
+      total: total,
+      percentage: total > 0 ? Math.round((current / total) * 100) : 0,
+      message: message,
+      stage: stage
+    };
+    this.requestUpdate();
+  }
+
+  _updateProgress(current, total, message = '') {
+    if (this.progress.show) {
+      this.progress = {
+        ...this.progress,
+        current: current,
+        total: total,
+        percentage: total > 0 ? Math.round((current / total) * 100) : 0,
+        message: message || this.progress.message
+      };
+      this.requestUpdate();
+    }
+  }
+
+  _hideProgress() {
+    this.progress = {
+      show: false,
+      current: 0,
+      total: 0,
+      percentage: 0,
+      message: '',
+      stage: ''
+    };
+    this.requestUpdate();
+  }
+
+  _showSuccessMessage(message) {
+    this.error = '';
+    // Create a temporary success message element
+    const successAlert = document.createElement('div');
+    successAlert.className = 'alert alert-success alert-dismissible fade show mt-3';
+    successAlert.innerHTML = `
+      <i class="fas fa-check-circle me-2"></i>
+      ${message}
+      <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+    `;
+    
+    // Insert after the header
+    const header = this.querySelector('.abc-header');
+    if (header) {
+      header.parentNode.insertBefore(successAlert, header.nextSibling);
+      // Auto-remove after 5 seconds
+      setTimeout(() => successAlert.remove(), 5000);
     }
   }
 
@@ -320,6 +583,7 @@ export class TopAbcContainer extends LitElement {
   handleApplyFilters(e) {
     this.params = { ...e.detail };
     this.fetchData();
+    this.showSettings = false; // Hide settings panel
   }
   
   // Handle the refresh-data event from the chart component
@@ -335,6 +599,23 @@ export class TopAbcContainer extends LitElement {
     this.activeTab = tab;
   }
   
+  // Handle mode change for switching between calculate and load modes
+  handleModeChange(e) {
+    this.analysisMode = e.target.value;
+    
+    // Clear any existing data when switching modes
+    this.data = [];
+    this.summary = [];
+    this.totalSales = 0;
+    this.error = '';
+    this.loadedAnalysisInfo = null; // Clear loaded analysis metadata
+    
+    // If switching to load mode and branch is selected, automatically load
+    if (this.analysisMode === 'load' && this.params.branch && this.params.branch.trim() !== '') {
+      this.loadSavedAnalysis();
+    }
+  }
+
   // Helper method to get branch display text (code + name)
   getBranchDisplay() {
     if (!this.params.branch) return '';
@@ -375,6 +656,21 @@ export class TopAbcContainer extends LitElement {
 
   // Simple period info calculation - not reactive, just utility
   getAnalysisPeriod() {
+    // If in load mode and we have loaded analysis info, show that instead
+    if (this.analysisMode === 'load' && this.loadedAnalysisInfo && this.loadedAnalysisInfo.date) {
+      const loadedDate = new Date(this.loadedAnalysisInfo.date);
+      const formatDate = (date) => {
+        return date.toLocaleDateString('ro-RO', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+      };
+      
+      return `Analiză încărcată din ${formatDate(loadedDate)} pentru ${this.loadedAnalysisInfo.branch || this.getBranchDisplay()}`;
+    }
+    
+    // Default behavior for calculate mode or when no loaded info
     if (!this.params.dataReferinta || !this.params.nrSaptamani) {
       return 'Nu sunt definite parametrii de analiză';
     }
@@ -406,21 +702,30 @@ export class TopAbcContainer extends LitElement {
 
       <div class="abc-container">
         <div class="abc-header d-flex justify-content-between align-items-center mb-3">
-          <div>
+          <div class="d-flex align-items-center gap-3">
             <button @click=${this.toggleSettings} class="btn btn-sm btn-outline-secondary">
               <i class="fas ${this.showSettings ? 'fa-eye-slash' : 'fa-eye'}"></i>
               ${this.showSettings ? 'Hide Settings' : 'Show Settings'}
             </button>
+            
+            <!-- Mode Toggle -->
+            <div class="d-flex align-items-center">
+              <label class="form-label me-2 mb-0 fw-semibold">Analysis Mode:</label>
+              <select class="form-select form-select-sm" @change=${this.handleModeChange} .value=${this.analysisMode}>
+                <option value="calculate">Calculate New Analysis</option>
+                <option value="load">Load Latest Saved Analysis</option>
+              </select>
+            </div>
           </div>
           <!-- Button group for save/export/reset actions -->
           <div class="btn-group btn-group-sm">
-            <button class="btn btn-success" @click=${this.handleSaveData} ?disabled=${this.loading || this.data.length === 0}>
+            <button class="btn btn-success" @click=${this.handleSaveData} ?disabled=${this.loading || this.progress.show || this.data.length === 0}>
               <i class="bi bi-save me-1"></i> Save
             </button>
             <button class="btn btn-secondary" @click=${this.exportToExcel} ?disabled=${this.data.length === 0}>
               <i class="bi bi-file-excel me-1"></i> Export
             </button>
-            <button class="btn btn-danger" @click=${this.handleResetData} ?disabled=${this.loading}
+            <button class="btn btn-danger" @click=${this.handleResetData} ?disabled=${this.loading || this.progress.show}
                     data-bs-toggle="tooltip" data-bs-placement="top" title="Clear interface (filters, data, and charts) - does not affect saved data">
               <i class="bi bi-x-circle me-1"></i> Reset
             </button>
@@ -441,6 +746,7 @@ export class TopAbcContainer extends LitElement {
         ${this.showSettings ? html`
           <top-abc-control-panel 
             .token=${this.token}
+            .loading=${this.loading} // Pass loading state
             @params-changed=${this.handleParamsChanged}
             @apply-filters=${this.handleApplyFilters}>
           </top-abc-control-panel>
@@ -451,6 +757,15 @@ export class TopAbcContainer extends LitElement {
           <i class="fas fa-calendar-alt me-2 text-primary"></i>
           <div>
             <strong>📅 Perioada analizată: ${this.getAnalysisPeriod()}</strong>
+            ${this.analysisMode === 'load' && this.loadedAnalysisInfo ? html`
+              <span class="badge bg-info ms-2">
+                <i class="fas fa-database me-1"></i>Date încărcate
+              </span>
+            ` : this.analysisMode === 'calculate' && this.data.length > 0 ? html`
+              <span class="badge bg-success ms-2">
+                <i class="fas fa-calculator me-1"></i>Date calculate
+              </span>
+            ` : ''}
             <br><small class="text-muted">Data referință: ${this.params.dataReferinta} | Săptămâni analizate: ${this.params.nrSaptamani}</small>
           </div>
         </div>
@@ -468,6 +783,43 @@ export class TopAbcContainer extends LitElement {
               <span class="visually-hidden">Loading...</span>
             </div>
             <div>Loading data...</div>
+          </div>
+        ` : ''}
+
+        <!-- Progress Indicator for Chunked Save Operations -->
+        ${this.progress.show ? html`
+          <div class="alert alert-primary d-flex align-items-start mt-3 mb-3" role="alert">
+            <div class="me-3">
+              <i class="fas ${this.progress.stage === 'reset' ? 'fa-database' : 
+                           this.progress.stage === 'chunks' ? 'fa-layer-group' : 
+                           this.progress.stage === 'complete' ? 'fa-check-circle' : 'fa-cog'} me-2"></i>
+            </div>
+            <div class="flex-grow-1">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <strong>${this.progress.stage === 'reset' ? 'Preparing Save Operation' : 
+                        this.progress.stage === 'chunks' ? 'Saving Large Dataset' : 
+                        this.progress.stage === 'complete' ? 'Save Completed' : 'Processing'}</strong>
+                <span class="badge bg-primary">${this.progress.percentage}%</span>
+              </div>
+              <div class="progress mb-2" style="height: 8px;">
+                <div class="progress-bar progress-bar-striped ${this.progress.stage !== 'complete' ? 'progress-bar-animated' : ''}" 
+                     role="progressbar" 
+                     style="width: ${this.progress.percentage}%"
+                     aria-valuenow="${this.progress.percentage}" 
+                     aria-valuemin="0" 
+                     aria-valuemax="100">
+                </div>
+              </div>
+              <small class="text-muted">${this.progress.message}</small>
+              ${this.progress.total > 0 ? html`
+                <div class="mt-1">
+                  <small class="text-muted">
+                    ${this.progress.current.toLocaleString()} / ${this.progress.total.toLocaleString()} 
+                    ${this.progress.stage === 'chunks' ? 'chunks processed' : 'items processed'}
+                  </small>
+                </div>
+              ` : ''}
+            </div>
           </div>
         ` : ''}
 
