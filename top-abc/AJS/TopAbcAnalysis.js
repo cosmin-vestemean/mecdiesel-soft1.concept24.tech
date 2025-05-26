@@ -366,11 +366,13 @@ function saveTopAbcAnalysis(apiObj) {
             for (var k = 0; k < apiObj.data.length; k++) {
                 var item = apiObj.data[k];
                 if (item.BRANCH == branchNum) {
-                    // Only keep essential fields to reduce payload
+                    // Keep essential fields including VALUE and CUMULATIVEPERC for proper save/load
                     branchData.push({
                         MTRL: item.MTRL,
                         BRANCH: item.BRANCH,
-                        SALESPRCNT: item.SALESPERC || item.SALESPRCNT || 0,
+                        SALESPERC: item.SALESPERC || item.SALESPRCNT || 0,
+                        CUMULATIVEPERC: item.CUMULATIVEPERC || 0,
+                        VALUE: item.VALUE || 0,
                         ABC: item.ABC
                     });
                     
@@ -405,11 +407,10 @@ function saveTopAbcAnalysis(apiObj) {
             // Step 3: Insert new summary record
             queryList.push(
                 "INSERT INTO CCCTOPABCSUMMARY (" +
-                    "DATACALCUL, BRANCH, PERIOADA, NRSAPT, MODSUC, SERIIEXCL, A, B, C" +
+                    "DATACALCUL, BRANCH, NRSAPT, MODSUC, SERIIEXCL, A, B, C" +
                 ") VALUES (" +
                     dataReferinta + ", " + 
                     branchNum + ", " + 
-                    "DATEDIFF(DAY, " + dataReferinta + ", GETDATE()), " + 
                     nrSaptamani + ", " + 
                     "'" + modFiltrareBranch + "', " + 
                     "'" + seriesL + "', " + 
@@ -434,17 +435,21 @@ function saveTopAbcAnalysis(apiObj) {
                 var item = branchData[l];
                 // Use the sales percentage from UI data
                 var mtrlValue = item.MTRL || 0;
-                var salesPrcnt = item.SALESPRCNT || 0;
+                var salesPrcnt = item.SALESPERC || item.SALESPRCNT || 0;
+                var cumulativePerc = item.CUMULATIVEPERC || 0;
+                var value = item.VALUE || 0;
                 var abc = item.ABC || 'C';
                 
                 queryList.push(
                     "INSERT INTO CCCTOPABC (" +
-                        "CCCTOPABCSUMMARYID, MTRL, BRANCH, SALESPRCNT, ABC" +
+                        "CCCTOPABCSUMMARYID, MTRL, BRANCH, SALESPERC, CUMULATIVEPERC, VALUE, ABC" +
                     ") VALUES (" +
                         "@SummaryID_" + branchNum + ", " + 
                         mtrlValue + ", " + 
                         branchNum + ", " + 
                         salesPrcnt + ", " + 
+                        cumulativePerc + ", " + 
+                        value + ", " + 
                         "'" + abc + "'" +
                     ")"
                 );
@@ -651,11 +656,10 @@ function saveTopAbcAnalysisChunk(apiObj) {
                 // Insert summary record
                 queryList.push(
                     "INSERT INTO CCCTOPABCSUMMARY (" +
-                        "DATACALCUL, BRANCH, PERIOADA, NRSAPT, MODSUC, SERIIEXCL, A, B, C" +
+                        "DATACALCUL, BRANCH, NRSAPT, MODSUC, SERIIEXCL, A, B, C" +
                     ") VALUES (" +
                         dataReferinta + ", " + 
                         branchNum + ", " + 
-                        "DATEDIFF(DAY, " + dataReferinta + ", GETDATE()), " + 
                         nrSaptamani + ", " + 
                         "'" + modFiltrareBranch + "', " + 
                         "'" + seriesL + "', " + 
@@ -688,16 +692,20 @@ function saveTopAbcAnalysisChunk(apiObj) {
                 if (item.BRANCH == branchNum) {
                     var mtrlValue = item.MTRL || 0;
                     var salesPrcnt = item.SALESPERC || item.SALESPRCNT || 0; // Use correct field name
+                    var cumulativePerc = item.CUMULATIVEPERC || 0;
+                    var value = item.VALUE || 0;
                     var abc = item.ABC || 'C';
                     
                     queryList.push(
                         "INSERT INTO CCCTOPABC (" +
-                            "CCCTOPABCSUMMARYID, MTRL, BRANCH, SALESPRCNT, ABC" +
+                            "CCCTOPABCSUMMARYID, MTRL, BRANCH, SALESPERC, CUMULATIVEPERC, VALUE, ABC" +
                         ") VALUES (" +
                             "@SummaryID_" + branchNum + "_" + chunkNumber + ", " + 
                             mtrlValue + ", " + 
                             branchNum + ", " + 
                             salesPrcnt + ", " + 
+                            cumulativePerc + ", " + 
+                            value + ", " + 
                             "'" + abc + "'" +
                         ")"
                     );
@@ -931,6 +939,28 @@ function loadSavedAnalysis(apiObj) {
             branch: branchCode,
             loadedFromSaved: true
         };
+        
+        // Extract and add period parameters if available from the loaded data
+        if (parsedCombinedJson.PeriodParameters) {
+            // Handle case where PeriodParameters might be a JSON string
+            var periodParams = parsedCombinedJson.PeriodParameters;
+            if (typeof periodParams === 'string') {
+                try {
+                    periodParams = JSON.parse(periodParams);
+                } catch (parseError) {
+                    // If parsing fails, log and skip period parameters
+                    console.error('Failed to parse PeriodParameters:', parseError);
+                    periodParams = null;
+                }
+            }
+            
+            if (periodParams) {
+                result.params.dataReferinta = periodParams.dataReferinta;
+                result.params.nrSaptamani = periodParams.nrSaptamani;
+                result.params.modFiltrareBranch = periodParams.modFiltrareBranch;
+                result.params.seriesL = periodParams.seriesL;
+            }
+        }
         
         // Total can be derived from DetailedRows.length
         result.total = parsedCombinedJson.DetailedRows ? parsedCombinedJson.DetailedRows.length : 0;

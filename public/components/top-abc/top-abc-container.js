@@ -166,6 +166,8 @@ export class TopAbcContainer extends LitElement {
       });
 
       console.log('Load saved analysis response:', response);
+      console.log('Response params:', response.params);
+      console.log('Response data PeriodParameters:', response.data ? response.data.PeriodParameters : 'N/A');
 
       if (response.success) {
         // Handle the loaded data structure
@@ -199,6 +201,20 @@ export class TopAbcContainer extends LitElement {
                   message: response.data.LoadedAnalysis.Message
                 };
               }
+            }
+            
+            // Extract period parameters from response.params (from the backend fix)
+            if (response.params && response.params.dataReferinta && response.params.nrSaptamani) {
+              // Update this.params with the loaded period information so getAnalysisPeriod() can display it
+              this.params.dataReferinta = response.params.dataReferinta;
+              this.params.nrSaptamani = response.params.nrSaptamani;
+              this.params.modFiltrareBranch = response.params.modFiltrareBranch || this.params.modFiltrareBranch;
+              this.params.seriesL = response.params.seriesL || this.params.seriesL;
+              
+              console.log('Updated params with loaded period info:', {
+                dataReferinta: this.params.dataReferinta,
+                nrSaptamani: this.params.nrSaptamani
+              });
             }
           } else {
             // Fallback: assume data is directly the detailed rows
@@ -671,8 +687,9 @@ export class TopAbcContainer extends LitElement {
     }
     
     // Default behavior for calculate mode or when no loaded info
+    // This will now work for both calculate mode AND load mode when period parameters are available
     if (!this.params.dataReferinta || !this.params.nrSaptamani) {
-      return 'Nu sunt definite parametrii de analiză';
+      return 'Parametrii de perioadă nu sunt disponibili.';
     }
 
     const referenceDate = new Date(this.params.dataReferinta);
@@ -757,16 +774,12 @@ export class TopAbcContainer extends LitElement {
           <i class="fas fa-calendar-alt me-2 text-primary"></i>
           <div>
             <strong>📅 Perioada analizată: ${this.getAnalysisPeriod()}</strong>
-            ${this.analysisMode === 'load' && this.loadedAnalysisInfo ? html`
-              <span class="badge bg-info ms-2">
-                <i class="fas fa-database me-1"></i>Date încărcate
-              </span>
-            ` : this.analysisMode === 'calculate' && this.data.length > 0 ? html`
-              <span class="badge bg-success ms-2">
-                <i class="fas fa-calculator me-1"></i>Date calculate
-              </span>
-            ` : ''}
-            <br><small class="text-muted">Data referință: ${this.params.dataReferinta} | Săptămâni analizate: ${this.params.nrSaptamani}</small>
+            ${this.analysisMode === 'load' && this.loadedAnalysisInfo && this.loadedAnalysisInfo.message ?
+              html`<br><small class="text-muted">Detalii analiză încărcată: ${this.loadedAnalysisInfo.message}</small>` :
+            this.params.dataReferinta && this.params.nrSaptamani ?
+              html`<br><small class="text-muted">Parametri analiză: Data referință: ${this.params.dataReferinta} | Săptămâni analizate: ${this.params.nrSaptamani}</small>` :
+              html`<br><small class="text-muted">Parametrii de perioadă nu sunt disponibili.</small>`
+            }
           </div>
         </div>
 
@@ -852,10 +865,10 @@ export class TopAbcContainer extends LitElement {
                                           item.ABC === 'B' ? 'bg-primary' : 
                                           'bg-warning text-light'}">${item.ABC}</span>
                       </td>
-                      <td class="text-end">${item.ITEMCOUNT}</td>
-                      <td class="text-end">${item.CLASSTOTAL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td class="text-end">${item.ITEMSPERC.toFixed(2)}%</td>
-                      <td class="text-end">${item.VALUEPERC.toFixed(2)}%</td>
+                      <td class="text-end">${item.ITEMCOUNT || 0}</td>
+                      <td class="text-end">${(item.CLASSTOTAL || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td class="text-end">${(item.ITEMSPERC || 0).toFixed(2)}%</td>
+                      <td class="text-end">${(item.VALUEPERC || 0).toFixed(2)}%</td>
                     </tr>
                   `)}
                 </tbody>

@@ -163,8 +163,8 @@ async function testChunkingServices() {
       ...testParams,
       branch: 'TEST_BRANCH',
       data: [
-        { MTRL: 999999, COD: 'TEST001', BRANCH: 'TEST_BRANCH', SALESPRCNT: 50.5, ABC: 'A' },
-        { MTRL: 999998, COD: 'TEST002', BRANCH: 'TEST_BRANCH', SALESPRCNT: 30.2, ABC: 'B' }
+        { MTRL: 999999, COD: 'TEST001', BRANCH: 'TEST_BRANCH', SALESPERC: 50.5, ABC: 'A' },
+        { MTRL: 999998, COD: 'TEST002', BRANCH: 'TEST_BRANCH', SALESPERC: 30.2, ABC: 'B' }
       ],
       summary: [
         { ABC: 'A', COUNT: 1, PERCENTAGE: 50 },
@@ -251,7 +251,7 @@ async function testChunkingWithProgress() {
         COD: `TEST${i.toString().padStart(4, '0')}`,
         DESCRIPTION: `Test Product ${i}`,
         BRANCH: 'TEST_BRANCH',
-        SALESPRCNT: Math.random() * 100,
+        SALESPERC: Math.random() * 100,
         ABC: i <= 700 ? 'A' : i <= 2100 ? 'B' : 'C'
       });
     }

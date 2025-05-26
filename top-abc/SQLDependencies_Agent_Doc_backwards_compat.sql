@@ -404,37 +404,72 @@ BEGIN
         ISNULL(m.code, '') as CODE,
         ISNULL(m.name, '') as DESCRIPTION,
         d.BRANCH,
-        0 as VALUE, -- We don't store values in saved data
-        ISNULL(d.SALESPRCNT, 0) as SALESPERC,
-        0 as CUMULATIVEPERC, -- We don't store cumulative percentage
+        ISNULL(d.VALUE, 0) as VALUE, -- Use saved VALUE data
+        ISNULL(d.SALESPERC, 0) as SALESPERC,
+        ISNULL(d.CUMULATIVEPERC, 0) as CUMULATIVEPERC, -- Use saved CUMULATIVEPERC data
         ISNULL(d.ABC, '') as ABC
     FROM CCCTOPABC d
     LEFT JOIN MTRL m ON d.MTRL = m.MTRL AND m.SODTYPE = 51
     WHERE d.CCCTOPABCSUMMARYID = @latestSummaryId
         AND d.ABC IN ('A', 'B', 'C')
         AND d.BRANCH = @branchId
-    ORDER BY d.SALESPRCNT DESC;
+    ORDER BY d.SALESPERC DESC;
     
-    -- Populate summary rows from saved data
+    -- Populate summary rows from saved data with calculated totals and percentages
+    WITH SavedDataSummary AS (
+        SELECT 
+            ABC,
+            COUNT(*) AS ITEMCOUNT,
+            SUM(CASE WHEN VALUE > 0 THEN VALUE ELSE 0 END) AS CLASSTOTAL
+        FROM #DetailedRows 
+        WHERE ABC IN ('A', 'B', 'C')
+        GROUP BY ABC
+    ),
+    TotalCounts AS (
+        SELECT 
+            SUM(ITEMCOUNT) AS totalItems,
+            SUM(CLASSTOTAL) AS grandTotal
+        FROM SavedDataSummary
+    )
     INSERT INTO #SummaryRows (ABC, ITEMCOUNT, CLASSTOTAL, ITEMSPERC, VALUEPERC)
-    SELECT 'A', ISNULL(s.A, 0), 0, 0, 0 FROM CCCTOPABCSUMMARY s WHERE s.CCCTOPABCSUMMARYID = @latestSummaryId
-    UNION ALL
-    SELECT 'B', ISNULL(s.B, 0), 0, 0, 0 FROM CCCTOPABCSUMMARY s WHERE s.CCCTOPABCSUMMARYID = @latestSummaryId
-    UNION ALL
-    SELECT 'C', ISNULL(s.C, 0), 0, 0, 0 FROM CCCTOPABCSUMMARY s WHERE s.CCCTOPABCSUMMARYID = @latestSummaryId;
+    SELECT 
+        sds.ABC,
+        sds.ITEMCOUNT,
+        sds.CLASSTOTAL,
+        (sds.ITEMCOUNT * 100.0 / NULLIF(tc.totalItems, 0)) AS ITEMSPERC,
+        (sds.CLASSTOTAL * 100.0 / NULLIF(tc.grandTotal, 0)) AS VALUEPERC
+    FROM SavedDataSummary sds 
+    CROSS JOIN TotalCounts tc
+    ORDER BY sds.ABC;
     
+    -- Get period parameters from the summary record
+    DECLARE @nrSaptVal INT, @modSucVal VARCHAR(10), @seriiExclVal VARCHAR(MAX);
+    
+    SELECT 
+        @nrSaptVal = NRSAPT, 
+        @modSucVal = MODSUC,
+        @seriiExclVal = SERIIEXCL
+    FROM CCCTOPABCSUMMARY 
+    WHERE CCCTOPABCSUMMARYID = @latestSummaryId;
+
     -- Generate JSON using proper SQL Server JSON functions
     DECLARE @jsonOutput NVARCHAR(MAX);
     SET @jsonOutput = (
         SELECT 
             (SELECT * FROM #DetailedRows ORDER BY SALESPERC DESC FOR JSON PATH) AS DetailedRows,
             (SELECT * FROM #SummaryRows ORDER BY ABC FOR JSON PATH) AS SummaryRows,
-            0 AS TotalPositiveSales,
+            (SELECT SUM(CASE WHEN VALUE > 0 THEN VALUE ELSE 0 END) FROM #DetailedRows) AS TotalPositiveSales,
             (SELECT 
                 CONVERT(VARCHAR, @latestDate, 23) AS Date,
                 @branchId AS Branch,
                 'Loaded from saved analysis' AS Message
-             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER) AS LoadedAnalysis
+             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER) AS LoadedAnalysis,
+            (SELECT 
+                CONVERT(VARCHAR, @latestDate, 23) AS dataReferinta,
+                @nrSaptVal AS nrSaptamani,
+                @modSucVal AS modFiltrareBranch,
+                ISNULL(@seriiExclVal, '') AS seriesL
+             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER) AS PeriodParameters
         FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
     );
 
@@ -449,7 +484,9 @@ create table CCCTOPABC (
     CCCTOPABCSUMMARYID INT,
     MTRL INT,
     BRANCH SMALLINT,
-    SALESPRCNT FLOAT,
+    SALESPERC FLOAT,
+    CUMULATIVEPERC FLOAT,
+    VALUE FLOAT,
     ABC CHAR(1),
     CONSTRAINT FK_CCCTOPABC_CCCTOPABCSUMMARY FOREIGN KEY (CCCTOPABCSUMMARYID) REFERENCES CCCTOPABCSUMMARY(CCCTOPABCSUMMARYID),
 );
@@ -459,7 +496,6 @@ CREATE TABLE CCCTOPABCSUMMARY (
     CCCTOPABCSUMMARYID INT IDENTITY(1,1) PRIMARY KEY,
     DATACALCUL DATE,
     BRANCH SMALLINT,
-    PERIOADA INT,
     NRSAPT INT,
     MODSUC VARCHAR(10),
     SERIIEXCL VARCHAR(MAX),
