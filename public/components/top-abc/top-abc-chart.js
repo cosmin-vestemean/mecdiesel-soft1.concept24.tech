@@ -122,7 +122,7 @@ export class TopAbcChart extends LitElement {
     this.selectedChart = 'pareto';
     this.params = {
       dataReferinta: new Date().toISOString().slice(0, 10),
-      nrSaptamani: 52,
+      nrSaptamani: 24,
       seriesL: '',
       branch: '',
       supplier: null,
@@ -136,6 +136,7 @@ export class TopAbcChart extends LitElement {
     this.chartInstance = null;
     this.chartType = 'pareto';
     this.paretoDisplayMode = 'smart'; // 'top30', 'smart', 'classA', 'to80percent', 'to95percent', 'adaptive'
+    this.maxDisplayItems = 50; // Maximum items to display
     
     // Ensure Chart.js is available
     if (typeof window !== 'undefined' && !window.Chart) {
@@ -512,33 +513,9 @@ export class TopAbcChart extends LitElement {
     };
     
     const count = strategies[this.paretoDisplayMode] ? strategies[this.paretoDisplayMode]() : strategies['smart']();
+    const finalCount = Math.min(count, this.maxDisplayItems, sortedData.length);
     
-    // Apply strategy-specific limits instead of global cap
-    let finalCount;
-    switch(this.paretoDisplayMode) {
-      case 'top30':
-        finalCount = Math.min(count, 30, sortedData.length);
-        break;
-      case 'smart':
-        finalCount = Math.min(count, 100, sortedData.length); // Smart algorithm has internal logic
-        break;
-      case 'adaptive':
-        finalCount = Math.min(count, 80, sortedData.length); // Adaptive can go a bit higher
-        break;
-      case 'classA':
-        finalCount = Math.min(count, Math.max(200, sortedData.length * 0.3), sortedData.length); // Class A can be substantial
-        break;
-      case 'to80percent':
-        finalCount = Math.min(count, Math.max(500, sortedData.length * 0.5), sortedData.length); // 80% threshold can show many items
-        break;
-      case 'to95percent':
-        finalCount = Math.min(count, Math.max(1000, sortedData.length * 0.8), sortedData.length); // 95% threshold can show most items
-        break;
-      default:
-        finalCount = Math.min(count, 100, sortedData.length);
-    }
-    
-    console.log(`📊 Display Strategy: ${this.paretoDisplayMode}, Raw: ${count}, Final: ${finalCount}/${sortedData.length} (${(finalCount/sortedData.length*100).toFixed(1)}%)`);
+    console.log(`📊 Display Strategy: ${this.paretoDisplayMode}, Items: ${finalCount}/${sortedData.length} (${(finalCount/sortedData.length*100).toFixed(1)}%)`);
     return finalCount;
   }
 
@@ -637,7 +614,7 @@ export class TopAbcChart extends LitElement {
     };
     
     const current = strategies[this.paretoDisplayMode] || strategies['smart'];
-    const finalCount = this.getOptimalDisplayItems(sortedData);
+    const finalCount = Math.min(current.count, this.maxDisplayItems, totalItems);
     
     return {
       strategy: this.paretoDisplayMode,
