@@ -40,6 +40,47 @@ export class TopAbcChart extends LitElement {
         display: flex;
         justify-content: space-between;
         align-items: center;
+        gap: 15px;
+        flex-wrap: wrap;
+      }
+      .controls > div {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .controls label {
+        font-weight: 500;
+        color: #495057;
+        white-space: nowrap;
+        font-size: 0.875rem;
+      }
+      .controls select {
+        padding: 6px 10px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        background-color: white;
+        font-size: 0.875rem;
+        min-width: 140px;
+        transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+      }
+      .controls select:focus {
+        outline: none;
+        border-color: #80bdff;
+        box-shadow: 0 0 0 2px rgba(0,123,255,.25);
+      }
+      .controls button {
+        padding: 6px 12px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.875rem;
+        font-weight: 500;
+        transition: background-color 0.15s ease-in-out;
+      }
+      .controls button:hover {
+        background-color: #0056b3;
       }
       .error-message {
         color: #dc3545;
@@ -54,26 +95,35 @@ export class TopAbcChart extends LitElement {
         margin: 20px 0;
         color: #6c757d;
       }
-      select, button {
-        padding: 8px;
-        border-radius: 4px;
-        border: 1px solid #ced4da;
+      .period-info {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 12px;
+        margin-bottom: 15px;
+        color: #495057;
       }
-      button {
-        background-color: #0d6efd;
-        color: white;
-        border: none;
-        cursor: pointer;
-        font-weight: 400;
-        text-align: center;
-        padding: 0.375rem 0.75rem;
+      .period-info strong {
+        color: #212529;
       }
-      button:hover {
-        background-color: #0b5ed7;
+      .period-info small {
+        color: #6c757d;
+        font-size: 0.8rem;
       }
-      select {
-        background-color: #fff;
-        padding: 0.375rem 0.75rem;
+      
+      @media (max-width: 768px) {
+        .controls {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .controls > div {
+          justify-content: space-between;
+        }
+        .controls select {
+          min-width: auto;
+          flex: 1;
+          margin-left: 10px;
+        }
       }
     `;
   }
@@ -100,6 +150,8 @@ export class TopAbcChart extends LitElement {
     };
     this.chartInstance = null;
     this.chartType = 'pareto';
+    this.paretoDisplayMode = 'smart'; // 'top30', 'smart', 'classA', 'to80percent', 'to95percent'
+    this.maxDisplayItems = 50; // Maximum items to display
     
     // Ensure Chart.js is available
     if (typeof window !== 'undefined' && !window.Chart) {
@@ -195,13 +247,18 @@ export class TopAbcChart extends LitElement {
       return b.VALUE - a.VALUE;
     });
     
+    // Determine optimal number of items to display
+    const displayCount = this.getOptimalDisplayItems(sortedData);
+    
     const labels = [];
     const values = [];
     const cumulativePercentages = [];
     
-    // Take only the top 30 items for better readability
-    sortedData.slice(0, 30).forEach(item => {
-      labels.push(item.CODE || ''); // Use exact SQL column name
+    // Take the optimal number of items for display
+    sortedData.slice(0, displayCount).forEach(item => {
+      // Shorten long codes for better display
+      const displayCode = this.shortenCode(item.CODE || '');
+      labels.push(displayCode);
       values.push(item.VALUE || 0);
       // Use the pre-calculated cumulative percentage from SQL
       cumulativePercentages.push(item.CUMULATIVEPERC || 0);
@@ -211,15 +268,12 @@ export class TopAbcChart extends LitElement {
     console.log('Pareto Chart Data:', {
       totalItems: this.data.length,
       displayedItems: labels.length,
+      displayMode: this.paretoDisplayMode,
+      lastCumulative: cumulativePercentages[cumulativePercentages.length - 1],
       firstItem: sortedData[0] ? {
         code: sortedData[0].CODE,
         value: sortedData[0].VALUE,
         sqlCumulative: sortedData[0].CUMULATIVEPERC
-      } : null,
-      lastDisplayedItem: sortedData[29] ? {
-        code: sortedData[29].CODE,
-        value: sortedData[29].VALUE,
-        sqlCumulative: sortedData[29].CUMULATIVEPERC
       } : null
     });
 
@@ -228,12 +282,116 @@ export class TopAbcChart extends LitElement {
       labels: labels,
       values: values,
       cumulativePercentages: cumulativePercentages, // Pass the SQL-calculated values
-      title: 'Top ABC Analysis - Pareto Chart',
+      title: `Top ABC Analysis - Pareto Chart (${displayCount}/${this.data.length} produse)`,
       xAxisLabel: 'Products',
       yAxisLabel: 'Value'
     });
     
+    // Enhance chart configuration for better readability with more items
+    this.enhanceChartForMoreItems(chartConfig, displayCount);
+    
+    // Get detailed information about the display strategy being used
+    const displayInfo = this.getDisplayStrategyInfo(sortedData);
+    
+    // Enhance title with strategy information
+    this.updateChartTitle(chartConfig, displayInfo);
+    
     this.chartInstance = new Chart(ctx, chartConfig);
+  }
+
+  // Shorten product codes for better display
+  shortenCode(code) {
+    if (!code || code.length <= 12) return code;
+    
+    // Try to find meaningful abbreviation
+    // Remove common prefixes/suffixes or take first and last parts
+    if (code.includes('-')) {
+      const parts = code.split('-');
+      if (parts.length >= 2) {
+        return parts[0].substring(0, 6) + '-' + parts[parts.length - 1].substring(0, 4);
+      }
+    }
+    
+    // Fallback: first 8 chars + last 4 chars
+    return code.substring(0, 8) + '...' + code.substring(code.length - 4);
+  }
+
+  // Enhance chart configuration for displaying more items
+  enhanceChartForMoreItems(chartConfig, itemCount) {
+    if (!chartConfig.options) chartConfig.options = {};
+    if (!chartConfig.options.scales) chartConfig.options.scales = {};
+    if (!chartConfig.options.scales.x) chartConfig.options.scales.x = {};
+    
+    // Calculate optimal settings based on item count
+    let maxRotation = 45;
+    let minRotation = 0;
+    let fontSize = 10;
+    let chartHeight = '500px';
+    let tickFrequency = 1;
+    
+    // Progressive adjustments based on item count
+    if (itemCount > 25) {
+      maxRotation = 60;
+      minRotation = 30;
+      fontSize = 9;
+      chartHeight = '550px';
+    }
+    
+    if (itemCount > 35) {
+      maxRotation = 90;
+      minRotation = 45;
+      fontSize = 8;
+      chartHeight = '600px';
+      // Start showing every other label
+      tickFrequency = 2;
+    }
+    
+    if (itemCount > 45) {
+      maxRotation = 90;
+      minRotation = 90;
+      fontSize = 7;
+      chartHeight = '650px';
+      // Show every third label
+      tickFrequency = 3;
+    }
+    
+    if (itemCount > 55) {
+      fontSize = 6;
+      chartHeight = '700px';
+      // Show every fourth label
+      tickFrequency = 4;
+    }
+    
+    // Apply label rotation and size settings
+    chartConfig.options.scales.x.ticks = {
+      ...chartConfig.options.scales.x.ticks,
+      maxRotation: maxRotation,
+      minRotation: minRotation,
+      font: {
+        size: fontSize
+      },
+      callback: function(value, index, ticks) {
+        // Show labels based on frequency to avoid overcrowding
+        if (index % tickFrequency === 0) {
+          return this.getLabelForValue(value);
+        }
+        return '';
+      }
+    };
+    
+    // Adjust chart height dynamically
+    const container = this.shadowRoot.querySelector('.chart-container');
+    if (container) {
+      container.style.height = chartHeight;
+    }
+    
+    // Adjust chart margins for better label visibility
+    if (!chartConfig.options.layout) chartConfig.options.layout = {};
+    chartConfig.options.layout.padding = {
+      bottom: Math.max(20, itemCount > 40 ? 40 : 20)
+    };
+    
+    console.log(`🎨 Chart enhanced for ${itemCount} items: rotation=${maxRotation}°, fontSize=${fontSize}px, height=${chartHeight}, frequency=1/${tickFrequency}`);
   }
 
   renderDistributionChart(ctx) {
@@ -358,8 +516,200 @@ export class TopAbcChart extends LitElement {
     }));
   }
 
+  // Calculate the analysis period based on reference date and number of weeks
+  getAnalysisPeriod() {
+    if (!this.params.dataReferinta || !this.params.nrSaptamani) {
+      return { startDate: null, endDate: null, periodText: 'Nu sunt definite parametrii de analiză' };
+    }
+
+    const referenceDate = new Date(this.params.dataReferinta);
+    const weeksAgo = this.params.nrSaptamani;
+    
+    // Calculate start date (reference date minus number of weeks)
+    const startDate = new Date(referenceDate);
+    startDate.setDate(startDate.getDate() - (weeksAgo * 7));
+    
+    // Format dates
+    const formatDate = (date) => {
+      return date.toLocaleDateString('ro-RO', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+    };
+
+    const startDateStr = formatDate(startDate);
+    const endDateStr = formatDate(referenceDate);
+    
+    const periodText = `Perioada analizată: ${startDateStr} - ${endDateStr} (${weeksAgo} săptămâni)`;
+    
+    return { 
+      startDate: startDate, 
+      endDate: referenceDate, 
+      periodText: periodText,
+      weeks: weeksAgo
+    };
+  }
+
+  // Determine optimal number of items to display based on various strategies
+  getOptimalDisplayItems(sortedData) {
+    const strategies = {
+      'top30': () => 30,
+      'smart': () => this.calculateSmartDisplayCount(sortedData),
+      'classA': () => this.getClassACount(sortedData),
+      'to80percent': () => this.getItemsToPercentage(sortedData, 80),
+      'to95percent': () => this.getItemsToPercentage(sortedData, 95),
+      'adaptive': () => this.calculateAdaptiveDisplayCount(sortedData)
+    };
+    
+    const count = strategies[this.paretoDisplayMode] ? strategies[this.paretoDisplayMode]() : strategies['smart']();
+    const finalCount = Math.min(count, this.maxDisplayItems, sortedData.length);
+    
+    console.log(`📊 Display Strategy: ${this.paretoDisplayMode}, Items: ${finalCount}/${sortedData.length} (${(finalCount/sortedData.length*100).toFixed(1)}%)`);
+    return finalCount;
+  }
+
+  // Adaptive algorithm that combines multiple strategies
+  calculateAdaptiveDisplayCount(sortedData) {
+    const totalItems = sortedData.length;
+    const to80Count = this.getItemsToPercentage(sortedData, 80);
+    const to95Count = this.getItemsToPercentage(sortedData, 95);
+    const classACount = this.getClassACount(sortedData);
+    const smartCount = this.calculateSmartDisplayCount(sortedData);
+    
+    // Calculate weighted average of different strategies
+    const weights = {
+      smart: 0.4,
+      to80: 0.3,
+      classA: 0.2,
+      to95: 0.1
+    };
+    
+    const weightedCount = Math.round(
+      smartCount * weights.smart +
+      to80Count * weights.to80 +
+      classACount * weights.classA +
+      to95Count * weights.to95
+    );
+    
+    // Ensure reasonable bounds
+    return Math.max(20, Math.min(weightedCount, 60, totalItems));
+  }
+
+  // Smart algorithm to determine display count based on data distribution
+  calculateSmartDisplayCount(sortedData) {
+    const totalItems = sortedData.length;
+    
+    // Find where 80% and 95% thresholds are reached
+    const to80Index = this.getItemsToPercentage(sortedData, 80);
+    const to95Index = this.getItemsToPercentage(sortedData, 95);
+    
+    // Determine optimal count based on data distribution and size
+    let optimalCount;
+    
+    if (totalItems <= 20) {
+      // Small datasets: show everything
+      optimalCount = totalItems;
+    } else if (totalItems <= 50) {
+      // Medium datasets: focus on 80% threshold with some buffer
+      optimalCount = Math.max(to80Index + 5, Math.min(35, totalItems));
+    } else if (totalItems <= 100) {
+      // Large datasets: balance between 80% and 95% thresholds
+      const buffer = Math.ceil((to95Index - to80Index) * 0.3);
+      optimalCount = Math.min(to80Index + buffer, 45, totalItems);
+    } else if (totalItems <= 200) {
+      // Very large datasets: focus on 80% with minimal extension
+      const buffer = Math.ceil((to95Index - to80Index) * 0.2);
+      optimalCount = Math.min(to80Index + buffer, 50, totalItems);
+    } else {
+      // Massive datasets: strict Pareto principle
+      optimalCount = Math.min(to80Index + 5, 50, totalItems);
+    }
+    
+    // Ensure we show at least the 80% threshold items
+    return Math.max(optimalCount, Math.min(to80Index, 30));
+  }
+
+  // Get count of items in class A
+  getClassACount(sortedData) {
+    return sortedData.filter(item => item.ABC === 'A').length;
+  }
+
+  // Get number of items needed to reach a specific cumulative percentage
+  getItemsToPercentage(sortedData, targetPercentage) {
+    for (let i = 0; i < sortedData.length; i++) {
+      if (sortedData[i].CUMULATIVEPERC >= targetPercentage) {
+        return i + 1;
+      }
+    }
+    return sortedData.length;
+  }
+
+  // Get detailed information about the display strategy being used
+  getDisplayStrategyInfo(sortedData) {
+    const totalItems = sortedData.length;
+    const to80Count = this.getItemsToPercentage(sortedData, 80);
+    const to95Count = this.getItemsToPercentage(sortedData, 95);
+    const classACount = this.getClassACount(sortedData);
+    const smartCount = this.calculateSmartDisplayCount(sortedData);
+    const adaptiveCount = this.calculateAdaptiveDisplayCount(sortedData);
+    
+    const strategies = {
+      'top30': { count: 30, description: 'Fixed top 30 items' },
+      'smart': { count: smartCount, description: 'Smart algorithm based on data distribution' },
+      'classA': { count: classACount, description: `All Class A items (${classACount})` },
+      'to80percent': { count: to80Count, description: `Items covering 80% of value (${to80Count})` },
+      'to95percent': { count: to95Count, description: `Items covering 95% of value (${to95Count})` },
+      'adaptive': { count: adaptiveCount, description: 'Multi-strategy weighted approach' }
+    };
+    
+    const current = strategies[this.paretoDisplayMode] || strategies['smart'];
+    const finalCount = Math.min(current.count, this.maxDisplayItems, totalItems);
+    
+    return {
+      strategy: this.paretoDisplayMode,
+      description: current.description,
+      requestedCount: current.count,
+      finalCount: finalCount,
+      totalItems: totalItems,
+      coverage: totalItems > 0 ? (finalCount / totalItems * 100).toFixed(1) : '0',
+      allStrategies: strategies
+    };
+  }
+
+  // Enhanced method to update chart title with strategy information
+  updateChartTitle(chartConfig, displayInfo) {
+    const baseTitle = 'Top ABC Analysis - Pareto Chart';
+    const strategyInfo = `${displayInfo.finalCount}/${displayInfo.totalItems} produse (${displayInfo.coverage}%)`;
+    const strategyDesc = displayInfo.description;
+    
+    if (chartConfig.options && chartConfig.options.plugins && chartConfig.options.plugins.title) {
+      chartConfig.options.plugins.title.text = [
+        baseTitle,
+        `📊 ${strategyInfo}`,
+        `🎯 Strategy: ${strategyDesc}`
+      ];
+      chartConfig.options.plugins.title.font = {
+        size: 14
+      };
+      chartConfig.options.plugins.title.padding = {
+        top: 10,
+        bottom: 20
+      };
+    }
+  }
+
   render() {
+    const analysisPeriod = this.getAnalysisPeriod();
+    
     return html`
+      <div class="period-info">
+        <strong>📅 ${analysisPeriod.periodText}</strong>
+        ${analysisPeriod.weeks ? html`
+          <br><small>Data referință: ${this.params.dataReferinta} | Săptămâni analizate: ${analysisPeriod.weeks}</small>
+        ` : ''}
+      </div>
+      
       <div class="controls">
         <div>
           <label for="chartType">Chart Type:</label>
@@ -369,6 +719,21 @@ export class TopAbcChart extends LitElement {
             <option value="value" ?selected=${this.chartType === 'value'}>Value Distribution</option>
           </select>
         </div>
+        
+        ${this.chartType === 'pareto' ? html`
+          <div>
+            <label for="displayMode">Display Strategy:</label>
+            <select id="displayMode" .value="${this.paretoDisplayMode}" @change="${this.handleDisplayModeChange}">
+              <option value="smart">Smart (Recommended)</option>
+              <option value="adaptive">Adaptive (Multi-strategy)</option>
+              <option value="to80percent">80% Threshold</option>
+              <option value="classA">Class A Items</option>
+              <option value="to95percent">95% Threshold</option>
+              <option value="top30">Top 30 Items</option>
+            </select>
+          </div>
+        ` : ''}
+        
         <button @click="${this.handleRefreshData}">Refresh Data</button>
       </div>
       
@@ -379,6 +744,19 @@ export class TopAbcChart extends LitElement {
         <canvas id="abcChart"></canvas>
       </div>
     `;
+  }
+
+  // Handle display mode change
+  handleDisplayModeChange(e) {
+    const oldMode = this.paretoDisplayMode;
+    this.paretoDisplayMode = e.target.value;
+    
+    console.log(`🔄 Display mode changed: ${oldMode} → ${this.paretoDisplayMode}`);
+    
+    // Re-render chart with new display strategy
+    if (this.data && this.data.length > 0 && window.Chart) {
+      this.renderChart();
+    }
   }
 }
 
