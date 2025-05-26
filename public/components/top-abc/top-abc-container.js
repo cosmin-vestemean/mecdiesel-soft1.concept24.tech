@@ -189,6 +189,130 @@ export class TopAbcContainer extends LitElement {
     }
   }
 
+  async handleSaveData() {
+    try {
+      // Validate that we have data to save
+      if (!this.data || this.data.length === 0) {
+        this.error = 'No data available to save. Please run an analysis first.';
+        return;
+      }
+
+      // Validate that a branch is selected
+      if (!this.params.branch || this.params.branch.trim() === '') {
+        this.error = 'Please select a branch before saving.';
+        return;
+      }
+
+      this.loading = true;
+      this.error = '';
+
+      // Prepare the save payload
+      const savePayload = {
+        token: this.token,
+        ...this.params,
+        data: this.data,
+        summary: this.summary
+      };
+
+      console.log('Saving ABC analysis data:', savePayload);
+
+      // Call the save API
+      const response = await client.service('top-abc').saveTopAbcAnalysis(savePayload);
+
+      console.log('Save response:', response);
+
+      if (response.success) {
+        // Show success message
+        this.error = '';
+        // Create a temporary success message element
+        const successAlert = document.createElement('div');
+        successAlert.className = 'alert alert-success alert-dismissible fade show mt-3';
+        successAlert.innerHTML = `
+          <i class="fas fa-check-circle me-2"></i>
+          ${response.message}
+          <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+        `;
+        
+        // Insert after the header
+        const header = this.querySelector('.abc-header');
+        if (header) {
+          header.parentNode.insertBefore(successAlert, header.nextSibling);
+          // Auto-remove after 5 seconds
+          setTimeout(() => successAlert.remove(), 5000);
+        }
+      } else {
+        this.error = response.message || 'An error occurred while saving data';
+        console.error('Error saving data:', response);
+      }
+    } catch (error) {
+      this.error = `Error saving data: ${error.message || 'Unknown error occurred'}`;
+      console.error('Exception during save:', error);
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  handleResetData() {
+    try {
+      // Confirm reset action
+      const confirmMessage = `Are you sure you want to reset the interface?\n\nThis will clear all current data, filters, and charts but will not affect saved data in the database.`;
+      
+      if (!confirm(confirmMessage)) {
+        return;
+      }
+
+      // Clear the data and reset interface elements
+      this.data = [];
+      this.summary = [];
+      this.totalSales = 0;
+      this.error = '';
+      this.loading = false;
+      
+      // Reset parameters to defaults
+      this.params = {
+        dataReferinta: new Date().toISOString().slice(0, 10),
+        nrSaptamani: 24,
+        seriesL: '',
+        branch: '',
+        supplier: null,
+        mtrl: null,
+        cod: '',
+        searchType: 1,
+        modFiltrareBranch: 'AGENT',
+        thresholdA: 80,
+        thresholdB: 15
+      };
+
+      // Reset active tab to table
+      this.activeTab = 'table';
+
+      // Show success message
+      const successAlert = document.createElement('div');
+      successAlert.className = 'alert alert-success alert-dismissible fade show mt-3';
+      successAlert.innerHTML = `
+        <i class="fas fa-check-circle me-2"></i>
+        Interface has been reset successfully. All filters and data have been cleared.
+        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+      `;
+      
+      // Insert after the header
+      const header = this.querySelector('.abc-header');
+      if (header) {
+        header.parentNode.insertBefore(successAlert, header.nextSibling);
+        // Auto-remove after 5 seconds
+        setTimeout(() => successAlert.remove(), 5000);
+      }
+
+      // Trigger a re-render to update all child components
+      this.requestUpdate();
+      
+      console.log('Interface reset completed');
+    } catch (error) {
+      this.error = `Error resetting interface: ${error.message || 'Unknown error occurred'}`;
+      console.error('Exception during interface reset:', error);
+    }
+  }
+
   handleParamsChanged(e) {
     this.params = { ...e.detail };
   }
@@ -287,8 +411,18 @@ export class TopAbcContainer extends LitElement {
               <i class="fas ${this.showSettings ? 'fa-eye-slash' : 'fa-eye'}"></i>
               ${this.showSettings ? 'Hide Settings' : 'Show Settings'}
             </button>
-            <button @click=${this.exportToExcel} class="btn btn-sm btn-success ms-2" ?disabled=${this.data.length === 0}>
-              <i class="fas fa-file-excel"></i> Export
+          </div>
+          <!-- Button group for save/export/reset actions -->
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-success" @click=${this.handleSaveData} ?disabled=${this.loading || this.data.length === 0}>
+              <i class="bi bi-save me-1"></i> Save
+            </button>
+            <button class="btn btn-secondary" @click=${this.exportToExcel} ?disabled=${this.data.length === 0}>
+              <i class="bi bi-file-excel me-1"></i> Export
+            </button>
+            <button class="btn btn-danger" @click=${this.handleResetData} ?disabled=${this.loading}
+                    data-bs-toggle="tooltip" data-bs-placement="top" title="Clear interface (filters, data, and charts) - does not affect saved data">
+              <i class="bi bi-x-circle me-1"></i> Reset
             </button>
           </div>
           ${!this.loading && this.totalSales > 0 && this.params.branch ? html`

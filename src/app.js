@@ -626,6 +626,58 @@ class TopAbcAnalysis {
     }
   }
 
+  async saveTopAbcAnalysis(data, params) {
+    // Initialize messages array for validation and error handling
+    let messages = [];
+    try {
+      // Validate required data
+      if (!data.token || !data.dataReferinta || !data.branch) {
+        messages.push("Missing required parameters: token, dataReferinta, and branch");
+      }
+      
+      if (!data.data || !Array.isArray(data.data) || data.data.length === 0) {
+        messages.push("No analysis data provided to save");
+      }
+
+      if (messages.length > 0) {
+        return {
+          success: false,
+          messages: messages,
+        };
+      }
+
+      // Call the external API to save the ABC analysis
+      return await request({
+        method: "POST",
+        uri: "/JS/TopAbcAnalysis/saveTopAbcAnalysis",
+        body: {
+          clientID: data.token,
+          dataReferinta: data.dataReferinta.startsWith("'") ? data.dataReferinta : `'${data.dataReferinta}'`,
+          nrSaptamani: data.nrSaptamani || 52,
+          seriesL: data.seriesL || "",
+          branch: data.branch,
+          supplier: data.supplier,
+          mtrl: data.mtrl,
+          cod: data.cod || "",
+          searchType: data.searchType || 1,
+          modFiltrareBranch: data.modFiltrareBranch || "AGENT",
+          thresholdA: data.thresholdA || 80,
+          thresholdB: data.thresholdB || 15,
+          data: data.data,
+          summary: data.summary || []
+        },
+        json: true,
+        gzip: true
+      });
+    } catch (error) {
+      messages.push("Error in saveTopAbcAnalysis: " + error.message);
+      return {
+        success: false,
+        messages,
+      };
+    }
+  }
+
   async getSuppliers(data, params) {
     try {
       // Fetch suppliers via S1 service endpoint
@@ -649,6 +701,7 @@ class TopAbcAnalysis {
 app.use("/top-abc", new TopAbcAnalysis(), {
   methods: [
     "getTopAbcAnalysis",
+    "saveTopAbcAnalysis",
     "getSuppliers"
   ],
 });
