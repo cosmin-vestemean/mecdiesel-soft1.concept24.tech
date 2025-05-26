@@ -507,12 +507,12 @@ export class TopAbcChart extends LitElement {
       'top30': () => 30,
       'smart': () => this.calculateSmartDisplayCount(sortedData),
       'classA': () => this.getClassACount(sortedData),
-      'to80percent': () => this.getItemsToPercentage(sortedData, 80),
-      'to95percent': () => this.getItemsToPercentage(sortedData, 95),
+      //'to80percent': () => this.getItemsToPercentage(sortedData, 80),
+      //'to95percent': () => this.getItemsToPercentage(sortedData, 95),
       'adaptive': () => this.calculateAdaptiveDisplayCount(sortedData)
     };
     
-    const count = strategies[this.paretoDisplayMode] ? strategies[this.paretoDisplayMode]() : strategies['smart']();
+    const count = strategies[this.pareto] ? strategies[this.paretoDisplayMode]() : strategies['smart']();
     const finalCount = Math.min(count, this.maxDisplayItems, sortedData.length);
     
     console.log(`📊 Display Strategy: ${this.paretoDisplayMode}, Items: ${finalCount}/${sortedData.length} (${(finalCount/sortedData.length*100).toFixed(1)}%)`);
@@ -520,7 +520,7 @@ export class TopAbcChart extends LitElement {
   }
 
   // Adaptive algorithm that combines multiple strategies
-  calculateAdaptiveDisplayCount(sortedData) {
+  calculateAdaptiveDisplayCount(sortedData) {DisplayMode
     const totalItems = sortedData.length;
     const to80Count = this.getItemsToPercentage(sortedData, 80);
     const to95Count = this.getItemsToPercentage(sortedData, 95);
