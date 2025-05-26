@@ -150,7 +150,7 @@ export class TopAbcChart extends LitElement {
     };
     this.chartInstance = null;
     this.chartType = 'pareto';
-    this.paretoDisplayMode = 'smart'; // 'top30', 'smart', 'classA', 'to80percent', 'to95percent'
+    this.paretoDisplayMode = 'smart'; // 'top30', 'smart', 'classA', 'to80percent', 'to95percent', 'adaptive'
     this.maxDisplayItems = 50; // Maximum items to display
     
     // Ensure Chart.js is available
