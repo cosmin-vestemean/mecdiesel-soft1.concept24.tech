@@ -122,7 +122,7 @@ export class TopAbcChart extends LitElement {
     this.selectedChart = 'pareto';
     this.params = {
       dataReferinta: new Date().toISOString().slice(0, 10),
-      nrSaptamani: 24,
+      nrSaptamani: 52,
       seriesL: '',
       branch: '',
       supplier: null,
