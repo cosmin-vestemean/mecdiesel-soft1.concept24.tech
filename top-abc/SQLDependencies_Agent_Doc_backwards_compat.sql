@@ -18,6 +18,7 @@ CREATE OR ALTER FUNCTION dbo.ufn_vanzariWksOptimized (
     DENUMARTICOL VARCHAR(MAX),
     branch SMALLINT,
     pcswk DECIMAL(18,8),
+    valuewk DECIMAL(18,8), -- Adăugat: valoarea vânzărilor
     wk INT,
     wkflag SMALLINT
 ) AS 
@@ -59,6 +60,7 @@ BEGIN
             d.name AS DENUMARTICOL,
             1000 AS branch,
             COALESCE(SUM(COALESCE((a.qty1 / CAST(d.MU41 AS DECIMAL(18, 8))), 0)), 0) AS pcswk,
+            COALESCE(SUM(COALESCE(a.LTRNVAL, 0)), 0) AS valuewk, -- Adăugat: valoarea vânzărilor
             DATEDIFF(wk, b.trndate, @dataReferinta) AS wk,
             1 AS wkflag
         FROM mtrtrn a
@@ -99,6 +101,7 @@ BEGIN
                 d.name AS DENUMARTICOL,
                 b.BRANCH AS branch, -- Se folosește BRANCH-ul documentului
                 COALESCE(SUM(COALESCE((a.qty1 / CAST(d.MU41 AS DECIMAL(18, 8))), 0)), 0) AS pcswk,
+                COALESCE(SUM(COALESCE(a.LTRNVAL, 0)), 0) AS valuewk, -- Adăugat: valoarea vânzărilor
                 DATEDIFF(wk, b.trndate, @dataReferinta) AS wk,
                 1 AS wkflag
             FROM mtrtrn a
@@ -138,6 +141,7 @@ BEGIN
                 d.name AS DENUMARTICOL,
                 e.branch,
                 COALESCE(SUM(COALESCE((a.qty1 / CAST(d.MU41 AS DECIMAL(18, 8))), 0)), 0) AS pcswk,
+                COALESCE(SUM(COALESCE(a.LTRNVAL, 0)), 0) AS valuewk, -- Adăugat: valoarea vânzărilor
                 DATEDIFF(wk, b.trndate, @dataReferinta) AS wk,
                 1 AS wkflag
             FROM mtrtrn a
@@ -215,6 +219,7 @@ BEGIN
         DENUMARTICOL VARCHAR(MAX),
         branch SMALLINT,
         pcswk DECIMAL(18,8),
+        valuewk DECIMAL(18,8), -- Adăugat: valoarea vânzărilor
         wk INT,
         wkflag SMALLINT
     );
@@ -245,7 +250,7 @@ BEGIN
         abcClass CHAR(1)
     );
     
-    -- Group by product and sum quantities
+    -- Group by product and sum VALUES (not quantities)
     WITH ProductSales AS (
         SELECT
             MTRL,
@@ -253,7 +258,7 @@ BEGIN
             CODARTICOL,
             DENUMARTICOL,
             branch,
-            SUM(pcswk) AS totalSales
+            SUM(valuewk) AS totalSales -- Modificat: folosim valoarea în loc de cantitate
         FROM @salesData
         GROUP BY
             MTRL,
@@ -427,7 +432,8 @@ BEGIN
         CODARTICOL VARCHAR(MAX),
         DENUMARTICOL VARCHAR(MAX),
         branch SMALLINT,
-        pcswk DECIMAL(18,8), -- Ensure this matches the function's return type
+        pcswk DECIMAL(18,8), -- Cantitatea
+        valuewk DECIMAL(18,8), -- Valoarea vânzărilor
         wk INT,
         wkflag SMALLINT
     );
@@ -451,7 +457,7 @@ BEGIN
     );
 
     WITH ProductSales AS (
-        SELECT MTRL, MTRSUP, CODARTICOL, DENUMARTICOL, branch, SUM(pcswk) AS totalSales
+        SELECT MTRL, MTRSUP, CODARTICOL, DENUMARTICOL, branch, SUM(valuewk) AS totalSales -- Modificat: folosim valoarea
         FROM @salesData GROUP BY MTRL, MTRSUP, CODARTICOL, DENUMARTICOL, branch
     ),
     Totals AS (

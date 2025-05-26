@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Pareto Chart Fix</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <h1>Test Pareto Chart Fix</h1>
+    <div style="width: 800px; height: 400px;">
+        <canvas id="testChart"></canvas>
+    </div>
+
+    <script type="module">
+        import { createParetoChartConfig } from './public/components/chart-helpers.js';
+
+        // Test data simulating SQL results
+        const testData = [
+            { CODE: 'PROD1', VALUE: 1000, CUMULATIVEPERC: 25.0 },
+            { CODE: 'PROD2', VALUE: 800, CUMULATIVEPERC: 45.0 },
+            { CODE: 'PROD3', VALUE: 600, CUMULATIVEPERC: 60.0 },
+            { CODE: 'PROD4', VALUE: 400, CUMULATIVEPERC: 70.0 },
+            { CODE: 'PROD5', VALUE: 300, CUMULATIVEPERC: 77.5 },
+            { CODE: 'PROD6', VALUE: 200, CUMULATIVEPERC: 82.5 },
+            { CODE: 'PROD7', VALUE: 150, CUMULATIVEPERC: 86.25 },
+            { CODE: 'PROD8', VALUE: 100, CUMULATIVEPERC: 88.75 },
+            { CODE: 'PROD9', VALUE: 80, CUMULATIVEPERC: 90.75 },
+            { CODE: 'PROD10', VALUE: 50, CUMULATIVEPERC: 92.0 }
+        ];
+
+        const labels = testData.map(item => item.CODE);
+        const values = testData.map(item => item.VALUE);
+        const cumulativePercentages = testData.map(item => item.CUMULATIVEPERC);
+
+        console.log('Test Data:', { labels, values, cumulativePercentages });
+
+        const chartConfig = createParetoChartConfig({
+            labels: labels,
+            values: values,
+            cumulativePercentages: cumulativePercentages,
+            title: 'Test Pareto Chart - Fixed Cumulative %',
+            xAxisLabel: 'Products',
+            yAxisLabel: 'Value'
+        });
+
+        const ctx = document.getElementById('testChart').getContext('2d');
+        new Chart(ctx, chartConfig);
+    </script>
+</body>
+</html>

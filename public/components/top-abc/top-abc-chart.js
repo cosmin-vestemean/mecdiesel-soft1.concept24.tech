@@ -197,17 +197,37 @@ export class TopAbcChart extends LitElement {
     
     const labels = [];
     const values = [];
+    const cumulativePercentages = [];
     
     // Take only the top 30 items for better readability
     sortedData.slice(0, 30).forEach(item => {
       labels.push(item.CODE || ''); // Use exact SQL column name
       values.push(item.VALUE || 0);
+      // Use the pre-calculated cumulative percentage from SQL
+      cumulativePercentages.push(item.CUMULATIVEPERC || 0);
+    });
+
+    // Log the data for debugging
+    console.log('Pareto Chart Data:', {
+      totalItems: this.data.length,
+      displayedItems: labels.length,
+      firstItem: sortedData[0] ? {
+        code: sortedData[0].CODE,
+        value: sortedData[0].VALUE,
+        sqlCumulative: sortedData[0].CUMULATIVEPERC
+      } : null,
+      lastDisplayedItem: sortedData[29] ? {
+        code: sortedData[29].CODE,
+        value: sortedData[29].VALUE,
+        sqlCumulative: sortedData[29].CUMULATIVEPERC
+      } : null
     });
 
     // Use our helper function to create the chart configuration
     const chartConfig = createParetoChartConfig({
       labels: labels,
       values: values,
+      cumulativePercentages: cumulativePercentages, // Pass the SQL-calculated values
       title: 'Top ABC Analysis - Pareto Chart',
       xAxisLabel: 'Products',
       yAxisLabel: 'Value'

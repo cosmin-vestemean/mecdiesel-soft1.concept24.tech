@@ -52,21 +52,28 @@ export function formatNumber(value, decimals = 0) {
  * @param {Object} options - Chart options
  * @param {Array} options.labels - X-axis labels
  * @param {Array} options.values - Values for the bars
+ * @param {Array} options.cumulativePercentages - Pre-calculated cumulative percentages from SQL
  * @param {string} options.title - Chart title
  * @param {string} options.xAxisLabel - Label for X axis
  * @param {string} options.yAxisLabel - Label for Y axis
  * @returns {Object} Chart.js configuration object
  */
 export function createParetoChartConfig(options) {
-  const { labels, values, title, xAxisLabel, yAxisLabel } = options;
+  const { labels, values, cumulativePercentages, title, xAxisLabel, yAxisLabel } = options;
   
-  // Calculate cumulative percentage
-  let totalValue = values.reduce((sum, value) => sum + value, 0);
-  let cumulativeValue = 0;
-  const cumulativePercentage = values.map(value => {
-    cumulativeValue += value;
-    return (cumulativeValue / totalValue) * 100;
-  });
+  // Use pre-calculated cumulative percentages from SQL if available, otherwise calculate them
+  let cumulativePercentage;
+  if (cumulativePercentages && cumulativePercentages.length === values.length) {
+    cumulativePercentage = cumulativePercentages;
+  } else {
+    // Fallback: Calculate cumulative percentage (for backward compatibility)
+    let totalValue = values.reduce((sum, value) => sum + value, 0);
+    let cumulativeValue = 0;
+    cumulativePercentage = values.map(value => {
+      cumulativeValue += value;
+      return (cumulativeValue / totalValue) * 100;
+    });
+  }
 
   return {
     type: 'bar',
