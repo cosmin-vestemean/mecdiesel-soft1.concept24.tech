@@ -25,6 +25,11 @@ export class ReplenishmentDataTable extends LitElement {
       this.columnConfig = [];
       this.utilityFunctions = {};
       
+      // Performance optimization: Cache filtered data and derived values
+      this._cachedFilteredData = [];
+      this._cachedFilters = {};
+      this._cachedDerivedValues = new Map(); // For CSS classes and styles
+      
       // Initialize all number filters to 'all'
       if (Array.isArray(columnConfig)) {
         columnConfig
@@ -120,9 +125,6 @@ export class ReplenishmentDataTable extends LitElement {
       <tr>
         ${visibleColumns.map(col => html`
           <th class="${col.group || ''} ${col.divider ? 'vertical-divider' : ''}"
-              data-bs-toggle="tooltip"
-              data-bs-placement="top"
-              data-bs-trigger="hover"
               title="${col.tooltip || col.displayName}">
             ${col.isHeaderFilter 
               ? (col.type === 'number' 
@@ -143,29 +145,21 @@ export class ReplenishmentDataTable extends LitElement {
         <div class="btn-group btn-group-sm number-filter-group">
           <button class="btn btn-outline-secondary btn-xs ${this.getNumberFilterStatus(column.key, 'all')}" 
                   @click=${() => this._dispatchUpdate(`numberFilter_${column.key}`, 'all')}
-                  data-bs-toggle="tooltip"
-                  data-bs-placement="top"
                   title="Show all values">
             <i class="bi bi-asterisk"></i>
           </button>
           <button class="btn btn-outline-success btn-xs ${this.getNumberFilterStatus(column.key, 'positive')}" 
                   @click=${() => this._dispatchUpdate(`numberFilter_${column.key}`, 'positive')}
-                  data-bs-toggle="tooltip"
-                  data-bs-placement="top"
                   title="Show positive values only">
             <i class="bi bi-plus"></i>
           </button>
           <button class="btn btn-outline-danger btn-xs ${this.getNumberFilterStatus(column.key, 'negative')}" 
                   @click=${() => this._dispatchUpdate(`numberFilter_${column.key}`, 'negative')}
-                  data-bs-toggle="tooltip"
-                  data-bs-placement="top"
                   title="Show negative values only">
             <i class="bi bi-dash"></i>
           </button>
           <button class="btn btn-outline-secondary btn-xs ${this.getNumberFilterStatus(column.key, 'zero')}" 
                   @click=${() => this._dispatchUpdate(`numberFilter_${column.key}`, 'zero')}
-                  data-bs-toggle="tooltip"
-                  data-bs-placement="top"
                   title="Show zero values only">
             <i class="bi bi-0-circle"></i>
           </button>
@@ -204,6 +198,11 @@ export class ReplenishmentDataTable extends LitElement {
   renderCell(item, column, index) {
     let content = '';
     const value = item[column.key];
+    const keyField = item.keyField;
+    
+    // Get cached derived values for performance
+    const cachedValues = this._cachedDerivedValues.get(keyField) || {};
+    
     // Ensure group class is first in the list and has !important
     const cellClassList = [];
     if (column.group) {
@@ -213,19 +212,32 @@ export class ReplenishmentDataTable extends LitElement {
       cellClassList.push('vertical-divider');
     }
 
-    // Apply dynamic class functions if defined
-    if (column.classFn && typeof this.utilityFunctions[column.classFn] === 'function') {
+    // Apply dynamic class functions using cached values when possible
+    if (column.classFn && cachedValues[column.classFn]) {
+      cellClassList.push(cachedValues[column.classFn]);
+    } else if (column.classFn && typeof this.utilityFunctions[column.classFn] === 'function') {
       cellClassList.push(this.utilityFunctions[column.classFn](item));
+    } else if (column.classFn === 'getValueClass' && cachedValues.valueClass) {
+      cellClassList.push(cachedValues.valueClass);
     } else if (column.classFn === 'getValueClass' && typeof this.utilityFunctions.getValueClass === 'function') {
       cellClassList.push(this.utilityFunctions.getValueClass(value));
     }
 
     if (column.type === 'index') {
       content = html`${index + 1}`;
+    } else if (column.key === 'abc_class' && value) {
+      // Special rendering for ABC classification - use cached class when possible
+      const textClass = cachedValues.abcBadgeClass || 
+        (this.utilityFunctions.getAbcBadgeClass ? this.utilityFunctions.getAbcBadgeClass(item) : 'text-secondary');
+      cellClassList.push(textClass);
+      content = html`${value}`;
     } else if (column.isEditable && column.key === 'transfer') {
+      // Use cached value class for transfer inputs
+      const valueClass = cachedValues.valueClass || 
+        (this.utilityFunctions.getValueClass ? this.utilityFunctions.getValueClass(value) : '');
       content = html`
         <input
-          class="form-control form-control-sm compact-input ${this.utilityFunctions.getValueClass ? this.utilityFunctions.getValueClass(value) : ''}"
+          class="form-control form-control-sm compact-input ${valueClass}"
           data-keyfield="${item.keyField}"
           data-colkey="${column.key}"
           type="number"
@@ -239,39 +251,92 @@ export class ReplenishmentDataTable extends LitElement {
       `;
     } else if (column.type === 'boolean') {
       content = html`${value === 'Da' ? 'Yes' : (value === '-' ? 'No' : value)}`;
-    } else if (column.truncate) {
-      const truncatedValue = (value || '').substring(0, column.truncate);
-      const showEllipsis = value?.length > column.truncate;
-      content = html`<span title="${value}">${truncatedValue}${showEllipsis ? '...' : ''}</span>`;
-      cellClassList.push('text-truncate');
     } else {
       content = html`${value}`;
     }
 
-    // Add stock indicator styling if needed
-    let indicatorHtml = '';
-    if (column.key === 'stoc_emit' || column.key === 'stoc_dest') {
-      const stockClass = column.key === 'stoc_emit' 
-        ? this.utilityFunctions.getStockClassEmit(item)
-        : this.utilityFunctions.getStockClassDest(item);
-      
-      if (stockClass.includes('stock-critical')) indicatorHtml = html`<span class="stock-indicator critical">▼</span>`;
-      else if (stockClass.includes('stock-optimal')) indicatorHtml = html`<span class="stock-indicator optimal">✓</span>`;
-      else if (stockClass.includes('stock-high')) indicatorHtml = html`<span class="stock-indicator high">▲</span>`;
-    }
-
     return html`
       <td class="${cellClassList.join(' ')}">
-        ${content}${indicatorHtml}
+        ${content}
       </td>
     `;
   }
 
   /**
-   * Apply number filters to filter the displayed data
+   * Pre-calculate derived values for performance optimization
+   */
+  _preCalculateDerivedValues() {
+    this._cachedDerivedValues.clear();
+    
+    if (!this.tableData || !this.utilityFunctions) return;
+    
+    this.tableData.forEach(item => {
+      const keyField = item.keyField;
+      const derivedValues = {};
+      
+      // Pre-calculate CSS classes for common utility functions
+      if (this.utilityFunctions.getValueClass) {
+        derivedValues.valueClass = this.utilityFunctions.getValueClass(item.transfer || 0);
+      }
+      if (this.utilityFunctions.getAbcBadgeClass) {
+        derivedValues.abcBadgeClass = this.utilityFunctions.getAbcBadgeClass(item);
+      }
+      if (this.utilityFunctions.getStockClassEmit) {
+        derivedValues.stockClassEmit = this.utilityFunctions.getStockClassEmit(item);
+      }
+      if (this.utilityFunctions.getStockClassDest) {
+        derivedValues.stockClassDest = this.utilityFunctions.getStockClassDest(item);
+      }
+      if (this.utilityFunctions.getBlacklistedClass) {
+        derivedValues.blacklistedClass = this.utilityFunctions.getBlacklistedClass(item);
+      }
+      if (this.utilityFunctions.getLichidareClass) {
+        derivedValues.lichidareClass = this.utilityFunctions.getLichidareClass(item);
+      }
+      if (this.utilityFunctions.getSalesPercClass) {
+        derivedValues.salesPercClass = this.utilityFunctions.getSalesPercClass(item);
+      }
+      
+      this._cachedDerivedValues.set(keyField, derivedValues);
+    });
+  }
+
+  /**
+   * Check if filters have changed to determine if cache is valid
+   */
+  _filtersChanged() {
+    const currentFilters = {
+      destinationFilter: this.destinationFilter
+    };
+    
+    // Add number filters
+    if (this.columnConfig) {
+      this.columnConfig
+        .filter(col => col.type === 'number' && col.isHeaderFilter && col.visible)
+        .forEach(col => {
+          currentFilters[`numberFilter_${col.key}`] = this[`numberFilter_${col.key}`];
+        });
+    }
+    
+    // Compare with cached filters
+    const filterKeys = Object.keys(currentFilters);
+    const cachedKeys = Object.keys(this._cachedFilters);
+    
+    if (filterKeys.length !== cachedKeys.length) return true;
+    
+    return filterKeys.some(key => currentFilters[key] !== this._cachedFilters[key]);
+  }
+
+  /**
+   * Apply number filters to filter the displayed data with caching
    * @returns {Array} The filtered data
    */
   getFilteredData() {
+    // Check if we can use cached data
+    if (!this._filtersChanged() && this._cachedFilteredData.length > 0) {
+      return this._cachedFilteredData;
+    }
+    
     // Start with all data
     let filtered = [...this.tableData];
     
@@ -294,6 +359,21 @@ export class ReplenishmentDataTable extends LitElement {
               }
             });
           }
+        });
+    }
+    
+    // Cache the results
+    this._cachedFilteredData = filtered;
+    this._cachedFilters = {
+      destinationFilter: this.destinationFilter
+    };
+    
+    // Cache number filters
+    if (this.columnConfig) {
+      this.columnConfig
+        .filter(col => col.type === 'number' && col.isHeaderFilter && col.visible)
+        .forEach(col => {
+          this._cachedFilters[`numberFilter_${col.key}`] = this[`numberFilter_${col.key}`];
         });
     }
     
@@ -334,17 +414,16 @@ export class ReplenishmentDataTable extends LitElement {
 
   updated(changedProperties) {
     super.updated(changedProperties);
-    // Initialize tooltips after each update
-    const tooltipTriggerList = this.querySelectorAll('[data-bs-toggle="tooltip"]');
-    tooltipTriggerList.forEach(tooltipTriggerEl => {
-      // Dispose existing tooltip instance if it exists
-      const existingTooltip = bootstrap.Tooltip.getInstance(tooltipTriggerEl);
-      if (existingTooltip) {
-        existingTooltip.dispose();
-      }
-      // Create new tooltip instance
-      new bootstrap.Tooltip(tooltipTriggerEl);
-    });
+    
+    // Pre-calculate derived values when data or utility functions change
+    if (changedProperties.has('tableData') || changedProperties.has('utilityFunctions')) {
+      this._preCalculateDerivedValues();
+      // Clear filter cache when data changes
+      this._cachedFilteredData = [];
+      this._cachedFilters = {};
+    }
+    
+    // No longer initializing tooltips here for performance - using basic HTML title attributes
   }
 
   connectedCallback() {

@@ -7,7 +7,7 @@ export const columnConfig = [
   { key: 'keyField', displayName: 'Key', visible: false, type: 'string', group: 'info' }, // Hidden unique key
   { key: 'mtrl', displayName: 'MTRL', visible: false, type: 'string', group: 'info' }, // Added MTRL
   { key: 'Cod', displayName: 'Cod', visible: true, type: 'string', group: 'info' },
-  { key: 'Descriere', displayName: 'Denumire', visible: true, type: 'string', group: 'info', truncate: 40 },
+  { key: 'Descriere', displayName: 'Denumire', visible: true, type: 'string', group: 'info' },
   { key: 'branchD', displayName: 'Branch Code', visible: false, type: 'string', group: 'info' }, // Hidden branch code
   { key: 'Destinatie', displayName: 'Dest', visible: true, type: 'string', group: 'info', isHeaderFilter: true }, // Filterable in header
   { key: 'Blacklisted', displayName: 'BlkLst', visible: true, type: 'boolean', group: 'info', classFn: 'getBlacklistedClass' },
@@ -24,6 +24,8 @@ export const columnConfig = [
   { key: 'stoc_dest', displayName: 'StocDest', visible: true, type: 'number', group: 'destination', classFn: 'getStockClassDest', divider: true, isHeaderFilter: true },
   { key: 'min_dest', displayName: 'MinDest', visible: true, type: 'number', group: 'destination', classFn: 'getValueClass', isHeaderFilter: true },
   { key: 'max_dest', displayName: 'MaxDest', visible: true, type: 'number', group: 'destination', classFn: 'getValueClass', isHeaderFilter: true },
+  { key: 'salesperc', displayName: 'Sales%', visible: true, type: 'number', group: 'destination', classFn: 'getSalesPercClass', tooltip: 'Sales Percentage from ABC Analysis', isHeaderFilter: true },
+  { key: 'abc_class', displayName: 'ABC', visible: true, type: 'string', group: 'destination', classFn: 'getAbcBadgeClass', tooltip: 'ABC Classification', isHeaderFilter: true },
   { key: 'comenzi', displayName: 'Com', visible: true, type: 'number', group: 'destination', classFn: 'getValueClass', divider: true, tooltip: 'Pending Orders', isHeaderFilter: true },
   { key: 'transf_nerec', displayName: 'InTransf', visible: true, type: 'number', group: 'destination', classFn: 'getValueClass', tooltip: 'In Transfer (Unreceived)', isHeaderFilter: true },
 

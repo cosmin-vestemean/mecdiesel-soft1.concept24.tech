@@ -164,9 +164,7 @@ BEGIN
         SELECT mtrl, branchTo AS branch, SUM(qty) AS qty
         FROM #UnreceivedTransfers
         GROUP BY mtrl, branchTo
-    ) transfer ON (bl.mtrl = transfer.mtrl AND bl.branch = transfer.branch);
-
-    -- Calculate necessity values
+    ) transfer ON (bl.mtrl = transfer.mtrl AND bl.branch = transfer.branch);    -- Calculate necessity values
     UPDATE #BranchLimits
     SET 
         MinNecessity = CASE WHEN (MinLimit - StockQty - PendingQty - TransferQty) > 0 
@@ -175,6 +173,40 @@ BEGIN
         MaxNecessity = CASE WHEN (MaxLimit - StockQty - PendingQty - TransferQty) > 0 
                        THEN (MaxLimit - StockQty - PendingQty - TransferQty)
                        ELSE 0 END;
+
+    -- Create temp table for ABC analysis data
+    CREATE TABLE #LatestAbcData (
+        mtrl INT,
+        branch SMALLINT,
+        salesperc FLOAT,
+        abc CHAR(1)
+    );
+
+    -- Get the most recent ABC analysis for each branch
+    INSERT INTO #LatestAbcData (mtrl, branch, salesperc, abc)
+    SELECT 
+        abc.MTRL,
+        abc.BRANCH,
+        abc.SALESPERC,
+        abc.ABC
+    FROM CCCTOPABC abc
+    INNER JOIN (
+        SELECT 
+            abc_inner.MTRL,
+            abc_inner.BRANCH,
+            MAX(s.DATACALCUL) AS latest_date
+        FROM CCCTOPABC abc_inner
+        INNER JOIN CCCTOPABCSUMMARY s ON abc_inner.CCCTOPABCSUMMARYID = s.CCCTOPABCSUMMARYID
+        WHERE abc_inner.ABC IN ('A', 'B', 'C')
+        GROUP BY abc_inner.MTRL, abc_inner.BRANCH
+    ) latest ON abc.MTRL = latest.MTRL 
+                AND abc.BRANCH = latest.BRANCH
+    INNER JOIN CCCTOPABCSUMMARY s2 ON abc.CCCTOPABCSUMMARYID = s2.CCCTOPABCSUMMARYID 
+                                   AND s2.DATACALCUL = latest.latest_date;
+
+    -- Create index for performance
+    CREATE NONCLUSTERED INDEX IX_LatestAbcData_MTRL_BRANCH 
+    ON #LatestAbcData(mtrl, branch);
 
     -- Main query using WITH clause
     -- Create a CTE for branch necessity calculations
@@ -280,20 +312,20 @@ BEGIN
         COUNT(dm.mtrl) OVER (ORDER BY dm.mtrl) grouper,
         dm.mtrl, 
         dm.branchE, 
-        br.branch branchD, 
-        m.Code Cod, 
-        CASE WHEN LEN(m.Name) > 50 THEN CONCAT(LEFT(m.Name, 300), '...') ELSE m.Name END Descriere,
-        dm.CantitateE stoc_emit, 
+        br.branch branchD,        m.Code Cod, 
+        CASE WHEN LEN(m.Name) > 30 THEN CONCAT(LEFT(m.Name, 30), '...') ELSE m.Name END Descriere,
+        dm.CantitateE stoc_emit,
         dm.MinE min_emit, 
         dm.MaxE max_emit,
         ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0) disp_min_emit,
         ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0) disp_max_emit,
         brD.name Destinatie,
         CASE WHEN ml.cccisblacklisted IS NULL THEN '-' ELSE CASE WHEN ml.cccisblacklisted = 0 THEN 'Nu' ELSE 'Da' END END Blacklisted,
-        CASE WHEN m.cccitemoutlet IS NULL THEN '-' ELSE CASE WHEN m.cccitemoutlet = 0 THEN 'Nu' ELSE 'Da' END END InLichidare,
-        CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END stoc_dest,
+        CASE WHEN m.cccitemoutlet IS NULL THEN '-' ELSE CASE WHEN m.cccitemoutlet = 0 THEN 'Nu' ELSE 'Da' END END InLichidare,        CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END stoc_dest,
         bl_dest.MinLimit min_dest,
         bl_dest.MaxLimit max_dest,
+        ISNULL(abc_data.salesperc, 0) AS salesperc,
+        ISNULL(abc_data.abc, '') AS abc_class,
         ISNULL(po.qty, 0) comenzi,
         ISNULL(ut.qty, 0) transf_nerec,
         -- Calculate necessity based on min limit
@@ -380,24 +412,26 @@ BEGIN
         SELECT mtrl, branchTo, SUM(qty) AS qty
         FROM #PendingOrders
         GROUP BY mtrl, branchTo
-    ) po ON (po.mtrl = dm.mtrl AND po.branchTo = br.branch)
-    LEFT JOIN (
+    ) po ON (po.mtrl = dm.mtrl AND po.branchTo = br.branch)    LEFT JOIN (
         SELECT mtrl, branchFrom, branchTo, SUM(qty) AS qty
         FROM #UnreceivedTransfers
         GROUP BY mtrl, branchFrom, branchTo
     ) ut ON (ut.mtrl = dm.mtrl AND ut.branchFrom = dm.branchE AND ut.branchTo = br.branch)
+    LEFT JOIN #LatestAbcData abc_data ON (
+        abc_data.mtrl = dm.mtrl 
+        AND abc_data.branch = br.branch
+    )
     WHERE (@setConditionForLimits = 0 OR (bl_dest.MaxLimit > 0 OR bl_dest.MinLimit > 0))
     AND (
         @setConditionForNecesar = 0
         OR (bl_dest.MinNecessity > 0 OR bl_dest.MaxNecessity > 0)
     )
     ORDER BY dm.mtrl, dm.branchE, br.branch
-    OPTION (RECOMPILE);
-
-    -- Clean up temp tables
+    OPTION (RECOMPILE);    -- Clean up temp tables
     DROP TABLE #PendingOrders;
     DROP TABLE #UnreceivedTransfers;
     DROP TABLE #BranchLimits;
+    DROP TABLE #LatestAbcData;
     DROP TABLE #EmitBranches;
     DROP TABLE #DestBranches;
 END

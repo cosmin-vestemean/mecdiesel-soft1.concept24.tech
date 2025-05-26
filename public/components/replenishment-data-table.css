@@ -195,3 +195,24 @@ tbody tr:hover {
 .tooltip {
     z-index: 1070 !important;
 }
+
+/* ABC Classification colored text styles */
+.abc-text-a {
+    color: #198754 !important;
+    font-weight: bold !important;
+}
+
+.abc-text-b {
+    color: #0d6efd !important;
+    font-weight: bold !important;
+}
+
+.abc-text-c {
+    color: #ffc107 !important;
+    font-weight: bold !important;
+}
+
+.abc-text-default {
+    color: #6c757d !important;
+    font-weight: normal !important;
+}

@@ -7,7 +7,6 @@ import { columnConfig } from '../config/table-column-config.js'; // Import colum
 import './query-panel.js';
 import './manipulation-panel.js';
 import './strategy-panel.js'; // Will be used as quick-panel
-import './status-legend.js';
 import './data-table.js';
 
 export class BranchReplenishmentContainer extends LitElement {
@@ -27,7 +26,6 @@ export class BranchReplenishmentContainer extends LitElement {
       transferFilter: { type: String, state: true },
       destinationFilter: { type: String, state: true },
       isSuccessiveStrategy: { type: Boolean, state: true },
-      stockStatusFilter: { type: String, state: true },
       queryPanelVisible: { type: Boolean, state: true }, // New property to track query panel visibility
 
       // Passed down, potentially static
@@ -50,7 +48,6 @@ export class BranchReplenishmentContainer extends LitElement {
     this.transferFilter = 'all';
     this.destinationFilter = 'all';
     this.isSuccessiveStrategy = true;
-    this.stockStatusFilter = 'all';
     this.queryPanelVisible = true; // Initially visible
     this.branches = { // Keep branches data here or fetch if dynamic
       '1000': 'HQ', '1200': 'CLUJ', '1300': 'CONSTANTA', '1400': 'GALATI',
@@ -94,6 +91,9 @@ export class BranchReplenishmentContainer extends LitElement {
         // Create a unique key if not provided by backend (adjust if backend provides one)
         keyField: item.keyField || `${item.mtrl}-${item.branchD}-${index}`
       }));
+
+      // Cache unique destinations once when data loads
+      this._cachedUniqueDestinations = this._calculateUniqueDestinations();
 
       // Hide query panel after successfully loading data
       this.queryPanelVisible = false;
@@ -292,10 +292,10 @@ export class BranchReplenishmentContainer extends LitElement {
   _handleResetData() {
     // Reset data and show the query panel again
     this.data = [];
+    this._cachedUniqueDestinations = [];
     this.searchTerm = '';
     this.transferFilter = 'all';
     this.destinationFilter = 'all';
-    this.stockStatusFilter = 'all';
     this.selectedReplenishmentStrategy = 'none';
     this.error = '';
     
@@ -368,24 +368,15 @@ export class BranchReplenishmentContainer extends LitElement {
       filtered = filtered.filter(item => item[destColKey] === this.destinationFilter);
     }
 
-    // Apply stock status filter (from legend)
-    if (this.stockStatusFilter !== 'all') {
-      filtered = filtered.filter(item => {
-        const stockClass = this.getStockClass(item.stoc_dest, item.min_dest, item.max_dest); // Use the specific destination stock class
-        switch (this.stockStatusFilter) {
-          case 'critical': return stockClass.includes('stock-critical');
-          case 'optimal': return stockClass.includes('stock-optimal');
-          case 'high': return stockClass.includes('stock-high');
-          case 'undefined': return stockClass.includes('stock-undefined');
-          default: return true;
-        }
-      });
-    }
     console.log('Filtered results:', filtered.length);
     return filtered;
   }
 
   get uniqueDestinations() {
+    return this._cachedUniqueDestinations || [];
+  }
+
+  _calculateUniqueDestinations() {
     if (!this.data || this.data.length === 0) return [];
     const destColKey = columnConfig.find(c => c.isHeaderFilter)?.key || 'Destinatie';
     return [...new Set(this.data.map(item => item[destColKey]))].sort();
@@ -417,6 +408,26 @@ export class BranchReplenishmentContainer extends LitElement {
 
   getBlacklistedClass = (item) => item.Blacklisted === 'Da' ? 'text-danger fw-bold' : '';
   getLichidareClass = (item) => item.InLichidare === 'Da' ? 'text-warning fw-bold' : '';
+
+  // ABC Analysis utility functions
+  getSalesPercClass = (value) => {
+    const num = parseFloat(value);
+    if (isNaN(num) || num === 0) return 'text-muted';
+    if (num >= 10) return 'text-success fw-bold';
+    if (num >= 5) return 'text-warning';
+    return 'text-danger';
+  }
+
+  getAbcBadgeClass = (item) => {
+    const abc = item.abc_class;
+    if (!abc) return 'text-muted';
+    switch (abc.toUpperCase()) {
+      case 'A': return 'text-success fw-bold';
+      case 'B': return 'text-primary fw-bold'; 
+      case 'C': return 'text-warning fw-bold';
+      default: return 'text-secondary';
+    }
+  }
 
 
   // --- Event Handlers for Child Component Updates ---
@@ -462,16 +473,6 @@ export class BranchReplenishmentContainer extends LitElement {
       this[property] = value;
       console.log(`Strategy update - New ${property}:`, value);
       this.requestUpdate();
-    }
-  }
-
-  _handleLegendUpdate(e) {
-    const { property, value } = e.detail;
-    if (property === 'stockStatusFilter') {
-      this.stockStatusFilter = value;
-      // Re-render and update data table based on new stock status filter
-      this.requestUpdate();
-      this._updateDataTable();
     }
   }
 
@@ -636,22 +637,7 @@ export class BranchReplenishmentContainer extends LitElement {
 
   updated(changedProperties) {
     console.log('Container updated. searchTerm:', this.searchTerm, 'transferFilter:', this.transferFilter, 'selectedReplenishmentStrategy:', this.selectedReplenishmentStrategy);
-    // Initialize tooltips after rendering/updating
-    const tooltipTriggerList = this.querySelectorAll('[data-bs-toggle="tooltip"]');
-    tooltipTriggerList.forEach(tooltipTriggerEl => {
-      // Dispose existing tooltip instance if it exists
-      const existingTooltip = bootstrap.Tooltip.getInstance(tooltipTriggerEl);
-      if (existingTooltip) {
-        existingTooltip.dispose();
-      }
-      // Create new tooltip instance
-      new bootstrap.Tooltip(tooltipTriggerEl, { trigger: 'hover' }); // Ensure hover trigger
-    });
-
-    // If data changes, recalculate legend counts (needed if legend counts depend on filtered data)
-    if (changedProperties.has('data') || changedProperties.has('searchTerm') || changedProperties.has('transferFilter') || changedProperties.has('destinationFilter') || changedProperties.has('stockStatusFilter')) {
-      this.requestUpdate('statusCounts'); // Request update for computed property if needed
-    }
+    // Remove tooltip initialization for performance - using basic HTML title attributes
   }
 
   // --- Rendering ---
@@ -661,17 +647,6 @@ export class BranchReplenishmentContainer extends LitElement {
     const totalCount = this.data.length;
     const filteredCount = currentFilteredData.length;
     console.log('Render - filtered count:', filteredCount, 'total:', totalCount);
-
-    // Calculate counts for the legend based on the *currently filtered* data
-    // This makes the legend counts dynamic based on other active filters
-    const statusCounts = {
-      critical: currentFilteredData.filter(item => this.getStockClassDest(item).includes('stock-critical')).length,
-      optimal: currentFilteredData.filter(item => this.getStockClassDest(item).includes('stock-optimal')).length,
-      high: currentFilteredData.filter(item => this.getStockClassDest(item).includes('stock-high')).length,
-      undefined: currentFilteredData.filter(item => this.getStockClassDest(item).includes('stock-undefined')).length,
-      all: filteredCount // 'All' in legend shows the count matching current filters
-    };
-
 
     return html`
       <div class="container-fluid mt-2">
@@ -730,13 +705,6 @@ export class BranchReplenishmentContainer extends LitElement {
           @update-property=${this._handleStrategyUpdate}>
         </quick-panel>
 
-        <status-legend
-          .stockStatusFilter=${this.stockStatusFilter}
-          .statusCounts=${statusCounts}
-          ?disabled=${!this.data || this.data.length === 0}
-          @update-property=${this._handleLegendUpdate}>
-        </status-legend>
-
         <replenishment-data-table
           .tableData=${currentFilteredData}
           .columnConfig=${columnConfig}
@@ -747,7 +715,9 @@ export class BranchReplenishmentContainer extends LitElement {
         getStockClassDest: this.getStockClassDest,
         getValueClass: this.getValueClass,
         getBlacklistedClass: this.getBlacklistedClass,
-        getLichidareClass: this.getLichidareClass
+        getLichidareClass: this.getLichidareClass,
+        getSalesPercClass: this.getSalesPercClass,
+        getAbcBadgeClass: this.getAbcBadgeClass
       }}
           .loading=${this.loading}
           @update-property=${this._handleTableUpdate}>
