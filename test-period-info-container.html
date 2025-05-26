@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Period Info at Container Level</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .info-box {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1 class="mb-4">🧪 Period Info Container Test</h1>
+        
+        <div class="info-box">
+            <h5><i class="fas fa-info-circle"></i> Test Overview</h5>
+            <p>Testing that period information has been successfully moved from the chart component to the container level, 
+            where it can be shared between both chart and table views.</p>
+            
+            <ul>
+                <li>✅ Period info should appear at container level (above tabs)</li>
+                <li>✅ Period info should be visible in both Chart and Table views</li>
+                <li>✅ Period info should be simple (not reactive/smart)</li>
+                <li>✅ Chart component should no longer have its own period info</li>
+            </ul>
+        </div>
+
+        <!-- Test the container component -->
+        <top-abc-container id="testContainer"></top-abc-container>
+    </div>
+
+    <script type="module">
+        import './public/components/top-abc/top-abc-container.js';
+        
+        // Set up some test data and parameters
+        window.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('testContainer');
+            
+            // Mock session storage token
+            sessionStorage.setItem('s1Token', 'test-token-12345');
+            
+            // Set test parameters
+            container.params = {
+                dataReferinta: '2025-05-26',
+                nrSaptamani: 12,
+                seriesL: 'TEST',
+                branch: '1200',
+                supplier: 72235,
+                mtrl: 2606178,
+                cod: '',
+                searchType: 1,
+                modFiltrareBranch: 'AGENT',
+                thresholdA: 80,
+                thresholdB: 15
+            };
+            
+            // Mock some sample data
+            container.data = [
+                {
+                    CODE: 'TEST001',
+                    DESCRIPTION: 'Test Product 1',
+                    ABC: 'A',
+                    VALUE: 15000,
+                    CUMULATIVEPERC: 25.5,
+                    SALESPERC: 15.2,
+                    BRANCH: '1200',
+                    MTRSUP: 72235
+                },
+                {
+                    CODE: 'TEST002',
+                    DESCRIPTION: 'Test Product 2',
+                    ABC: 'A',
+                    VALUE: 12000,
+                    CUMULATIVEPERC: 45.8,
+                    SALESPERC: 12.1,
+                    BRANCH: '1200',
+                    MTRSUP: 72235
+                },
+                {
+                    CODE: 'TEST003',
+                    DESCRIPTION: 'Test Product 3',
+                    ABC: 'B',
+                    VALUE: 8000,
+                    CUMULATIVEPERC: 58.9,
+                    SALESPERC: 8.5,
+                    BRANCH: '1200',
+                    MTRSUP: 72235
+                }
+            ];
+            
+            // Mock summary data
+            container.summary = [
+                {
+                    ABC: 'A',
+                    ITEMCOUNT: 2,
+                    CLASSTOTAL: 27000,
+                    ITEMSPERC: 66.7,
+                    VALUEPERC: 69.2
+                },
+                {
+                    ABC: 'B',
+                    ITEMCOUNT: 1,
+                    CLASSTOTAL: 8000,
+                    ITEMSPERC: 33.3,
+                    VALUEPERC: 20.5
+                }
+            ];
+            
+            container.totalSales = 39000;
+            container.loading = false;
+            container.error = '';
+            
+            console.log('✅ Test container initialized with period info at container level');
+            console.log('📅 Period should show: 26.02.2025 - 26.05.2025 (12 săptămâni)');
+        });
+    </script>
+</body>
+</html>

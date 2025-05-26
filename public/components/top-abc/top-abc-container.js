@@ -249,6 +249,34 @@ export class TopAbcContainer extends LitElement {
     return branchName ? `${branchCode} - ${branchName}` : branchCode;
   }
 
+  // Simple period info calculation - not reactive, just utility
+  getAnalysisPeriod() {
+    if (!this.params.dataReferinta || !this.params.nrSaptamani) {
+      return 'Nu sunt definite parametrii de analiză';
+    }
+
+    const referenceDate = new Date(this.params.dataReferinta);
+    const weeksAgo = this.params.nrSaptamani;
+    
+    // Calculate start date (reference date minus number of weeks)
+    const startDate = new Date(referenceDate);
+    startDate.setDate(startDate.getDate() - (weeksAgo * 7));
+    
+    // Format dates
+    const formatDate = (date) => {
+      return date.toLocaleDateString('ro-RO', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+    };
+
+    const startDateStr = formatDate(startDate);
+    const endDateStr = formatDate(referenceDate);
+    
+    return `${startDateStr} - ${endDateStr} (${weeksAgo} săptămâni)`;
+  }
+
   render() {
     return html`
 
@@ -283,6 +311,15 @@ export class TopAbcContainer extends LitElement {
             @apply-filters=${this.handleApplyFilters}>
           </top-abc-control-panel>
         ` : ''}
+
+        <!-- Period Info - Shared by Chart and Table -->
+        <div class="alert alert-light border d-flex align-items-center mb-3" role="info">
+          <i class="fas fa-calendar-alt me-2 text-primary"></i>
+          <div>
+            <strong>📅 Perioada analizată: ${this.getAnalysisPeriod()}</strong>
+            <br><small class="text-muted">Data referință: ${this.params.dataReferinta} | Săptămâni analizate: ${this.params.nrSaptamani}</small>
+          </div>
+        </div>
 
         ${this.error ? html`
           <div class="alert alert-danger d-flex align-items-center mt-3 mb-3" role="alert">
