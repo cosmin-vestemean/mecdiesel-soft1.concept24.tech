@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Table Sorting Test</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        .sortable-header {
+            cursor: pointer;
+            user-select: none;
+        }
+        .sortable-header:hover {
+            background-color: #f8f9fa;
+        }
+        .sort-icon {
+            margin-left: 5px;
+            opacity: 0.5;
+        }
+        .sort-icon.active {
+            opacity: 1;
+        }
+        .test-container {
+            margin: 20px;
+        }
+        .test-results {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="test-container">
+            <h1>Table Sorting Functionality Test</h1>
+            
+            <div class="test-results">
+                <h3>Test Results</h3>
+                <div id="test-output"></div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <h3>Test Data Table</h3>
+                    <div id="table-container"></div>
+                </div>
+                
+                <div class="col-md-6">
+                    <h3>Test Controls</h3>
+                    <div class="mb-3">
+                        <button class="btn btn-primary" onclick="runSortingTests()">Run All Tests</button>
+                        <button class="btn btn-secondary" onclick="generateTestData()">Generate New Test Data</button>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h5>Manual Sort Test</h5>
+                        <select id="sort-column" class="form-select mb-2">
+                            <option value="Cod">Code</option>
+                            <option value="Descriere">Description</option>
+                            <option value="stoc_emit">Stock Emit</option>
+                            <option value="stoc_dest">Stock Dest</option>
+                            <option value="transfer">Transfer</option>
+                            <option value="abc_class">ABC Class</option>
+                            <option value="Blacklisted">Blacklisted</option>
+                        </select>
+                        <select id="sort-direction" class="form-select mb-2">
+                            <option value="asc">Ascending</option>
+                            <option value="desc">Descending</option>
+                        </select>
+                        <button class="btn btn-info" onclick="manualSort()">Sort</button>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h5>Performance Test</h5>
+                        <input type="number" id="data-size" class="form-control mb-2" value="100" min="10" max="10000">
+                        <button class="btn btn-warning" onclick="performanceTest()">Performance Test</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { columnConfig } from '../config/table-column-config.js';
+        import '../components/data-table.js';
+        
+        // Test data generator
+        function generateTestData(size = 50) {
+            const codes = ['ABC123', 'DEF456', 'GHI789', 'JKL012', 'MNO345', 'PQR678', 'STU901', 'VWX234'];
+            const descriptions = ['Engine Oil', 'Brake Pads', 'Air Filter', 'Spark Plugs', 'Coolant', 'Battery', 'Tires', 'Transmission Fluid'];
+            const abcClasses = ['A', 'B', 'C', null];
+            const booleanValues = ['Da', 'Nu', true, false, 'Yes', 'No'];
+            const destinations = ['CLUJ', 'BUCURESTI', 'CONSTANTA', 'IASI', 'TIMISOARA'];
+            
+            const data = [];
+            for (let i = 0; i < size; i++) {
+                data.push({
+                    keyField: `key-${i}`,
+                    Cod: codes[Math.floor(Math.random() * codes.length)] + (i + 1),
+                    Descriere: descriptions[Math.floor(Math.random() * descriptions.length)] + ` #${i + 1}`,
+                    Destinatie: destinations[Math.floor(Math.random() * destinations.length)],
+                    stoc_emit: Math.floor(Math.random() * 1000),
+                    min_emit: Math.floor(Math.random() * 50),
+                    max_emit: Math.floor(Math.random() * 200) + 50,
+                    stoc_dest: Math.floor(Math.random() * 500),
+                    min_dest: Math.floor(Math.random() * 30),
+                    max_dest: Math.floor(Math.random() * 150) + 30,
+                    transfer: Math.floor(Math.random() * 100),
+                    abc_class: abcClasses[Math.floor(Math.random() * abcClasses.length)],
+                    Blacklisted: booleanValues[Math.floor(Math.random() * booleanValues.length)],
+                    InLichidare: booleanValues[Math.floor(Math.random() * booleanValues.length)]
+                });
+            }
+            return data;
+        }
+        
+        // Utility functions for the data table
+        const utilityFunctions = {
+            getValueClass: (value) => {
+                const num = parseFloat(value);
+                if (isNaN(num)) return '';
+                return num < 0 ? 'text-danger fw-bold' : (num > 0 ? 'text-success' : 'text-muted');
+            },
+            getStockClassEmit: (item) => {
+                const stock = parseFloat(item.stoc_emit);
+                const min = parseFloat(item.min_emit);
+                const max = parseFloat(item.max_emit);
+                if (isNaN(stock)) return '';
+                if (!isNaN(min) && stock < min) return 'text-danger';
+                if (!isNaN(max) && stock > max) return 'text-success';
+                return 'text-dark';
+            },
+            getStockClassDest: (item) => {
+                const stock = parseFloat(item.stoc_dest);
+                const min = parseFloat(item.min_dest);
+                const max = parseFloat(item.max_dest);
+                if (isNaN(stock)) return '';
+                if (!isNaN(min) && stock < min) return 'text-danger';
+                if (!isNaN(max) && stock > max) return 'text-success';
+                return 'text-dark';
+            },
+            getAbcBadgeClass: (item) => {
+                const abc = item.abc_class;
+                if (!abc) return 'text-muted';
+                switch (abc.toUpperCase()) {
+                    case 'A': return 'text-success fw-bold';
+                    case 'B': return 'text-primary fw-bold';
+                    case 'C': return 'text-warning fw-bold';
+                    default: return 'text-secondary';
+                }
+            }
+        };
+        
+        let testData = generateTestData();
+        let dataTable = null;
+        
+        // Initialize the data table
+        function initializeTable() {
+            const container = document.getElementById('table-container');
+            container.innerHTML = '<replenishment-data-table></replenishment-data-table>';
+            
+            dataTable = container.querySelector('replenishment-data-table');
+            dataTable.tableData = testData;
+            dataTable.columnConfig = columnConfig.filter(col => col.visible);
+            dataTable.utilityFunctions = utilityFunctions;
+            dataTable.destinationFilter = 'all';
+            dataTable.abcFilter = 'all';
+            dataTable.blacklistedFilter = 'all';
+            dataTable.lichidareFilter = 'all';
+            
+            // Listen for sort events
+            dataTable.addEventListener('update-property', (e) => {
+                if (e.detail.property === 'sort') {
+                    logMessage(`✅ Sort event received: ${e.detail.value.column} ${e.detail.value.direction} (${e.detail.value.dataType})`);
+                }
+            });
+        }
+        
+        // Test functions
+        function logMessage(message) {
+            const output = document.getElementById('test-output');
+            const timestamp = new Date().toLocaleTimeString();
+            output.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('test-output').innerHTML = '';
+        }
+        
+        // Test sorting functionality
+        window.runSortingTests = function() {
+            clearLog();
+            logMessage('🧪 Starting sorting tests...');
+            
+            // Test 1: Sort by string column
+            logMessage('Test 1: Sorting by Code (string)');
+            dataTable.sortColumn = 'Cod';
+            dataTable.sortDirection = 'asc';
+            dataTable.requestUpdate();
+            
+            setTimeout(() => {
+                const sortedData = dataTable.getFilteredData();
+                const first = sortedData[0]?.Cod;
+                const last = sortedData[sortedData.length - 1]?.Cod;
+                logMessage(`📊 String sort result: ${first} ... ${last}`);
+                
+                // Test 2: Sort by number column
+                logMessage('Test 2: Sorting by Stock Emit (number)');
+                dataTable.sortColumn = 'stoc_emit';
+                dataTable.sortDirection = 'desc';
+                dataTable.requestUpdate();
+                
+                setTimeout(() => {
+                    const numSortedData = dataTable.getFilteredData();
+                    const firstNum = numSortedData[0]?.stoc_emit;
+                    const lastNum = numSortedData[numSortedData.length - 1]?.stoc_emit;
+                    logMessage(`📊 Number sort result: ${firstNum} ... ${lastNum}`);
+                    
+                    // Test 3: Sort by boolean column
+                    logMessage('Test 3: Sorting by Blacklisted (boolean)');
+                    dataTable.sortColumn = 'Blacklisted';
+                    dataTable.sortDirection = 'desc';
+                    dataTable.requestUpdate();
+                    
+                    setTimeout(() => {
+                        const boolSortedData = dataTable.getFilteredData();
+                        const firstBool = boolSortedData[0]?.Blacklisted;
+                        const lastBool = boolSortedData[boolSortedData.length - 1]?.Blacklisted;
+                        logMessage(`📊 Boolean sort result: ${firstBool} ... ${lastBool}`);
+                        logMessage('✅ All tests completed!');
+                    }, 100);
+                }, 100);
+            }, 100);
+        };
+        
+        // Manual sort test
+        window.manualSort = function() {
+            const column = document.getElementById('sort-column').value;
+            const direction = document.getElementById('sort-direction').value;
+            
+            logMessage(`🔄 Manual sort: ${column} ${direction}`);
+            dataTable.sortColumn = column;
+            dataTable.sortDirection = direction;
+            dataTable.requestUpdate();
+        };
+        
+        // Performance test
+        window.performanceTest = function() {
+            const size = parseInt(document.getElementById('data-size').value);
+            logMessage(`⚡ Performance test with ${size} items...`);
+            
+            const startTime = performance.now();
+            const largeData = generateTestData(size);
+            dataTable.tableData = largeData;
+            
+            // Sort by a column
+            dataTable.sortColumn = 'stoc_emit';
+            dataTable.sortDirection = 'desc';
+            dataTable.requestUpdate();
+            
+            setTimeout(() => {
+                const endTime = performance.now();
+                const duration = (endTime - startTime).toFixed(2);
+                logMessage(`⏱️ Performance test completed in ${duration}ms for ${size} items`);
+                
+                if (duration > 100) {
+                    logMessage(`⚠️ Sorting took longer than 100ms. Consider server-side sorting for datasets this size.`);
+                } else {
+                    logMessage(`✅ Performance is good for this dataset size.`);
+                }
+            }, 50);
+        };
+        
+        // Generate new test data
+        window.generateTestData = function() {
+            testData = generateTestData();
+            dataTable.tableData = testData;
+            dataTable.requestUpdate();
+            logMessage('🔄 Generated new test data');
+        };
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeTable();
+            logMessage('🚀 Sorting test page initialized');
+        });
+    </script>
+</body>
+</html>

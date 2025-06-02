@@ -1,0 +1,56 @@
+/* Sortable Table Header Styles */
+.sortable-header {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s ease-in-out;
+}
+
+.sortable-header:hover {
+    background-color: #f8f9fa !important;
+}
+
+.sortable-header:active {
+    background-color: #e9ecef !important;
+}
+
+/* Sort icon styling */
+.sort-icon {
+    margin-left: 5px;
+    opacity: 0.5;
+    transition: opacity 0.15s ease-in-out;
+}
+
+.sort-icon.active {
+    opacity: 1;
+}
+
+/* Visual feedback for sorted column */
+.sortable-header.sorted {
+    background-color: #e7f3ff !important;
+    font-weight: 600;
+}
+
+/* Bootstrap icon colors for sorting */
+.sort-icon.bi-arrow-up {
+    color: #198754; /* Green for ascending */
+}
+
+.sort-icon.bi-arrow-down {
+    color: #dc3545; /* Red for descending */
+}
+
+.sort-icon.bi-arrow-up-down {
+    color: #6c757d; /* Gray for unsorted */
+}
+
+/* Responsive styling */
+@media (max-width: 768px) {
+    .sortable-header {
+        font-size: 0.75rem;
+    }
+    
+    .sort-icon {
+        font-size: 0.7em;
+        margin-left: 3px;
+    }
+}

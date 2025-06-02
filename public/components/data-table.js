@@ -1,5 +1,5 @@
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
-import { columnConfig } from '../config/table-column-config.js'; // Import the column config
+import { columnConfig, sortConfig } from '../config/table-column-config.js'; // Import the column config and sort config
 
 export class ReplenishmentDataTable extends LitElement {
   static get properties() {
@@ -14,6 +14,9 @@ export class ReplenishmentDataTable extends LitElement {
       lichidareFilter: { type: String },
       utilityFunctions: { type: Object }, // Pass utility functions { getStockClass, getValueClass, etc. }
       loading: { type: Boolean },
+      // Sorting properties
+      sortColumn: { type: String },
+      sortDirection: { type: String },
       // Dynamic properties for number filters - safely create with imported columnConfig
       ...Object.fromEntries(
         (columnConfig || [])
@@ -32,12 +35,16 @@ export class ReplenishmentDataTable extends LitElement {
       this.abcFilter = 'all';
       this.blacklistedFilter = 'all';
       this.lichidareFilter = 'all';
+      this.sortColumn = null;
+      this.sortDirection = 'asc';
       
       // Performance optimization: Cache filtered data and derived values
       this._cachedFilteredData = [];
       this._cachedFilters = {};
       this._cachedDerivedValues = new Map(); // For CSS classes and styles
       this._cachedVisibleDataKeys = null; // Cache for keyboard navigation
+      this._cachedSortedData = []; // Cache for sorted data
+      this._lastSortState = null; // Track last sort state for cache invalidation
       
       // Initialize all number filters to 'all'
       if (Array.isArray(columnConfig)) {
@@ -127,6 +134,125 @@ export class ReplenishmentDataTable extends LitElement {
     }
   }
 
+  // --- Sorting Logic ---
+  handleSort(column) {
+    if (!column.isSortable) return;
+    
+    // Performance check: warn about client-side sorting on large datasets
+    if (this.tableData && this.tableData.length > sortConfig.clientSortThreshold) {
+      console.warn(`Dataset size (${this.tableData.length}) exceeds client-side sorting threshold (${sortConfig.clientSortThreshold}). Consider implementing server-side sorting for better performance.`);
+    }
+    
+    if (this.sortColumn === column.key) {
+      // Toggle direction if same column
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      // New column, use default sort order for this data type
+      this.sortColumn = column.key;
+      this.sortDirection = sortConfig.defaultSortOrder[column.type] || 'asc';
+    }
+    
+    // Dispatch sort event to container (for potential server-side sorting)
+    this._dispatchUpdate('sort', {
+      column: this.sortColumn,
+      direction: this.sortDirection,
+      dataType: column.type
+    });
+    
+    // Clear cached data to force re-sort
+    this._cachedSortedData = [];
+    this._lastSortState = null;
+    
+    // Request update to trigger re-render
+    this.requestUpdate();
+  }
+
+  sortData(data) {
+    if (!this.sortColumn || !data || data.length === 0) {
+      return data;
+    }
+    
+    // Check cache validity
+    const currentSortState = `${this.sortColumn}-${this.sortDirection}`;
+    if (this._lastSortState === currentSortState && this._cachedSortedData.length > 0) {
+      return this._cachedSortedData;
+    }
+    
+    const sortColumn = this.columnConfig.find(col => col.key === this.sortColumn);
+    if (!sortColumn) {
+      return data;
+    }
+    
+    const sorted = [...data].sort((a, b) => {
+      let aVal = a[this.sortColumn];
+      let bVal = b[this.sortColumn];
+      
+      // Handle different data types
+      switch (sortColumn.type) {
+        case 'number':
+          aVal = parseFloat(aVal) || 0;
+          bVal = parseFloat(bVal) || 0;
+          break;
+        case 'boolean':
+          // Convert various boolean formats to actual booleans for comparison
+          aVal = this.parseBooleanValue(aVal);
+          bVal = this.parseBooleanValue(bVal);
+          break;
+        case 'string':
+          aVal = (aVal || '').toString().toLowerCase();
+          bVal = (bVal || '').toString().toLowerCase();
+          break;
+        default:
+          aVal = aVal || '';
+          bVal = bVal || '';
+      }
+      
+      let comparison = 0;
+      if (aVal < bVal) {
+        comparison = -1;
+      } else if (aVal > bVal) {
+        comparison = 1;
+      }
+      
+      return this.sortDirection === 'desc' ? -comparison : comparison;
+    });
+    
+    // Cache the result
+    this._cachedSortedData = sorted;
+    this._lastSortState = currentSortState;
+    
+    return sorted;
+  }
+  
+  parseBooleanValue(value) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value > 0;
+    if (typeof value === 'string') {
+      const lowercaseValue = value.toLowerCase();
+      return lowercaseValue === 'true' || 
+             lowercaseValue === 'da' || 
+             lowercaseValue === 'yes' || 
+             lowercaseValue === '1';
+    }
+    return false;
+  }
+
+  renderSortIcon(column) {
+    if (!column.isSortable) return '';
+    
+    const isCurrentSort = this.sortColumn === column.key;
+    const iconClass = isCurrentSort 
+      ? (this.sortDirection === 'asc' ? 'bi-arrow-up' : 'bi-arrow-down')
+      : 'bi-arrow-up-down';
+    const opacity = isCurrentSort ? '1' : '0.5';
+    
+    return html`
+      <i class="bi ${iconClass} ms-1" 
+         style="opacity: ${opacity}; font-size: 0.8em;"
+         title="Click to sort by ${column.displayName}"></i>
+    `;
+  }
+
   // --- Rendering Logic ---
   renderHeader() {
     // Safety check to prevent undefined errors
@@ -139,11 +265,18 @@ export class ReplenishmentDataTable extends LitElement {
     return html`
       <tr>
         ${visibleColumns.map(col => html`
-          <th class="${col.group || ''} ${col.divider ? 'vertical-divider' : ''}"
-              title="${col.tooltip || col.displayName}">
+          <th class="${col.group || ''} ${col.divider ? 'vertical-divider' : ''} ${col.isSortable ? 'sortable-header' : ''}"
+              title="${col.tooltip || col.displayName}"
+              @click=${col.isSortable ? () => this.handleSort(col) : null}
+              style="${col.isSortable ? 'cursor: pointer; user-select: none;' : ''}">
             ${col.isHeaderFilter 
               ? this.renderHeaderFilter(col)
-              : col.displayName}
+              : html`
+                <div class="d-flex align-items-center justify-content-center">
+                  <span>${col.displayName}</span>
+                  ${this.renderSortIcon(col)}
+                </div>
+              `}
           </th>
         `)}
       </tr>
@@ -166,12 +299,17 @@ export class ReplenishmentDataTable extends LitElement {
 
   renderAbcFilterHeader(column) {
     return html`
-      <div class="d-flex flex-column align-items-center">
-        <div class="small fw-bold mb-1">${column.displayName}</div>
+      <div class="d-flex flex-column align-items-center"
+           @click=${column.isSortable ? (e) => { e.stopPropagation(); this.handleSort(column); } : null}>
+        <div class="d-flex align-items-center small fw-bold mb-1">
+          <span>${column.displayName}</span>
+          ${column.isSortable ? this.renderSortIcon(column) : ''}
+        </div>
         <select class="form-select form-select-sm border-0 bg-transparent p-1 header-filter-select"
                 title="Filter by ${column.displayName}"
                 .value=${this.abcFilter}
-                @change=${e => this._dispatchUpdate('abcFilter', e.target.value)}>
+                @change=${e => this._dispatchUpdate('abcFilter', e.target.value)}
+                @click=${e => e.stopPropagation()}>
             <option value="all">All</option>
             <option value="A">A</option>
             <option value="B">B</option>
@@ -184,12 +322,17 @@ export class ReplenishmentDataTable extends LitElement {
 
   renderBooleanFilterHeader(column, filterProperty) {
     return html`
-      <div class="d-flex flex-column align-items-center">
-        <div class="small fw-bold mb-1">${column.displayName}</div>
+      <div class="d-flex flex-column align-items-center"
+           @click=${column.isSortable ? (e) => { e.stopPropagation(); this.handleSort(column); } : null}>
+        <div class="d-flex align-items-center small fw-bold mb-1">
+          <span>${column.displayName}</span>
+          ${column.isSortable ? this.renderSortIcon(column) : ''}
+        </div>
         <select class="form-select form-select-sm border-0 bg-transparent p-1 header-filter-select"
                 title="Filter by ${column.displayName}"
                 .value=${this[filterProperty]}
-                @change=${e => this._dispatchUpdate(filterProperty, e.target.value)}>
+                @change=${e => this._dispatchUpdate(filterProperty, e.target.value)}
+                @click=${e => e.stopPropagation()}>
             <option value="all">All</option>
             <option value="yes">Yes</option>
             <option value="no">No</option>
@@ -202,26 +345,30 @@ export class ReplenishmentDataTable extends LitElement {
   renderNumberFilterHeader(column) {
     // Each number column will have a filter: all, positive, negative, zero
     return html`
-      <div class="d-flex flex-column align-items-center">
-        <div class="small fw-bold mb-1">${column.displayName}</div>
+      <div class="d-flex flex-column align-items-center"
+           @click=${column.isSortable ? (e) => { e.stopPropagation(); this.handleSort(column); } : null}>
+        <div class="d-flex align-items-center small fw-bold mb-1">
+          <span>${column.displayName}</span>
+          ${column.isSortable ? this.renderSortIcon(column) : ''}
+        </div>
         <div class="btn-group btn-group-sm number-filter-group">
           <button class="btn btn-outline-secondary btn-xs ${this.getNumberFilterStatus(column.key, 'all')}" 
-                  @click=${() => this._dispatchUpdate(`numberFilter_${column.key}`, 'all')}
+                  @click=${(e) => { e.stopPropagation(); this._dispatchUpdate(`numberFilter_${column.key}`, 'all'); }}
                   title="Show all values">
             <i class="bi bi-asterisk"></i>
           </button>
           <button class="btn btn-outline-success btn-xs ${this.getNumberFilterStatus(column.key, 'positive')}" 
-                  @click=${() => this._dispatchUpdate(`numberFilter_${column.key}`, 'positive')}
+                  @click=${(e) => { e.stopPropagation(); this._dispatchUpdate(`numberFilter_${column.key}`, 'positive'); }}
                   title="Show positive values only">
             <i class="bi bi-plus"></i>
           </button>
           <button class="btn btn-outline-danger btn-xs ${this.getNumberFilterStatus(column.key, 'negative')}" 
-                  @click=${() => this._dispatchUpdate(`numberFilter_${column.key}`, 'negative')}
+                  @click=${(e) => { e.stopPropagation(); this._dispatchUpdate(`numberFilter_${column.key}`, 'negative'); }}
                   title="Show negative values only">
             <i class="bi bi-dash"></i>
           </button>
           <button class="btn btn-outline-secondary btn-xs ${this.getNumberFilterStatus(column.key, 'zero')}" 
-                  @click=${() => this._dispatchUpdate(`numberFilter_${column.key}`, 'zero')}
+                  @click=${(e) => { e.stopPropagation(); this._dispatchUpdate(`numberFilter_${column.key}`, 'zero'); }}
                   title="Show zero values only">
             <i class="bi bi-0-circle"></i>
           </button>
@@ -238,13 +385,21 @@ export class ReplenishmentDataTable extends LitElement {
 
   renderDestinationFilterHeader(column) {
      return html`
+      <div class="d-flex flex-column align-items-center"
+           @click=${column.isSortable ? (e) => { e.stopPropagation(); this.handleSort(column); } : null}>
+        <div class="d-flex align-items-center small fw-bold mb-1">
+          <span>${column.displayName}</span>
+          ${column.isSortable ? this.renderSortIcon(column) : ''}
+        </div>
         <select class="form-select form-select-sm border-0 bg-transparent p-1 header-filter-select"
                 title="Filter by ${column.displayName}"
                 .value=${this.destinationFilter}
-                @change=${e => this._dispatchUpdate('destinationFilter', e.target.value)}>
+                @change=${e => this._dispatchUpdate('destinationFilter', e.target.value)}
+                @click=${e => e.stopPropagation()}>
             <option value="all">All ${column.displayName}s</option>
             ${(this.uniqueDestinations || []).map(dest => html`<option value="${dest}">${dest}</option>`)}
         </select>
+      </div>
      `;
   }
 
@@ -395,9 +550,7 @@ export class ReplenishmentDataTable extends LitElement {
     if (filterKeys.length !== cachedKeys.length) return true;
     
     return filterKeys.some(key => currentFilters[key] !== this._cachedFilters[key]);
-  }
-
-  /**
+  }  /**
    * Apply number filters to filter the displayed data with caching
    * @returns {Array} The filtered data
    */
@@ -496,7 +649,7 @@ export class ReplenishmentDataTable extends LitElement {
         });
       }
     }
-
+    
     // Apply all number filters
     if (this.columnConfig) {
       this.columnConfig
@@ -519,7 +672,7 @@ export class ReplenishmentDataTable extends LitElement {
         });
     }
     
-    // Cache the results
+    // Cache the filtered results
     this._cachedFilteredData = filtered;
     this._cachedFilters = {
       destinationFilter: this.destinationFilter,
@@ -537,7 +690,35 @@ export class ReplenishmentDataTable extends LitElement {
         });
     }
     
+    // Apply sorting and return
     return filtered;
+  }
+
+  /**
+   * Public method to trigger sorting from outside the component
+   * @param {String} columnKey - The column key to sort by
+   * @param {String} direction - The sort direction ('asc' or 'desc')
+   */
+  triggerSort(columnKey, direction) {
+    this.sortColumn = columnKey;
+    this.sortDirection = direction;
+
+    // Invalidate cache for sorted data
+    this._cachedSortedData = [];
+    this._lastSortState = null;
+
+    // Request update to re-render the table with new sort order
+    this.requestUpdate();
+  }
+
+  /**
+   * Get the current sort status for a column (asc/desc/none)
+   * @param {String} columnKey - The column key to check
+   * @returns {String} - The sort status ('asc', 'desc', or '')
+   */
+  getSortStatus(columnKey) {
+    if (this.sortColumn !== columnKey) return '';
+    return this.sortDirection === 'asc' ? 'desc' : 'asc';
   }
 
   render() {
@@ -554,6 +735,9 @@ export class ReplenishmentDataTable extends LitElement {
     // Apply filters to the data
     const filteredData = this.getFilteredData();
 
+    // Sort the data if a sort column is set
+    const sortedData = this.sortColumn ? this.sortData(filteredData) : filteredData;
+
     return html`
       <div class="table-responsive data-table-container">
         ${this.loading ? html`<div class="table-overlay"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>` : ''}
@@ -562,8 +746,8 @@ export class ReplenishmentDataTable extends LitElement {
             ${this.renderHeader()}
           </thead>
           <tbody class="small">
-            ${filteredData && filteredData.length > 0
-              ? filteredData.map((item, index) => this.renderRow(item, index))
+            ${sortedData && sortedData.length > 0
+              ? sortedData.map((item, index) => this.renderRow(item, index))
               : html`<tr><td colspan="${(this.columnConfig && Array.isArray(this.columnConfig)) ? this.columnConfig.filter(c => c.visible).length : 1}" class="text-center text-muted p-2">No data available for the current selection and filters.</td></tr>`
             }
           </tbody>

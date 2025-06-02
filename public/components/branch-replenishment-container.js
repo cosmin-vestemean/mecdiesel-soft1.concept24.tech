@@ -603,6 +603,22 @@ export class BranchReplenishmentContainer extends LitElement {
         console.log(`Updated number filter ${property} to:`, value);
         dataTable.requestUpdate();
       }
+    } else if (property === 'sort') {
+      // Handle sorting events from the data table
+      console.log(`📊 Sort event received:`, value);
+      
+      // For now, just log the sort event - in future this could trigger server-side sorting
+      // The data table handles client-side sorting internally, so no action needed here
+      // unless implementing server-side sorting for large datasets
+      
+      if (value && value.column && value.direction) {
+        console.log(`🔄 Sorting by column "${value.column}" in "${value.direction}" order (${value.dataType} type)`);
+        
+        // Future: Could implement server-side sorting here
+        // if (this.data.length > sortConfig.clientSortThreshold) {
+        //   this._handleServerSideSort(value.column, value.direction);
+        // }
+      }
     } else if (property === 'itemTransfer' && itemKey !== undefined) {
       // Update transfer value for a specific item
       const dataIndex = this.data.findIndex(item => item.keyField === itemKey);
