@@ -8,6 +8,10 @@ export class ReplenishmentDataTable extends LitElement {
       columnConfig: { type: Array },
       destinationFilter: { type: String },
       uniqueDestinations: { type: Array },
+      uniqueAbcValues: { type: Array },
+      abcFilter: { type: String },
+      blacklistedFilter: { type: String },
+      lichidareFilter: { type: String },
       utilityFunctions: { type: Object }, // Pass utility functions { getStockClass, getValueClass, etc. }
       loading: { type: Boolean },
       // Dynamic properties for number filters - safely create with imported columnConfig
@@ -24,11 +28,16 @@ export class ReplenishmentDataTable extends LitElement {
       this.tableData = [];
       this.columnConfig = [];
       this.utilityFunctions = {};
+      this.destinationFilter = 'all';
+      this.abcFilter = 'all';
+      this.blacklistedFilter = 'all';
+      this.lichidareFilter = 'all';
       
       // Performance optimization: Cache filtered data and derived values
       this._cachedFilteredData = [];
       this._cachedFilters = {};
       this._cachedDerivedValues = new Map(); // For CSS classes and styles
+      this._cachedVisibleDataKeys = null; // Cache for keyboard navigation
       
       // Initialize all number filters to 'all'
       if (Array.isArray(columnConfig)) {
@@ -58,7 +67,7 @@ export class ReplenishmentDataTable extends LitElement {
   handleKeyNav(e) {
     const inputElement = e.target;
     const currentKey = inputElement.dataset.keyfield;
-    const currentColKey = inputElement.dataset.colkey; // Assuming we add data-colkey to input
+    const currentColKey = inputElement.dataset.colkey;
 
     if (!currentKey || !currentColKey) return;
 
@@ -66,7 +75,13 @@ export class ReplenishmentDataTable extends LitElement {
     let nextColKey = currentColKey;
     let moved = false;
 
-    const visibleDataKeys = this.tableData.map(item => item.keyField); // Get keys in current filtered order
+    // Use cached visible data keys for performance
+    // Cache should reflect filtered data, not all table data
+    if (!this._cachedVisibleDataKeys) {
+      const filteredData = this.getFilteredData();
+      this._cachedVisibleDataKeys = filteredData.map(item => item.keyField);
+    }
+    const visibleDataKeys = this._cachedVisibleDataKeys;
     const currentItemIndex = visibleDataKeys.indexOf(currentKey);
 
     switch (e.key) {
@@ -127,13 +142,60 @@ export class ReplenishmentDataTable extends LitElement {
           <th class="${col.group || ''} ${col.divider ? 'vertical-divider' : ''}"
               title="${col.tooltip || col.displayName}">
             ${col.isHeaderFilter 
-              ? (col.type === 'number' 
-                ? this.renderNumberFilterHeader(col)
-                : this.renderDestinationFilterHeader(col))
+              ? this.renderHeaderFilter(col)
               : col.displayName}
           </th>
         `)}
       </tr>
+    `;
+  }
+
+  renderHeaderFilter(column) {
+    if (column.type === 'number') {
+      return this.renderNumberFilterHeader(column);
+    } else if (column.key === 'abc_class') {
+      return this.renderAbcFilterHeader(column);
+    } else if (column.key === 'Blacklisted') {
+      return this.renderBooleanFilterHeader(column, 'blacklistedFilter');
+    } else if (column.key === 'InLichidare') {
+      return this.renderBooleanFilterHeader(column, 'lichidareFilter');
+    } else {
+      return this.renderDestinationFilterHeader(column);
+    }
+  }
+
+  renderAbcFilterHeader(column) {
+    return html`
+      <div class="d-flex flex-column align-items-center">
+        <div class="small fw-bold mb-1">${column.displayName}</div>
+        <select class="form-select form-select-sm border-0 bg-transparent p-1 header-filter-select"
+                title="Filter by ${column.displayName}"
+                .value=${this.abcFilter}
+                @change=${e => this._dispatchUpdate('abcFilter', e.target.value)}>
+            <option value="all">All</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+            <option value="none">None</option>
+        </select>
+      </div>
+    `;
+  }
+
+  renderBooleanFilterHeader(column, filterProperty) {
+    return html`
+      <div class="d-flex flex-column align-items-center">
+        <div class="small fw-bold mb-1">${column.displayName}</div>
+        <select class="form-select form-select-sm border-0 bg-transparent p-1 header-filter-select"
+                title="Filter by ${column.displayName}"
+                .value=${this[filterProperty]}
+                @change=${e => this._dispatchUpdate(filterProperty, e.target.value)}>
+            <option value="all">All</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+            <option value="none">None</option>
+        </select>
+      </div>
     `;
   }
 
@@ -250,7 +312,12 @@ export class ReplenishmentDataTable extends LitElement {
         />
       `;
     } else if (column.type === 'boolean') {
-      content = html`${value === 'Da' ? 'Yes' : (value === '-' ? 'No' : value)}`;
+      // Unified display for boolean fields
+      // Convert Da/Yes to 'Yes', and Nu/No/- to 'No' with muted style
+      const displayValue = value && (value.toString().toLowerCase() === 'da' || value.toString().toLowerCase() === 'yes') 
+        ? 'Yes' 
+        : html`<span class="text-muted">No</span>`;
+      content = html`${displayValue}`;
     } else {
       content = html`${value}`;
     }
@@ -306,7 +373,10 @@ export class ReplenishmentDataTable extends LitElement {
    */
   _filtersChanged() {
     const currentFilters = {
-      destinationFilter: this.destinationFilter
+      destinationFilter: this.destinationFilter,
+      abcFilter: this.abcFilter,
+      blacklistedFilter: this.blacklistedFilter,
+      lichidareFilter: this.lichidareFilter
     };
     
     // Add number filters
@@ -349,6 +419,84 @@ export class ReplenishmentDataTable extends LitElement {
       }
     }
     
+    // Apply ABC classification filter
+    if (this.abcFilter && this.abcFilter !== 'all') {
+      const abcColumn = this.columnConfig.find(col => col.key === 'abc_class');
+      if (abcColumn) {
+        filtered = filtered.filter(item => {
+          const abcValue = item[abcColumn.key];
+          if (this.abcFilter === 'none') {
+            return !abcValue || abcValue === '' || abcValue === null || abcValue === undefined;
+          }
+          return abcValue === this.abcFilter;
+        });
+      }
+    }
+    
+    // Apply Blacklisted filter
+    if (this.blacklistedFilter && this.blacklistedFilter !== 'all') {
+      const blacklistedColumn = this.columnConfig.find(col => col.key === 'Blacklisted');
+      if (blacklistedColumn) {
+        filtered = filtered.filter(item => {
+          const blacklistedValue = item[blacklistedColumn.key];
+          if (this.blacklistedFilter === 'yes') {
+            // Handle multiple formats: true, 1, '1', 'true', 'Da', 'Yes'
+            return blacklistedValue === true || 
+                   blacklistedValue === 1 || 
+                   blacklistedValue === '1' || 
+                   blacklistedValue === 'true' ||
+                   (typeof blacklistedValue === 'string' && 
+                    (blacklistedValue.toLowerCase() === 'da' || blacklistedValue.toLowerCase() === 'yes'));
+          } else if (this.blacklistedFilter === 'no') {
+            // Handle multiple formats: false, 0, '0', 'false', 'Nu', 'No', '-'
+            return blacklistedValue === false || 
+                   blacklistedValue === 0 || 
+                   blacklistedValue === '0' || 
+                   blacklistedValue === 'false' ||
+                   (typeof blacklistedValue === 'string' && 
+                    (blacklistedValue.toLowerCase() === 'nu' || 
+                     blacklistedValue.toLowerCase() === 'no' || 
+                     blacklistedValue === '-'));
+          } else if (this.blacklistedFilter === 'none') {
+            return blacklistedValue === null || blacklistedValue === undefined || blacklistedValue === '';
+          }
+          return true;
+        });
+      }
+    }
+    
+    // Apply InLichidare filter
+    if (this.lichidareFilter && this.lichidareFilter !== 'all') {
+      const lichidareColumn = this.columnConfig.find(col => col.key === 'InLichidare');
+      if (lichidareColumn) {
+        filtered = filtered.filter(item => {
+          const lichidareValue = item[lichidareColumn.key];
+          if (this.lichidareFilter === 'yes') {
+            // Handle multiple formats: true, 1, '1', 'true', 'Da', 'Yes'
+            return lichidareValue === true || 
+                   lichidareValue === 1 || 
+                   lichidareValue === '1' || 
+                   lichidareValue === 'true' ||
+                   (typeof lichidareValue === 'string' && 
+                    (lichidareValue.toLowerCase() === 'da' || lichidareValue.toLowerCase() === 'yes'));
+          } else if (this.lichidareFilter === 'no') {
+            // Handle multiple formats: false, 0, '0', 'false', 'Nu', 'No', '-'
+            return lichidareValue === false || 
+                   lichidareValue === 0 || 
+                   lichidareValue === '0' || 
+                   lichidareValue === 'false' ||
+                   (typeof lichidareValue === 'string' && 
+                    (lichidareValue.toLowerCase() === 'nu' || 
+                     lichidareValue.toLowerCase() === 'no' || 
+                     lichidareValue === '-'));
+          } else if (this.lichidareFilter === 'none') {
+            return lichidareValue === null || lichidareValue === undefined || lichidareValue === '';
+          }
+          return true;
+        });
+      }
+    }
+
     // Apply all number filters
     if (this.columnConfig) {
       this.columnConfig
@@ -374,7 +522,10 @@ export class ReplenishmentDataTable extends LitElement {
     // Cache the results
     this._cachedFilteredData = filtered;
     this._cachedFilters = {
-      destinationFilter: this.destinationFilter
+      destinationFilter: this.destinationFilter,
+      abcFilter: this.abcFilter,
+      blacklistedFilter: this.blacklistedFilter,
+      lichidareFilter: this.lichidareFilter
     };
     
     // Cache number filters
@@ -430,6 +581,17 @@ export class ReplenishmentDataTable extends LitElement {
       // Clear filter cache when data changes
       this._cachedFilteredData = [];
       this._cachedFilters = {};
+      // Clear keyboard navigation cache when data changes
+      this._cachedVisibleDataKeys = null;
+    }
+    
+    // Clear keyboard navigation cache when filters change (affects visible rows)
+    if (changedProperties.has('destinationFilter') || 
+        changedProperties.has('abcFilter') ||
+        changedProperties.has('blacklistedFilter') ||
+        changedProperties.has('lichidareFilter') ||
+        Object.keys(changedProperties).some(key => key.startsWith('numberFilter_'))) {
+      this._cachedVisibleDataKeys = null;
     }
     
     // No longer initializing tooltips here for performance - using basic HTML title attributes

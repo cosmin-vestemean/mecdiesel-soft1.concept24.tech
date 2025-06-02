@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Strategy Application</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .debug-container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        
+        .sample-data {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        
+        .log-output {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 5px;
+            height: 400px;
+            overflow-y: scroll;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin: 10px 0;
+        }
+        
+        .test-controls {
+            background-color: #e9ecef;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        
+        .status-success { background-color: #198754; }
+        .status-warning { background-color: #ffc107; }
+        .status-error { background-color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="debug-container">
+        <h1 class="mb-4">🔧 Branch Replenishment Strategy Debug Tool</h1>
+        
+        <div class="alert alert-info">
+            <h5>Debug Purpose</h5>
+            <p>This tool helps debug why strategy application (Apply Min/Max) works unpredictably. 
+            It will analyze sample data and show exactly why some items get values while others don't.</p>
+        </div>
+
+        <div class="test-controls">
+            <h4>Test Strategy Application</h4>
+            <div class="row">
+                <div class="col-md-4">
+                    <label for="strategy-select" class="form-label">Strategy:</label>
+                    <select id="strategy-select" class="form-select">
+                        <option value="min">Apply Min Quantities</option>
+                        <option value="max">Apply Max Quantities</option>
+                        <option value="skip_blacklisted">Skip Blacklisted</option>
+                        <option value="clear">Clear All Transfers</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-check form-switch mt-4">
+                        <input class="form-check-input" type="checkbox" id="successive-check" checked>
+                        <label class="form-check-label" for="successive-check">
+                            Apply to Zeros Only (Successive)
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <button id="run-test" class="btn btn-primary mt-4">
+                        🧪 Run Strategy Test
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <h4>Sample Test Data</h4>
+                <div class="sample-data" id="sample-data">
+                    Loading sample data...
+                </div>
+            </div>
+            <div class="col-md-6">
+                <h4>Strategy Logic Analysis</h4>
+                <div id="analysis-results">
+                    <p class="text-muted">Run a test to see analysis results...</p>
+                </div>
+            </div>
+        </div>
+
+        <h4>Console Output</h4>
+        <div class="log-output" id="console-output">
+            Console logs will appear here...
+        </div>
+
+        <div class="mt-4">
+            <h4>Common Issues & Solutions</h4>
+            <div class="accordion" id="troubleshooting">
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingOne">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne">
+                            <span class="status-indicator status-error"></span>
+                            Some items not getting values
+                        </button>
+                    </h2>
+                    <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#troubleshooting">
+                        <div class="accordion-body">
+                            <strong>Possible causes:</strong>
+                            <ul>
+                                <li><code>cant_min</code> or <code>cant_max</code> values are 0, null, or negative</li>
+                                <li>Items are blacklisted (<code>Blacklisted !== '-'</code>)</li>
+                                <li>Successive mode is on and items already have transfer values</li>
+                                <li>Items are filtered out by search/destination filters</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingTwo">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo">
+                            <span class="status-indicator status-warning"></span>
+                            Strategy applies but values are wrong
+                        </button>
+                    </h2>
+                    <div id="collapseTwo" class="accordion-collapse collapse" data-bs-parent="#troubleshooting">
+                        <div class="accordion-body">
+                            <strong>Possible causes:</strong>
+                            <ul>
+                                <li>Database calculation issues in stored procedure</li>
+                                <li><code>cant_min</code>/<code>cant_max</code> calculation logic problems</li>
+                                <li>Branch limits (MinLimit/MaxLimit) not set correctly</li>
+                                <li>Stock levels or necessity calculations incorrect</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingThree">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThree">
+                            <span class="status-indicator status-success"></span>
+                            Understanding successive mode
+                        </button>
+                    </h2>
+                    <div id="collapseThree" class="accordion-collapse collapse" data-bs-parent="#troubleshooting">
+                        <div class="accordion-body">
+                            <strong>Successive Mode (Apply to Zeros):</strong>
+                            <ul>
+                                <li><strong>ON:</strong> Only applies to items with transfer = 0</li>
+                                <li><strong>OFF:</strong> Overwrites all transfer values</li>
+                                <li>Use successive mode for layered strategy application</li>
+                                <li>Turn off successive to reset all values</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Mock sample data that represents typical branch replenishment data
+        const sampleData = [
+            {
+                keyField: "12345-1200-1",
+                mtrl: 12345,
+                Cod: "PART001",
+                Descriere: "Test Part 1",
+                Blacklisted: "-",
+                cant_min: 5.0,
+                cant_max: 10.0,
+                transfer: 0,
+                stoc_emit: 20,
+                min_emit: 5,
+                nec_min: 5,
+                nec_max: 10
+            },
+            {
+                keyField: "12346-1200-2",
+                mtrl: 12346,
+                Cod: "PART002", 
+                Descriere: "Test Part 2 (Blacklisted)",
+                Blacklisted: "Da",
+                cant_min: 3.0,
+                cant_max: 7.0,
+                transfer: 0,
+                stoc_emit: 15,
+                min_emit: 3,
+                nec_min: 3,
+                nec_max: 7
+            },
+            {
+                keyField: "12347-1200-3",
+                mtrl: 12347,
+                Cod: "PART003",
+                Descriere: "Test Part 3 (Has Transfer)",
+                Blacklisted: "-",
+                cant_min: 2.0,
+                cant_max: 8.0,
+                transfer: 4.0,
+                stoc_emit: 25,
+                min_emit: 10,
+                nec_min: 2,
+                nec_max: 8
+            },
+            {
+                keyField: "12348-1200-4",
+                mtrl: 12348,
+                Cod: "PART004",
+                Descriere: "Test Part 4 (No Quantity Available)",
+                Blacklisted: "-",
+                cant_min: 0,
+                cant_max: 0,
+                transfer: 0,
+                stoc_emit: 8,
+                min_emit: 15,
+                nec_min: 0,
+                nec_max: 0
+            },
+            {
+                keyField: "12349-1200-5", 
+                mtrl: 12349,
+                Cod: "PART005",
+                Descriere: "Test Part 5 (Normal Case)",
+                Blacklisted: "-",
+                cant_min: 6.0,
+                cant_max: 12.0,
+                transfer: 0,
+                stoc_emit: 30,
+                min_emit: 8,
+                nec_min: 6,
+                nec_max: 12
+            }
+        ];
+
+        // Display sample data
+        document.getElementById('sample-data').textContent = JSON.stringify(sampleData, null, 2);
+
+        // Mock console.log to capture output
+        const originalConsoleLog = console.log;
+        const originalConsoleWarn = console.warn;
+        const consoleOutput = document.getElementById('console-output');
+        
+        function addToConsole(type, ...args) {
+            const timestamp = new Date().toLocaleTimeString();
+            const message = args.map(arg => 
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+            ).join(' ');
+            
+            const logEntry = document.createElement('div');
+            logEntry.style.color = type === 'warn' ? '#ffc107' : 
+                                  type === 'error' ? '#dc3545' : '#d4d4d4';
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            consoleOutput.appendChild(logEntry);
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+
+        console.log = (...args) => {
+            originalConsoleLog.apply(console, args);
+            addToConsole('log', ...args);
+        };
+
+        console.warn = (...args) => {
+            originalConsoleWarn.apply(console, args);
+            addToConsole('warn', ...args);
+        };
+
+        // Mock strategy application logic
+        function mockApplyStrategy(data, strategy, isSuccessive) {
+            console.log(`🎯 Applying strategy: ${strategy}, Successive: ${isSuccessive}`);
+            
+            let dataUpdated = false;
+            let skippedReasons = {
+                notInFilter: 0,
+                alreadyHasTransfer: 0,
+                blacklisted: 0,
+                noQuantityAvailable: 0,
+                applied: 0
+            };
+
+            const newData = data.map(item => {
+                let updatedItem = { ...item };
+                let applyChange = false;
+
+                // Successive logic
+                if (isSuccessive) {
+                    const currentTransfer = parseFloat(updatedItem.transfer || 0);
+                    if (currentTransfer === 0) {
+                        applyChange = true;
+                    } else {
+                        skippedReasons.alreadyHasTransfer++;
+                    }
+                } else {
+                    applyChange = true;
+                }
+
+                if (applyChange) {
+                    switch (strategy) {
+                        case 'min':
+                            if (updatedItem.Blacklisted === '-') {
+                                const minQty = parseFloat(updatedItem.cant_min || 0);
+                                if (minQty > 0) {
+                                    updatedItem.transfer = minQty;
+                                    dataUpdated = true;
+                                    skippedReasons.applied++;
+                                    console.log(`✅ Applied min ${minQty} to item ${updatedItem.mtrl}`);
+                                } else {
+                                    skippedReasons.noQuantityAvailable++;
+                                    console.log(`⚠️  No min quantity available for item ${updatedItem.mtrl}: cant_min=${updatedItem.cant_min}`);
+                                }
+                            } else {
+                                skippedReasons.blacklisted++;
+                                console.log(`🚫 Skipped blacklisted item ${updatedItem.mtrl}: Blacklisted=${updatedItem.Blacklisted}`);
+                            }
+                            break;
+                        case 'max':
+                            if (updatedItem.Blacklisted === '-') {
+                                const maxQty = parseFloat(updatedItem.cant_max || 0);
+                                if (maxQty > 0) {
+                                    updatedItem.transfer = maxQty;
+                                    dataUpdated = true;
+                                    skippedReasons.applied++;
+                                    console.log(`✅ Applied max ${maxQty} to item ${updatedItem.mtrl}`);
+                                } else {
+                                    skippedReasons.noQuantityAvailable++;
+                                    console.log(`⚠️  No max quantity available for item ${updatedItem.mtrl}: cant_max=${updatedItem.cant_max}`);
+                                }
+                            } else {
+                                skippedReasons.blacklisted++;
+                                console.log(`🚫 Skipped blacklisted item ${updatedItem.mtrl}: Blacklisted=${updatedItem.Blacklisted}`);
+                            }
+                            break;
+                        case 'clear':
+                            updatedItem.transfer = 0;
+                            dataUpdated = true;
+                            skippedReasons.applied++;
+                            console.log(`✅ Cleared transfer for item ${updatedItem.mtrl}`);
+                            break;
+                    }
+                }
+                return updatedItem;
+            });
+
+            console.log(`📊 Strategy Application Results:`, {
+                strategy: strategy,
+                successive: isSuccessive,
+                totalItems: data.length,
+                results: skippedReasons
+            });
+
+            return { newData, skippedReasons, dataUpdated };
+        }
+
+        // Run test function
+        document.getElementById('run-test').addEventListener('click', function() {
+            const strategy = document.getElementById('strategy-select').value;
+            const isSuccessive = document.getElementById('successive-check').checked;
+            
+            console.log('🧪 Starting strategy test...');
+            consoleOutput.innerHTML = '';
+            
+            const { newData, skippedReasons, dataUpdated } = mockApplyStrategy([...sampleData], strategy, isSuccessive);
+            
+            // Display analysis results
+            const analysisDiv = document.getElementById('analysis-results');
+            analysisDiv.innerHTML = `
+                <div class="alert alert-${dataUpdated ? 'success' : 'warning'}">
+                    <h6>Results Summary:</h6>
+                    <ul class="mb-0">
+                        <li><strong>Strategy:</strong> ${strategy}</li>
+                        <li><strong>Successive Mode:</strong> ${isSuccessive ? 'ON' : 'OFF'}</li>
+                        <li><strong>Items Updated:</strong> ${skippedReasons.applied}/${sampleData.length}</li>
+                        <li><strong>Blacklisted Skipped:</strong> ${skippedReasons.blacklisted}</li>
+                        <li><strong>No Quantity Available:</strong> ${skippedReasons.noQuantityAvailable}</li>
+                        <li><strong>Already Has Transfer:</strong> ${skippedReasons.alreadyHasTransfer}</li>
+                    </ul>
+                </div>
+                <h6>Updated Data:</h6>
+                <div class="sample-data" style="max-height: 300px; overflow-y: auto;">
+${newData.map(item => `Item ${item.mtrl}: transfer = ${item.transfer} (was ${sampleData.find(orig => orig.mtrl === item.mtrl)?.transfer})`).join('\n')}
+                </div>
+            `;
+        });
+
+        // Initialize
+        console.log('🔧 Strategy Debug Tool loaded');
+        console.log('📋 Sample data contains', sampleData.length, 'test items');
+    </script>
+</body>
+</html>

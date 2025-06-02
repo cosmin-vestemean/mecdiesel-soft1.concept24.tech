@@ -25,6 +25,9 @@ export class BranchReplenishmentContainer extends LitElement {
       selectedReplenishmentStrategy: { type: String, state: true },
       transferFilter: { type: String, state: true },
       destinationFilter: { type: String, state: true },
+      abcFilter: { type: String, state: true },
+      blacklistedFilter: { type: String, state: true },
+      lichidareFilter: { type: String, state: true },
       isSuccessiveStrategy: { type: Boolean, state: true },
       queryPanelVisible: { type: Boolean, state: true }, // New property to track query panel visibility
 
@@ -47,6 +50,9 @@ export class BranchReplenishmentContainer extends LitElement {
     this.selectedReplenishmentStrategy = 'none';
     this.transferFilter = 'all';
     this.destinationFilter = 'all';
+    this.abcFilter = 'all';
+    this.blacklistedFilter = 'all';
+    this.lichidareFilter = 'all';
     this.isSuccessiveStrategy = true;
     this.queryPanelVisible = true; // Initially visible
     this.branches = { // Keep branches data here or fetch if dynamic
@@ -222,15 +228,29 @@ export class BranchReplenishmentContainer extends LitElement {
 
   // --- Strategy Application ---
   _handleApplyStrategy() {
-    if (!this.data.length || this.selectedReplenishmentStrategy === 'none') return;
+    if (!this.data.length || this.selectedReplenishmentStrategy === 'none') {
+      console.warn('Strategy application skipped: No data or no strategy selected');
+      return;
+    }
 
+    console.log(`🎯 Applying strategy: ${this.selectedReplenishmentStrategy}, Successive: ${this.isSuccessiveStrategy}`);
+    
     const currentFilteredDataKeys = new Set(this.filteredData.map(item => item.keyField));
     let dataUpdated = false;
+    let applicableCount = 0;
+    let skippedReasons = {
+      notInFilter: 0,
+      alreadyHasTransfer: 0,
+      blacklisted: 0,
+      noQuantityAvailable: 0,
+      applied: 0
+    };
 
     // Create a new array to ensure Lit detects the change
     const newData = this.data.map(item => {
       // Only apply strategy to items currently visible in the filtered view
       if (!currentFilteredDataKeys.has(item.keyField)) {
+        skippedReasons.notInFilter++;
         return item;
       }
 
@@ -239,52 +259,111 @@ export class BranchReplenishmentContainer extends LitElement {
 
       // Determine if the strategy should be applied based on the successive flag
       if (this.isSuccessiveStrategy) {
-        if (parseFloat(updatedItem.transfer || 0) === 0) {
+        const currentTransfer = parseFloat(updatedItem.transfer || 0);
+        if (currentTransfer === 0) {
           applyChange = true;
+          applicableCount++;
+        } else {
+          skippedReasons.alreadyHasTransfer++;
         }
       } else {
         applyChange = true;
+        applicableCount++;
       }
 
       if (applyChange) {
+        const isBlacklisted = this.isItemBlacklisted(updatedItem);
+        
         switch (this.selectedReplenishmentStrategy) {
           case 'min':
-            if (updatedItem.Blacklisted === '-') {
-              const minQty = parseFloat(updatedItem.cant_min);
-              updatedItem.transfer = minQty > 0 ? minQty : 0;
-              dataUpdated = true;
+            if (!isBlacklisted) {
+              const minQty = parseFloat(updatedItem.cant_min || 0);
+              if (minQty > 0) {
+                updatedItem.transfer = minQty;
+                dataUpdated = true;
+                skippedReasons.applied++;
+                console.log(`✅ Applied min ${minQty} to item ${updatedItem.mtrl || 'unknown'} (Blacklisted: ${updatedItem.Blacklisted})`);
+              } else {
+                skippedReasons.noQuantityAvailable++;
+                console.log(`⚠️  No min quantity available for item ${updatedItem.mtrl || 'unknown'}: cant_min=${updatedItem.cant_min}`);
+              }
+            } else {
+              skippedReasons.blacklisted++;
+              console.log(`🚫 Skipped blacklisted item ${updatedItem.mtrl || 'unknown'}: Blacklisted=${updatedItem.Blacklisted}`);
             }
             break;
           case 'max':
-            if (updatedItem.Blacklisted === '-') {
-              const maxQty = parseFloat(updatedItem.cant_max);
-              updatedItem.transfer = maxQty > 0 ? maxQty : 0;
-              dataUpdated = true;
+            if (!isBlacklisted) {
+              const maxQty = parseFloat(updatedItem.cant_max || 0);
+              if (maxQty > 0) {
+                updatedItem.transfer = maxQty;
+                dataUpdated = true;
+                skippedReasons.applied++;
+                console.log(`✅ Applied max ${maxQty} to item ${updatedItem.mtrl || 'unknown'} (Blacklisted: ${updatedItem.Blacklisted})`);
+              } else {
+                skippedReasons.noQuantityAvailable++;
+                console.log(`⚠️  No max quantity available for item ${updatedItem.mtrl || 'unknown'}: cant_max=${updatedItem.cant_max}`);
+              }
+            } else {
+              skippedReasons.blacklisted++;
+              console.log(`🚫 Skipped blacklisted item ${updatedItem.mtrl || 'unknown'}: Blacklisted=${updatedItem.Blacklisted}`);
             }
             break;
           case 'skip_blacklisted':
-            // This strategy doesn't make sense with 'Apply to Zeros' as it sets to zero
-            // If not successive, it clears transfers for blacklisted items
-            if (!this.isSuccessiveStrategy && updatedItem.Blacklisted !== '-') {
-              updatedItem.transfer = 0;
-              dataUpdated = true;
-            } else if (this.isSuccessiveStrategy && updatedItem.Blacklisted !== '-') {
-              // If successive, we just skip applying min/max, but don't clear existing transfers
-              // No action needed here if already zero
+            if (isBlacklisted) {
+              if (!this.isSuccessiveStrategy) {
+                // Clear transfers for blacklisted items when not in successive mode
+                updatedItem.transfer = 0;
+                dataUpdated = true;
+                skippedReasons.applied++;
+                console.log(`✅ Cleared transfer for blacklisted item ${updatedItem.mtrl || 'unknown'} (Blacklisted: ${updatedItem.Blacklisted})`);
+              } else {
+                // In successive mode, just skip blacklisted items
+                skippedReasons.blacklisted++;
+                console.log(`🚫 Skipped blacklisted item in successive mode ${updatedItem.mtrl || 'unknown'} (Blacklisted: ${updatedItem.Blacklisted})`);
+              }
+            } else {
+              // For non-blacklisted items in skip_blacklisted strategy, apply min quantities
+              const minQty = parseFloat(updatedItem.cant_min || 0);
+              if (minQty > 0) {
+                updatedItem.transfer = minQty;
+                dataUpdated = true;
+                skippedReasons.applied++;
+                console.log(`✅ Applied min ${minQty} to non-blacklisted item ${updatedItem.mtrl || 'unknown'} (Blacklisted: ${updatedItem.Blacklisted})`);
+              } else {
+                skippedReasons.noQuantityAvailable++;
+                console.log(`⚠️  No min quantity available for non-blacklisted item ${updatedItem.mtrl || 'unknown'}: cant_min=${updatedItem.cant_min}`);
+              }
             }
             break;
           case 'clear':
             updatedItem.transfer = 0;
             dataUpdated = true;
+            skippedReasons.applied++;
+            console.log(`✅ Cleared transfer for item ${updatedItem.mtrl || 'unknown'}`);
             break;
         }
       }
       return updatedItem;
     });
 
+    // Report results
+    console.log(`📊 Strategy Application Results:`, {
+      strategy: this.selectedReplenishmentStrategy,
+      successive: this.isSuccessiveStrategy,
+      totalItems: this.data.length,
+      filteredItems: currentFilteredDataKeys.size,
+      applicableItems: applicableCount,
+      results: skippedReasons
+    });
+
     if (dataUpdated) {
       this.data = newData; // Trigger update with modified data
+      console.log(`✅ Strategy applied successfully! Updated ${skippedReasons.applied} items.`);
+    } else {
+      console.warn(`⚠️  No items were updated. Check if items meet strategy criteria.`);
     }
+    
     // Don't reset dropdown immediately, user might want to apply again with different successive setting
     // this.selectedReplenishmentStrategy = 'none';
   }
@@ -365,7 +444,21 @@ export class BranchReplenishmentContainer extends LitElement {
     // Note: Destination filtering is now handled by the data table's getFilteredData() method
     // to avoid double-filtering issues with the header filter dropdowns
 
-    console.log('Filtered results:', filtered.length);
+    console.log(`📋 Filtered results: ${filtered.length} items (from ${this.data.length} total)`);
+    
+    // Sample a few items to debug strategy issues
+    if (filtered.length > 0) {
+      const sample = filtered.slice(0, 3);
+      console.log('🔍 Sample filtered items for strategy debugging:', sample.map(item => ({
+        mtrl: item.mtrl,
+        keyField: item.keyField,
+        cant_min: item.cant_min,
+        cant_max: item.cant_max,
+        transfer: item.transfer,
+        Blacklisted: item.Blacklisted
+      })));
+    }
+    
     return filtered;
   }
 
@@ -403,8 +496,24 @@ export class BranchReplenishmentContainer extends LitElement {
     return num < 0 ? 'text-danger fw-bold' : (num > 0 ? 'text-success' : 'text-muted');
   }
 
-  getBlacklistedClass = (item) => item.Blacklisted === 'Da' ? 'text-danger fw-bold' : '';
-  getLichidareClass = (item) => item.InLichidare === 'Da' ? 'text-warning fw-bold' : '';
+  getBlacklistedClass = (item) => this.isItemBlacklisted(item) ? 'text-danger fw-bold' : '';
+  getLichidareClass = (item) => this.isItemInLichidare(item) ? 'text-warning fw-bold' : '';
+
+  // Helper function to determine if an item is blacklisted
+  // Handles multiple formats: '-', 'Nu', 'No' = not blacklisted; 'Da', 'Yes' = blacklisted
+  isItemBlacklisted = (item) => {
+    const blacklisted = (item.Blacklisted || '').toString().toLowerCase();
+    // Consider blacklisted if value is 'da' (yes in Romanian) or 'yes'
+    return blacklisted === 'da' || blacklisted === 'yes';
+  };
+  
+  // Helper function to determine if an item is in lichidare (liquidation)
+  // Handles multiple formats: '-', 'Nu', 'No' = not in liquidation; 'Da', 'Yes' = in liquidation
+  isItemInLichidare = (item) => {
+    const inLichidare = (item.InLichidare || '').toString().toLowerCase();
+    // Consider in liquidation if value is 'da' (yes in Romanian) or 'yes'
+    return inLichidare === 'da' || inLichidare === 'yes';
+  };
 
   // ABC Analysis utility functions
   getSalesPercClass = (value) => {
@@ -477,6 +586,15 @@ export class BranchReplenishmentContainer extends LitElement {
     const { property, value, itemKey, transferValue } = e.detail;
     if (property === 'destinationFilter') {
       this.destinationFilter = value;
+    } else if (property === 'abcFilter') {
+      this.abcFilter = value;
+      console.log(`Updated ABC filter to:`, value);
+    } else if (property === 'blacklistedFilter') {
+      this.blacklistedFilter = value;
+      console.log(`Updated Blacklisted filter to:`, value);
+    } else if (property === 'lichidareFilter') {
+      this.lichidareFilter = value;
+      console.log(`Updated InLichidare filter to:`, value);
     } else if (property.startsWith('numberFilter_')) {
       // Handle number filter events from the data table
       const dataTable = this.querySelector('replenishment-data-table');
@@ -706,6 +824,9 @@ export class BranchReplenishmentContainer extends LitElement {
           .tableData=${currentFilteredData}
           .columnConfig=${columnConfig}
           .destinationFilter=${this.destinationFilter}
+          .abcFilter=${this.abcFilter}
+          .blacklistedFilter=${this.blacklistedFilter}
+          .lichidareFilter=${this.lichidareFilter}
           .uniqueDestinations=${this.uniqueDestinations}
           .utilityFunctions=${{
         getStockClassEmit: this.getStockClassEmit,

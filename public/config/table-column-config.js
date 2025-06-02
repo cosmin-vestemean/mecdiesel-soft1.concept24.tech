@@ -10,8 +10,8 @@ export const columnConfig = [
   { key: 'Descriere', displayName: 'Denumire', visible: true, type: 'string', group: 'info' },
   { key: 'branchD', displayName: 'Branch Code', visible: false, type: 'string', group: 'info' }, // Hidden branch code
   { key: 'Destinatie', displayName: 'Dest', visible: true, type: 'string', group: 'info', isHeaderFilter: true }, // Filterable in header
-  { key: 'Blacklisted', displayName: 'BlkLst', visible: true, type: 'boolean', group: 'info', classFn: 'getBlacklistedClass' },
-  { key: 'InLichidare', displayName: 'InLic', visible: true, type: 'boolean', group: 'info', classFn: 'getLichidareClass' },
+  { key: 'Blacklisted', displayName: 'BlkLst', visible: true, type: 'boolean', group: 'info', classFn: 'getBlacklistedClass', isHeaderFilter: true },
+  { key: 'InLichidare', displayName: 'InLic', visible: true, type: 'boolean', group: 'info', classFn: 'getLichidareClass', isHeaderFilter: true },
 
   // --- Source Branch Data ---
   { key: 'stoc_emit', displayName: 'StocEmit', visible: true, type: 'number', group: 'source', classFn: 'getStockClassEmit', isHeaderFilter: true },

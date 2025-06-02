@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ABC and Boolean Filters Fix Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #cce7ff; color: #004085; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ABC and Boolean Filters Fix Test</h1>
+        
+        <div class="test-info">
+            <h3>Testing the Fix for ABC Classification and Boolean Filters</h3>
+            <p>This test verifies that the ABC, Blacklisted, and InLichidare filters now work correctly.</p>
+            <p><strong>Issue:</strong> Filter events were not being handled by the container.</p>
+            <p><strong>Fix:</strong> Added abcFilter, blacklistedFilter, and lichidareFilter properties to the container and updated the _handleTableUpdate method.</p>
+        </div>
+
+        <div id="test-container">
+            <!-- The branch replenishment container will be loaded here -->
+        </div>
+
+        <div id="test-results">
+            <h3>Test Results</h3>
+            <div id="filter-tests"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import './public/components/branch-replenishment-container.js';
+
+        // Test monitoring function
+        function monitorFilterChanges() {
+            const container = document.querySelector('branch-replenishment-container');
+            const testResults = document.getElementById('filter-tests');
+            
+            if (!container) {
+                testResults.innerHTML = '<div class="error">Container not found</div>';
+                return;
+            }
+
+            // Monitor container properties
+            const originalHandleTableUpdate = container._handleTableUpdate;
+            let filterUpdateCount = 0;
+
+            container._handleTableUpdate = function(e) {
+                const { property, value } = e.detail;
+                
+                if (['abcFilter', 'blacklistedFilter', 'lichidareFilter'].includes(property)) {
+                    filterUpdateCount++;
+                    const statusDiv = document.createElement('div');
+                    statusDiv.className = 'status success';
+                    statusDiv.innerHTML = `✅ Filter Update #${filterUpdateCount}: ${property} = "${value}"`;
+                    testResults.appendChild(statusDiv);
+                    
+                    console.log(`ABC/Boolean Filter Test: ${property} updated to:`, value);
+                }
+                
+                // Call original method
+                return originalHandleTableUpdate.call(this, e);
+            };
+
+            // Initial status
+            testResults.innerHTML = `
+                <div class="status info">
+                    🔍 Monitoring filter changes...
+                    <br>Container ABC Filter: ${container.abcFilter}
+                    <br>Container Blacklisted Filter: ${container.blacklistedFilter}
+                    <br>Container InLichidare Filter: ${container.lichidareFilter}
+                </div>
+            `;
+        }
+
+        // Initialize test
+        window.addEventListener('DOMContentLoaded', () => {
+            const testContainer = document.getElementById('test-container');
+            testContainer.innerHTML = '<branch-replenishment-container></branch-replenishment-container>';
+            
+            // Wait for component to initialize
+            setTimeout(monitorFilterChanges, 1000);
+        });
+
+        // Add some test data simulation
+        window.testABCFilter = function() {
+            const container = document.querySelector('branch-replenishment-container');
+            if (container) {
+                const mockEvent = new CustomEvent('update-property', {
+                    detail: { property: 'abcFilter', value: 'A' }
+                });
+                container._handleTableUpdate(mockEvent);
+            }
+        };
+
+        window.testBooleanFilter = function() {
+            const container = document.querySelector('branch-replenishment-container');
+            if (container) {
+                const mockEvent = new CustomEvent('update-property', {
+                    detail: { property: 'blacklistedFilter', value: 'yes' }
+                });
+                container._handleTableUpdate(mockEvent);
+            }
+        };
+    </script>
+    
+    <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 4px;">
+        <h4>Manual Test Buttons:</h4>
+        <button onclick="testABCFilter()" style="margin: 5px; padding: 8px 16px;">Test ABC Filter (A)</button>
+        <button onclick="testBooleanFilter()" style="margin: 5px; padding: 8px 16px;">Test Blacklisted Filter (Yes)</button>
+    </div>
+</body>
+</html>
