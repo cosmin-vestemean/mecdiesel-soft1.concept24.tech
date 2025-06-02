@@ -117,6 +117,7 @@ $(document).ready(() => {
                 // Login successful
                 $loginForm.addClass('d-none'); // Hide login form
                 $appContainer.removeClass('d-none'); // Show main app
+                $('#headerToggle').removeClass('d-none'); // Show header toggle button
                 
                 // Store the potentially refreshed token/clientID from the validation result
                 // Use validationResult.clientID which should be returned from the backend

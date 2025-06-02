@@ -36,6 +36,7 @@ class HierarchicalNavigation {
   init() {
     this.bindAppSelectorEvents();
     this.bindSubTabEvents();
+    this.bindHeaderToggle();
     this.setInitialState();
   }
 
@@ -56,6 +57,69 @@ class HierarchicalNavigation {
         this.setActiveSubTab(tabId);
       });
     });
+  }
+
+  bindHeaderToggle() {
+    const headerToggleBtn = document.getElementById('headerToggle');
+    const header = document.getElementById('header');
+    const app = document.getElementById('app');
+    
+    if (headerToggleBtn && header && app) {
+      // Default state: header visible
+      let isHeaderVisible = true;
+      
+      headerToggleBtn.addEventListener('click', () => {
+        isHeaderVisible = !isHeaderVisible;
+        
+        if (isHeaderVisible) {
+          // Show header
+          header.classList.remove('header-collapsed');
+          app.classList.remove('header-collapsed');
+          headerToggleBtn.querySelector('i').className = 'fas fa-chevron-up';
+          headerToggleBtn.title = 'Hide Header';
+        } else {
+          // Hide header
+          header.classList.add('header-collapsed');
+          app.classList.add('header-collapsed');
+          headerToggleBtn.querySelector('i').className = 'fas fa-chevron-down';
+          headerToggleBtn.title = 'Show Header';
+        }
+        
+        // Store preference in localStorage
+        localStorage.setItem('headerVisible', isHeaderVisible.toString());
+        
+        // Recalculate content dimensions after transition
+        setTimeout(() => {
+          this.recalculateContentDimensions();
+        }, 350); // Slightly after the CSS transition completes
+        
+        // Dispatch event for other components that might need to react
+        const event = new CustomEvent('header-toggled', {
+          detail: { isVisible: isHeaderVisible }
+        });
+        document.dispatchEvent(event);
+      });
+      
+      // Restore previous state from localStorage
+      const savedState = localStorage.getItem('headerVisible');
+      if (savedState === 'false') {
+        headerToggleBtn.click(); // Trigger the toggle to hide header
+      }
+    }
+  }
+
+  recalculateContentDimensions() {
+    // Force recalculation of any components that depend on viewport dimensions
+    const event = new CustomEvent('viewport-resized', {
+      detail: { 
+        trigger: 'header-toggle',
+        timestamp: Date.now()
+      }
+    });
+    window.dispatchEvent(event);
+    
+    // Trigger resize event for any components listening to window resize
+    window.dispatchEvent(new Event('resize'));
   }
 
   switchApp(appName) {

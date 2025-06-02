@@ -351,7 +351,7 @@ export class ReplenishmentDataTable extends LitElement {
   renderAbcFilterHeader(column) {
     const isCurrentSort = this.sortColumn === column.key;
     return html`
-      <div class="d-flex flex-column align-items-center ${isCurrentSort ? 'text-primary fw-bold' : ''}"
+      <div class="d-flex flex-column align-items-center ${isCurrentSort ? 'text-primary' : ''}"
            @click=${column.isSortable ? (e) => { e.stopPropagation(); this.handleSort(column); } : null}
            style="${column.isSortable ? 'cursor: pointer;' : ''}">
         <div class="d-flex align-items-center small">
@@ -377,7 +377,7 @@ export class ReplenishmentDataTable extends LitElement {
   renderBooleanFilterHeader(column, filterProperty) {
     const isCurrentSort = this.sortColumn === column.key;
     return html`
-      <div class="d-flex flex-column align-items-center ${isCurrentSort ? 'text-primary fw-bold' : ''}"
+      <div class="d-flex flex-column align-items-center ${isCurrentSort ? 'text-primary' : ''}"
            @click=${column.isSortable ? (e) => { e.stopPropagation(); this.handleSort(column); } : null}
            style="${column.isSortable ? 'cursor: pointer;' : ''}">
         <div class="d-flex align-items-center small">
@@ -402,7 +402,7 @@ export class ReplenishmentDataTable extends LitElement {
     // Each number column will have a filter: all, positive, negative, zero
     const isCurrentSort = this.sortColumn === column.key;
     return html`
-      <div class="d-flex flex-column align-items-center ${isCurrentSort ? 'text-primary fw-bold' : ''}"
+      <div class="d-flex flex-column align-items-center ${isCurrentSort ? 'text-primary' : ''}"
            @click=${column.isSortable ? (e) => { e.stopPropagation(); this.handleSort(column); } : null}
            style="${column.isSortable ? 'cursor: pointer;' : ''}">
         <div class="d-flex align-items-center small">
