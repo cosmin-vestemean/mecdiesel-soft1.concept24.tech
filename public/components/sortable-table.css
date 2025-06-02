@@ -7,10 +7,14 @@
 
 .sortable-header:hover {
     background-color: #f8f9fa !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: all 0.15s ease-in-out;
 }
 
 .sortable-header:active {
     background-color: #e9ecef !important;
+    transform: scale(0.98);
+    transition: all 0.1s ease-in-out;
 }
 
 /* Sort icon styling */
@@ -28,6 +32,7 @@
 .sortable-header.sorted {
     background-color: #e7f3ff !important;
     font-weight: 600;
+    transition: all 0.15s ease-in-out;
 }
 
 /* Bootstrap icon colors for sorting */

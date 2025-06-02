@@ -138,6 +138,15 @@ export class ReplenishmentDataTable extends LitElement {
   handleSort(column) {
     if (!column.isSortable) return;
     
+    // Micro-optimization: Immediate visual feedback for perceived performance
+    const headerElement = document.querySelector(`th[data-column="${column.key}"]`);
+    if (headerElement) {
+      headerElement.style.transform = 'scale(0.98)';
+      setTimeout(() => {
+        headerElement.style.transform = '';
+      }, 100);
+    }
+    
     // Performance check: warn about client-side sorting on large datasets
     if (this.tableData && this.tableData.length > sortConfig.clientSortThreshold) {
       console.warn(`Dataset size (${this.tableData.length}) exceeds client-side sorting threshold (${sortConfig.clientSortThreshold}). Consider implementing server-side sorting for better performance.`);
@@ -159,9 +168,12 @@ export class ReplenishmentDataTable extends LitElement {
       dataType: column.type
     });
     
-    // Clear cached data to force re-sort
+    // Clear sorting cache only - filtering cache should remain valid
     this._cachedSortedData = [];
     this._lastSortState = null;
+    
+    // Clear keyboard navigation cache as sort order affects navigation
+    this._cachedVisibleDataKeys = null;
     
     // Request update to trigger re-render
     this.requestUpdate();
@@ -172,8 +184,11 @@ export class ReplenishmentDataTable extends LitElement {
       return data;
     }
     
-    // Check cache validity
-    const currentSortState = `${this.sortColumn}-${this.sortDirection}`;
+    // Create a comprehensive cache key that includes both sort state and data characteristics
+    const dataFingerprint = this._createDataFingerprint(data);
+    const currentSortState = `${this.sortColumn}-${this.sortDirection}-${dataFingerprint}`;
+    
+    // Check cache validity with comprehensive key
     if (this._lastSortState === currentSortState && this._cachedSortedData.length > 0) {
       return this._cachedSortedData;
     }
@@ -217,11 +232,25 @@ export class ReplenishmentDataTable extends LitElement {
       return this.sortDirection === 'desc' ? -comparison : comparison;
     });
     
-    // Cache the result
+    // Cache the result with comprehensive key
     this._cachedSortedData = sorted;
     this._lastSortState = currentSortState;
     
     return sorted;
+  }
+
+  /**
+   * Create a fingerprint of the data to detect changes
+   * @param {Array} data - The data array to fingerprint
+   * @returns {String} - A string representing the data characteristics
+   */
+  _createDataFingerprint(data) {
+    if (!data || data.length === 0) return 'empty';
+    
+    // Create a lightweight fingerprint based on data length and first/last item keys
+    const firstKey = data[0]?.keyField || 'unknown';
+    const lastKey = data[data.length - 1]?.keyField || 'unknown';
+    return `${data.length}-${firstKey}-${lastKey}`;
   }
   
   parseBooleanValue(value) {
@@ -241,15 +270,30 @@ export class ReplenishmentDataTable extends LitElement {
     if (!column.isSortable) return '';
     
     const isCurrentSort = this.sortColumn === column.key;
-    const iconClass = isCurrentSort 
-      ? (this.sortDirection === 'asc' ? 'bi-arrow-up' : 'bi-arrow-down')
-      : 'bi-arrow-up-down';
-    const opacity = isCurrentSort ? '1' : '0.5';
+    let iconClass, iconColor, opacity, title;
+    
+    if (isCurrentSort) {
+      if (this.sortDirection === 'asc') {
+        iconClass = 'bi-arrow-up';
+        iconColor = '#198754'; // Green for ascending
+        title = 'Sorted ascending (click for descending)';
+      } else {
+        iconClass = 'bi-arrow-down';
+        iconColor = '#dc3545'; // Red for descending
+        title = 'Sorted descending (click for ascending)';
+      }
+      opacity = '1';
+    } else {
+      iconClass = 'bi-arrow-up-down';
+      iconColor = '#6c757d'; // Gray for unsorted
+      opacity = '0.5';
+      title = 'Click to sort';
+    }
     
     return html`
-      <i class="bi ${iconClass} ms-1" 
-         style="opacity: ${opacity}; font-size: 0.8em;"
-         title="Click to sort by ${column.displayName}"></i>
+      <i class="bi ${iconClass} sort-icon ms-1 ${isCurrentSort ? 'active' : ''}" 
+         style="opacity: ${opacity}; font-size: 0.8em; color: ${iconColor}; transition: all 0.15s ease-in-out;"
+         title="${title}"></i>
     `;
   }
 
@@ -264,21 +308,28 @@ export class ReplenishmentDataTable extends LitElement {
     const visibleColumns = this.columnConfig.filter(col => col.visible);
     return html`
       <tr>
-        ${visibleColumns.map(col => html`
-          <th class="${col.group || ''} ${col.divider ? 'vertical-divider' : ''} ${col.isSortable ? 'sortable-header' : ''}"
-              title="${col.tooltip || col.displayName}"
-              @click=${col.isSortable ? () => this.handleSort(col) : null}
-              style="${col.isSortable ? 'cursor: pointer; user-select: none;' : ''}">
-            ${col.isHeaderFilter 
-              ? this.renderHeaderFilter(col)
-              : html`
-                <div class="d-flex align-items-center justify-content-center">
-                  <span>${col.displayName}</span>
-                  ${this.renderSortIcon(col)}
-                </div>
-              `}
-          </th>
-        `)}
+        ${visibleColumns.map(col => {
+          const isCurrentSort = this.sortColumn === col.key;
+          const sortClass = col.isSortable ? 'sortable-header' : '';
+          const activeClass = isCurrentSort ? 'sorted' : '';
+          const combinedClass = `${col.group || ''} ${col.divider ? 'vertical-divider' : ''} ${sortClass} ${activeClass}`.trim();
+          
+          return html`
+            <th class="${combinedClass}"
+                title="${col.tooltip || col.displayName}${col.isSortable ? ' (Click to sort)' : ''}"
+                @click=${col.isSortable ? () => this.handleSort(col) : null}
+                style="${col.isSortable ? 'cursor: pointer; user-select: none;' : ''}">
+              ${col.isHeaderFilter 
+                ? this.renderHeaderFilter(col)
+                : html`
+                  <div class="d-flex align-items-center justify-content-center">
+                    <span>${col.displayName}</span>
+                    ${this.renderSortIcon(col)}
+                  </div>
+                `}
+            </th>
+          `;
+        })}
       </tr>
     `;
   }
@@ -298,9 +349,11 @@ export class ReplenishmentDataTable extends LitElement {
   }
 
   renderAbcFilterHeader(column) {
+    const isCurrentSort = this.sortColumn === column.key;
     return html`
-      <div class="d-flex flex-column align-items-center"
-           @click=${column.isSortable ? (e) => { e.stopPropagation(); this.handleSort(column); } : null}>
+      <div class="d-flex flex-column align-items-center ${isCurrentSort ? 'text-primary fw-bold' : ''}"
+           @click=${column.isSortable ? (e) => { e.stopPropagation(); this.handleSort(column); } : null}
+           style="${column.isSortable ? 'cursor: pointer;' : ''}">
         <div class="d-flex align-items-center small fw-bold mb-1">
           <span>${column.displayName}</span>
           ${column.isSortable ? this.renderSortIcon(column) : ''}
@@ -311,6 +364,7 @@ export class ReplenishmentDataTable extends LitElement {
                 @change=${e => this._dispatchUpdate('abcFilter', e.target.value)}
                 @click=${e => e.stopPropagation()}>
             <option value="all">All</option>
+            <option value="abc">ABC</option>
             <option value="A">A</option>
             <option value="B">B</option>
             <option value="C">C</option>
@@ -321,9 +375,11 @@ export class ReplenishmentDataTable extends LitElement {
   }
 
   renderBooleanFilterHeader(column, filterProperty) {
+    const isCurrentSort = this.sortColumn === column.key;
     return html`
-      <div class="d-flex flex-column align-items-center"
-           @click=${column.isSortable ? (e) => { e.stopPropagation(); this.handleSort(column); } : null}>
+      <div class="d-flex flex-column align-items-center ${isCurrentSort ? 'text-primary fw-bold' : ''}"
+           @click=${column.isSortable ? (e) => { e.stopPropagation(); this.handleSort(column); } : null}
+           style="${column.isSortable ? 'cursor: pointer;' : ''}">
         <div class="d-flex align-items-center small fw-bold mb-1">
           <span>${column.displayName}</span>
           ${column.isSortable ? this.renderSortIcon(column) : ''}
@@ -344,9 +400,11 @@ export class ReplenishmentDataTable extends LitElement {
 
   renderNumberFilterHeader(column) {
     // Each number column will have a filter: all, positive, negative, zero
+    const isCurrentSort = this.sortColumn === column.key;
     return html`
-      <div class="d-flex flex-column align-items-center"
-           @click=${column.isSortable ? (e) => { e.stopPropagation(); this.handleSort(column); } : null}>
+      <div class="d-flex flex-column align-items-center ${isCurrentSort ? 'text-primary fw-bold' : ''}"
+           @click=${column.isSortable ? (e) => { e.stopPropagation(); this.handleSort(column); } : null}
+           style="${column.isSortable ? 'cursor: pointer;' : ''}">
         <div class="d-flex align-items-center small fw-bold mb-1">
           <span>${column.displayName}</span>
           ${column.isSortable ? this.renderSortIcon(column) : ''}
@@ -580,6 +638,9 @@ export class ReplenishmentDataTable extends LitElement {
           const abcValue = item[abcColumn.key];
           if (this.abcFilter === 'none') {
             return !abcValue || abcValue === '' || abcValue === null || abcValue === undefined;
+          } else if (this.abcFilter === 'abc') {
+            // Show only items with ABC classifications (A, B, C) - exclude None/empty values
+            return abcValue === 'A' || abcValue === 'B' || abcValue === 'C';
           }
           return abcValue === this.abcFilter;
         });
@@ -762,20 +823,29 @@ export class ReplenishmentDataTable extends LitElement {
     // Pre-calculate derived values when data or utility functions change
     if (changedProperties.has('tableData') || changedProperties.has('utilityFunctions')) {
       this._preCalculateDerivedValues();
-      // Clear filter cache when data changes
+      // Clear all caches when data changes
       this._cachedFilteredData = [];
       this._cachedFilters = {};
-      // Clear keyboard navigation cache when data changes
+      this._cachedSortedData = [];
+      this._lastSortState = null;
       this._cachedVisibleDataKeys = null;
     }
     
-    // Clear keyboard navigation cache when filters change (affects visible rows)
+    // Clear navigation cache when filters change (affects visible rows)
     if (changedProperties.has('destinationFilter') || 
         changedProperties.has('abcFilter') ||
         changedProperties.has('blacklistedFilter') ||
         changedProperties.has('lichidareFilter') ||
         Object.keys(changedProperties).some(key => key.startsWith('numberFilter_'))) {
       this._cachedVisibleDataKeys = null;
+      // Note: We don't clear filter cache here as it's handled by _filtersChanged()
+    }
+    
+    // Clear sorting cache when sort properties change
+    if (changedProperties.has('sortColumn') || changedProperties.has('sortDirection')) {
+      this._cachedSortedData = [];
+      this._lastSortState = null;
+      this._cachedVisibleDataKeys = null; // Sort order affects navigation
     }
     
     // No longer initializing tooltips here for performance - using basic HTML title attributes

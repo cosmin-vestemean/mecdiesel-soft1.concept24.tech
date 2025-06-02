@@ -56,7 +56,7 @@ export class BranchReplenishmentContainer extends LitElement {
     this.isSuccessiveStrategy = true;
     this.queryPanelVisible = true; // Initially visible
     this.branches = { // Keep branches data here or fetch if dynamic
-      '1000': 'HQ', '1200': 'CLUJ', '1300': 'CONSTANTA', '1400': 'GALATI',
+      '1200': 'CLUJ', '1300': 'CONSTANTA', '1400': 'GALATI',
       '1500': 'PLOIESTI', '1600': 'IASI', '1700': 'SIBIU', '1800': 'CRAIOVA',
       '1900': 'ORADEA', '2000': 'PITESTI', '2100': 'BRASOV', '2200': 'BUCURESTI',
       '2300': 'ARAD', '2400': 'VOLUNTARI', '2600': 'MIHAILESTI', '2700': 'TG. MURES',

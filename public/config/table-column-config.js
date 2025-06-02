@@ -51,7 +51,7 @@ export const getSortableColumns = () => columnConfig.filter(col => col.visible &
 export const sortConfig = {
   // Maximum dataset size for client-side sorting
   // Above this threshold, consider implementing server-side sorting
-  clientSortThreshold: 1000,
+  clientSortThreshold: 2000,
   
   // Default sort orders for different data types
   defaultSortOrder: {
