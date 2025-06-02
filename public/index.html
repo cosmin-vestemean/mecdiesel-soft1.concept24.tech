@@ -86,7 +86,26 @@
           </a>
         </div>
         <div class="col-12 col-md-10">
-          <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+          <!-- App Level Navigation -->
+          <div class="app-selector mb-2">
+            <div class="btn-group btn-group-sm" role="group" aria-label="Application selector">
+              <button type="button" class="btn btn-sm btn-outline-primary app-btn active" data-app="italy-sync">
+                <i class="fas fa-exchange-alt me-1"></i>Italy Sync
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-primary app-btn" data-app="conversie-auto">
+                <i class="fas fa-cogs me-1"></i>Conversie Auto
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-primary app-btn" data-app="print-config">
+                <i class="fas fa-print me-1"></i>Print Config
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-primary app-btn" data-app="achizitii">
+                <i class="fas fa-shopping-cart me-1"></i>Achizitii
+              </button>
+            </div>
+          </div>
+
+          <!-- Sub-app Navigation for Italy Sync -->
+          <ul class="nav nav-tabs sub-nav" id="italySyncTabs" role="tablist" data-app="italy-sync">
             <li class="nav-item" role="presentation">
               <button class="nav-link active" id="mappingsButton" data-bs-toggle="tab" type="button" role="tab">
                 Mappings <i id="mappingsReload" class="fas fa-sync reload-icon"></i>
@@ -103,11 +122,6 @@
               </button>
             </li>
             <li class="nav-item" role="presentation">
-              <button class="nav-link" id="convAutoButton" data-bs-toggle="tab" type="button" role="tab">
-                Conversie automata <i id="convAutoReload" class="fas fa-sync reload-icon"></i>
-              </button>
-            </li>
-            <li class="nav-item" role="presentation">
               <button class="nav-link" id="stockChangesButton" data-bs-toggle="tab" type="button" role="tab">
                 Stock changes <i id="stockChangesReload" class="fas fa-sync reload-icon"></i>
               </button>
@@ -117,28 +131,46 @@
                 Batch
               </button>
             </li>
+          </ul>
+
+          <!-- Sub-app Navigation for Conversie Auto (no sub-tabs) -->
+          <ul class="nav nav-tabs sub-nav d-none" id="conversieAutoTabs" role="tablist" data-app="conversie-auto">
             <li class="nav-item" role="presentation">
-              <button class="nav-link" id="printConfigButton" data-bs-toggle="tab" type="button" role="tab">
+              <button class="nav-link active" id="convAutoButton" data-bs-toggle="tab" type="button" role="tab">
+                Conversie automata <i id="convAutoReload" class="fas fa-sync reload-icon"></i>
+              </button>
+            </li>
+          </ul>
+
+          <!-- Sub-app Navigation for Print Config (no sub-tabs) -->
+          <ul class="nav nav-tabs sub-nav d-none" id="printConfigTabs" role="tablist" data-app="print-config">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="printConfigButton" data-bs-toggle="tab" type="button" role="tab">
                 Print config
               </button>
             </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" id="branchReplenishButton" data-bs-toggle="tab" type="button" role="tab">
-                Branch Replenishment</i>
-              </button>
-            </li>
+          </ul>
+
+          <!-- Sub-app Navigation for Achizitii -->
+          <ul class="nav nav-tabs sub-nav d-none" id="achizitiiTabs" role="tablist" data-app="achizitii">
             <li class="nav-item" role="presentation">
               <button class="nav-link" id="necesarAchizitiiButton" data-bs-toggle="tab" type="button" role="tab">
-                Necesar achizitii</i>
+                Necesar achizitii
               </button>
             </li>
             <li class="nav-item" role="presentation">
               <button class="nav-link" id="topAbcButton" data-bs-toggle="tab" type="button" role="tab">
-                Top ABC</i>
+                Top ABC
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="branchReplenishButton" data-bs-toggle="tab" type="button" role="tab">
+                Branch Replenishment
               </button>
             </li>
           </ul>
-          <div class="d-flex align-items-center mt-2 gap-2">
+          
+          <div class="d-flex align-items-center mt-2 gap-2" id="contextualControls">
             <select id="tables" class="form-select w-auto">
               <option value="mec_item">mec_item</option>
               <option value="mec_item_producer_relation">mec_item_producer_relation</option>
@@ -391,6 +423,7 @@
     <div id="salesHistoryChartModalContainer"></div>
     
     <!-- Application Scripts - Load after frameworks -->
+    <script type="module" src="hierarchical-navigation.js"></script>
     <script type="module" src="socketConfig.js"></script>
     <script type="module" src="login/login.js"></script> <!-- Add login script -->
     <script type="module" src="renderTable.js"></script>

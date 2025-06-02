@@ -14,8 +14,9 @@ import {
   getAllPrintTemplatesForSoSource,
   getItemsFromService
 } from './dataFetching.js';
-import { client } from './socketConfig.js'; // Add this import
+import { client } from './socketConfig.js';
 import { paginationManager } from './paginationManager.js';
+import { hierarchicalNav } from './hierarchical-navigation.js';
 
 let codes = [];
 let isStopped = false;
@@ -116,10 +117,6 @@ export function initializeUserInteractions() {
     paginationManager.paginate(-1);
   });
 
-  $("#itemsButton").click(() => {
-    hideAllButArray(["itemsContent", "searchItems", "tables", "tablesLabel"]);
-  });
-
   const arrOfHtmlElements = [
     "itemsContent",
     "tables",
@@ -156,12 +153,15 @@ export function initializeUserInteractions() {
     });
   }
 
+  // Updated tab handlers to work with hierarchical navigation
   $("#mappingsButton").click(() => {
     hideAllButArray(["mappingsContent"]);
+    paginationManager.setActiveTab("mappingsButton");
   });
 
   $("#errorsButton").click(() => {
     hideAllButArray(["errorsContent", "searchErrors"]);
+    paginationManager.setActiveTab("errorsButton");
     if (!document.getElementById("searchErrors")) {
       var input = document.createElement("input");
       input.setAttribute("type", "text");
@@ -209,12 +209,12 @@ export function initializeUserInteractions() {
 
   $("#convAutoButton").click(() => {
     hideAllButArray(["convAutoContent"]);
-    // Update active tab in pagination manager
     paginationManager.setActiveTab("convAutoButton");
   });
 
   $("#batchButton").click(() => {
     hideAllButArray(["batchApp", "batchSize", "batchTable", "batchStatus"]);
+    paginationManager.setActiveTab("batchButton");
   });
 
   $("#stockChangesButton").click(() => {
@@ -278,6 +278,7 @@ export function initializeUserInteractions() {
 
   $("#printConfigButton").click(() => {
     hideAllButArray(["print_config"]);
+    paginationManager.setActiveTab("printConfigButton");
     connectToS1((token) => {
       getAllSoSourceObjectsRo(token, (sosourceOptions) => {
         addOptions(sosourceOptions, ".sosource", "sosource");
@@ -287,21 +288,24 @@ export function initializeUserInteractions() {
 
   $("#branchReplenishButton").click(() => {
     hideAllButArray(["branchReplenishContent"]);
-    // Update active tab in pagination manager
     paginationManager.setActiveTab("branchReplenishButton");
   });
 
   //necesarAchizitiiButton
   $("#necesarAchizitiiButton").click(() => {
     hideAllButArray(["necesarAchizitiiContent"]);
-    // Update active tab in pagination manager
     paginationManager.setActiveTab("necesarAchizitiiButton");
   });
 
   $("#topAbcButton").click(() => {
     hideAllButArray(["topAbcContent"]);
-    // Update active tab in pagination manager
     paginationManager.setActiveTab("topAbcButton");
+  });
+
+  // Update items button handler to work with hierarchical navigation
+  $("#itemsButton").click(() => {
+    hideAllButArray(["itemsContent", "searchItems", "tables", "tablesLabel"]);
+    paginationManager.setActiveTab("itemsButton");
   });
 
   $("#mappingsButton").click();
@@ -694,23 +698,6 @@ export function initializeUserInteractions() {
     button.addEventListener('click', () => {
       paginationManager.setActiveTab(button.id);
     });
-  });
-  
-  // Handle Top ABC Analysis tab
-  document.getElementById('topAbcButton').addEventListener('click', function() {
-    // Hide all content divs
-    document.querySelectorAll('#mainContent > div').forEach(div => {
-      div.style.display = 'none';
-    });
-    // Show only Top ABC content
-    document.getElementById('topAbcContent').style.display = 'block';
-    
-    // Clear the active class from all tabs
-    document.querySelectorAll('.nav-link').forEach(tab => {
-      tab.classList.remove('active');
-    });
-    // Set this tab as active
-    this.classList.add('active');
   });
 
   // Global pagination controls

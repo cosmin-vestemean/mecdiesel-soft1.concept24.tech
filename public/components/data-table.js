@@ -354,7 +354,7 @@ export class ReplenishmentDataTable extends LitElement {
       <div class="d-flex flex-column align-items-center ${isCurrentSort ? 'text-primary fw-bold' : ''}"
            @click=${column.isSortable ? (e) => { e.stopPropagation(); this.handleSort(column); } : null}
            style="${column.isSortable ? 'cursor: pointer;' : ''}">
-        <div class="d-flex align-items-center small fw-bold mb-1">
+        <div class="d-flex align-items-center small">
           <span>${column.displayName}</span>
           ${column.isSortable ? this.renderSortIcon(column) : ''}
         </div>
@@ -380,7 +380,7 @@ export class ReplenishmentDataTable extends LitElement {
       <div class="d-flex flex-column align-items-center ${isCurrentSort ? 'text-primary fw-bold' : ''}"
            @click=${column.isSortable ? (e) => { e.stopPropagation(); this.handleSort(column); } : null}
            style="${column.isSortable ? 'cursor: pointer;' : ''}">
-        <div class="d-flex align-items-center small fw-bold mb-1">
+        <div class="d-flex align-items-center small">
           <span>${column.displayName}</span>
           ${column.isSortable ? this.renderSortIcon(column) : ''}
         </div>
@@ -405,7 +405,7 @@ export class ReplenishmentDataTable extends LitElement {
       <div class="d-flex flex-column align-items-center ${isCurrentSort ? 'text-primary fw-bold' : ''}"
            @click=${column.isSortable ? (e) => { e.stopPropagation(); this.handleSort(column); } : null}
            style="${column.isSortable ? 'cursor: pointer;' : ''}">
-        <div class="d-flex align-items-center small fw-bold mb-1">
+        <div class="d-flex align-items-center small">
           <span>${column.displayName}</span>
           ${column.isSortable ? this.renderSortIcon(column) : ''}
         </div>
@@ -445,7 +445,7 @@ export class ReplenishmentDataTable extends LitElement {
      return html`
       <div class="d-flex flex-column align-items-center"
            @click=${column.isSortable ? (e) => { e.stopPropagation(); this.handleSort(column); } : null}>
-        <div class="d-flex align-items-center small fw-bold mb-1">
+        <div class="d-flex align-items-center small">
           <span>${column.displayName}</span>
           ${column.isSortable ? this.renderSortIcon(column) : ''}
         </div>
