@@ -78,19 +78,17 @@ export class TopAbcControlPanel extends LitElement {
 
   // Initialize selectedBranches from branch string if it exists
   initializeBranchSelection() {
-    // Guard against this.branches not being an array or not populated
-    if (!this.branches || !Array.isArray(this.branches)) {
+    // Guard against this.branches not being populated (it's an object, not array)
+    if (!this.branches || typeof this.branches !== 'object') {
       this.selectedBranches = [];
       return;
     }
 
     if (this.branch && this.branch !== "1000") {
-      const branchIds = this.branch.split(",").map(Number);
-      this.selectedBranches = this.branches.filter((b) =>
-        branchIds.includes(b.id)
-      );
+      const branchIds = this.branch.split(",");
+      this.selectedBranches = branchIds.filter(id => this.branches[id]).map(id => id);
     } else if (this.branch === "1000") {
-      this.selectedBranches = [{ id: 1000, name: "All Branches" }];
+      this.selectedBranches = ["1000"];
     } else {
       // Clear selection if this.branch is empty or null
       this.selectedBranches = [];
@@ -150,10 +148,9 @@ export class TopAbcControlPanel extends LitElement {
 
   // Handler for branch selection from fancy-dropdown
   handleBranchSelectionChanged(e) {
-    // Instead of replacing the array, mutate it in place to avoid Lit re-rendering the dropdown
-    this.selectedBranches.length = 0;
-    this.selectedBranches.push(...e.detail.value);
-    // Update the branch string for API compatibility
+    // Update selectedBranches with the new selection
+    this.selectedBranches = [...e.detail.value];
+    // Update the branch string for API compatibility - selectedBranches contains the keys
     this.branch = this.selectedBranches.join(',');
     // Dispatch event with updated parameters
     this.dispatchEvent(new CustomEvent('params-changed', {
@@ -214,31 +211,33 @@ export class TopAbcControlPanel extends LitElement {
     if (changedProperties.has("branch")) {
       this.initializeBranchSelection();
       // Ensure the fancy-dropdown re-renders with the new selection
-      if (this.shadowRoot) {
-        const branchDropdown = this.shadowRoot.querySelector('#branch-fancy-dropdown');
+      // Use querySelector since we render in light DOM, not shadow DOM
+      setTimeout(() => {
+        const branchDropdown = this.querySelector('#branch-fancy-dropdown');
         if (branchDropdown) {
           branchDropdown.requestUpdate();
         }
-      }
+      }, 0);
     }
     if (changedProperties.has("supplier")) {
       if (this.supplier === null) {
         this.selectedSuppliers = [];
       } else if (this.supplier && this.suppliers && Array.isArray(this.suppliers)) {
-        // Ensure this.supplier is treated as a number for comparison, as TRDR is likely numeric
+        // Find the supplier and set selectedSuppliers to contain just the TRDR key
         const supplierIdToFind = Number(this.supplier);
         const selected = this.suppliers.find(s => s.TRDR === supplierIdToFind);
-        this.selectedSuppliers = selected ? [selected] : [];
+        this.selectedSuppliers = selected ? [String(selected.TRDR)] : [];
       } else {
         this.selectedSuppliers = [];
       }
       // Ensure the fancy-dropdown re-renders with the new selection
-      if (this.shadowRoot) {
-        const supplierDropdown = this.shadowRoot.querySelector('#supplier-fancy-dropdown');
+      // Use querySelector since we render in light DOM, not shadow DOM
+      setTimeout(() => {
+        const supplierDropdown = this.querySelector('#supplier-fancy-dropdown');
         if (supplierDropdown) {
           supplierDropdown.requestUpdate();
         }
-      }
+      }, 0);
     }
   }
 
