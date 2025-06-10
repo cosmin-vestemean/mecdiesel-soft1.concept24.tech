@@ -23,9 +23,7 @@ BEGIN
     SELECT CAST(value AS INT) FROM STRING_SPLIT(@branchesEmit, ',');
 
     INSERT INTO #DestBranches (branch)
-    SELECT CAST(value AS INT) FROM STRING_SPLIT(@branchesDest, ',');
-
-    -- Create temp table for pre-calculated pending orders
+    SELECT CAST(value AS INT) FROM STRING_SPLIT(@branchesDest, ',');    -- Create temp table for pre-calculated pending orders
     CREATE TABLE #PendingOrders (
         mtrl INT,
         branchFrom INT,
@@ -38,8 +36,8 @@ BEGIN
     INSERT INTO #PendingOrders
     SELECT 
         A.mtrl, 
-        C.BRANCH,
-        B.BRANCHSEC,
+        C.BRANCH AS branchFrom,
+        C.BRANCH AS branchTo,
         SUM((ISNULL(A.QTY1,0)) - (ISNULL(A.QTY1COV,0) + ISNULL(A.QTY1CANC,0)))
     FROM MTRLINES A 
     INNER JOIN findoc c ON (c.findoc=a.findoc AND c.company=a.company AND c.sosource=a.sosource)
@@ -47,13 +45,13 @@ BEGIN
     WHERE 
         A.COMPANY = @company
         AND a.pending = 1
-        AND a.restmode IN (1,2) 
+        AND a.restmode = 2
         AND c.FISCPRD = @fiscalYear
         AND c.iscancel = 0
         AND c.sosource = 1151
         AND c.FPRMS = 3130
-        AND B.BRANCHSEC IN (SELECT branch FROM #DestBranches) -- Use temp table instead of STRING_SPLIT
-    GROUP BY A.mtrl, C.BRANCH, B.BRANCHSEC;
+        AND C.BRANCH IN (SELECT branch FROM #EmitBranches) -- Use emit branches instead of dest branches
+    GROUP BY A.mtrl, C.BRANCH;
 
     -- Create index on the pending orders temp table
     CREATE NONCLUSTERED INDEX IX_PendingOrders_MTRL_BRANCHTO 
@@ -314,11 +312,11 @@ BEGIN
         dm.branchE, 
         br.branch branchD,        m.Code Cod, 
         CASE WHEN LEN(m.Name) > 30 THEN CONCAT(LEFT(m.Name, 30), '...') ELSE m.Name END Descriere,
-        dm.CantitateE stoc_emit,
+        ISNULL(dm.CantitateE, 0) - ISNULL(po_emit.qty, 0) stoc_emit,
         dm.MinE min_emit, 
         dm.MaxE max_emit,
-        ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0) disp_min_emit,
-        ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0) disp_max_emit,
+        ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(dm.MinE, 0) disp_min_emit,
+        ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(dm.MaxE, 0) disp_max_emit,
         brD.name Destinatie,
         CASE WHEN ml.cccisblacklisted IS NULL THEN '-' ELSE CASE WHEN ml.cccisblacklisted = 0 THEN 'Nu' ELSE 'Da' END END Blacklisted,
         CASE WHEN m.cccitemoutlet IS NULL THEN '-' ELSE CASE WHEN m.cccitemoutlet = 0 THEN 'Nu' ELSE 'Da' END END InLichidare,        CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END stoc_dest,
@@ -407,12 +405,16 @@ BEGIN
     INNER JOIN #BranchLimits bl_dest ON (
         bl_dest.mtrl = dm.mtrl 
         AND bl_dest.branch = br.branch
-    )
-    LEFT JOIN (
+    )    LEFT JOIN (
         SELECT mtrl, branchTo, SUM(qty) AS qty
         FROM #PendingOrders
         GROUP BY mtrl, branchTo
-    ) po ON (po.mtrl = dm.mtrl AND po.branchTo = br.branch)    LEFT JOIN (
+    ) po ON (po.mtrl = dm.mtrl AND po.branchTo = br.branch)
+    LEFT JOIN (
+        SELECT mtrl, branchFrom, SUM(qty) AS qty
+        FROM #PendingOrders
+        GROUP BY mtrl, branchFrom
+    ) po_emit ON (po_emit.mtrl = dm.mtrl AND po_emit.branchFrom = dm.branchE)LEFT JOIN (
         SELECT mtrl, branchFrom, branchTo, SUM(qty) AS qty
         FROM #UnreceivedTransfers
         GROUP BY mtrl, branchFrom, branchTo
