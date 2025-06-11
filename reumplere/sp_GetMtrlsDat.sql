@@ -312,11 +312,17 @@ BEGIN
         dm.branchE, 
         br.branch branchD,        m.Code Cod, 
         CASE WHEN LEN(m.Name) > 30 THEN CONCAT(LEFT(m.Name, 30), '...') ELSE m.Name END Descriere,
-        ISNULL(dm.CantitateE, 0) - ISNULL(po_emit.qty, 0) stoc_emit,
+        ISNULL(dm.CantitateE, 0) stoc_emit,
         dm.MinE min_emit, 
         dm.MaxE max_emit,
-        ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(dm.MinE, 0) disp_min_emit,
-        ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(dm.MaxE, 0) disp_max_emit,
+        CASE WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(dm.MinE, 0)) < 0 
+             THEN 0 
+             ELSE (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(dm.MinE, 0)) 
+        END disp_min_emit,
+        CASE WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(dm.MaxE, 0)) < 0 
+             THEN 0 
+             ELSE (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(dm.MaxE, 0)) 
+        END disp_max_emit,
         brD.name Destinatie,
         CASE WHEN ml.cccisblacklisted IS NULL THEN '-' ELSE CASE WHEN ml.cccisblacklisted = 0 THEN 'Nu' ELSE 'Da' END END Blacklisted,
         CASE WHEN m.cccitemoutlet IS NULL THEN '-' ELSE CASE WHEN m.cccitemoutlet = 0 THEN 'Nu' ELSE 'Da' END END InLichidare,        CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END stoc_dest,
