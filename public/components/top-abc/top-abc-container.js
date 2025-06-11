@@ -66,12 +66,85 @@ export class TopAbcContainer extends LitElement {
     super.connectedCallback();
     this.token = sessionStorage.getItem('s1Token');
     if (!this.token) {
-      console.error('No token available');
-      this.error = 'No authentication token found. Please log in.';
+      console.log('No token found in session storage, acquiring S1 token automatically...');
+      this.acquireS1Token();
       return;
     }
 
     this.fetchData();
+ }
+
+  /**
+   * Automatically acquire S1 authentication token
+   * This method replicates the connectToS1 pattern used throughout the application
+   */
+  async acquireS1Token() {
+    try {
+      console.log('Starting S1 token acquisition...');
+      this.loading = true;
+      this.error = '';
+      
+      // Step 1: Ping the S1 service
+      await client.service("s1").ping();
+      console.log('S1 ping successful');
+
+      // Step 2: Login to get initial token and branch data
+      const loginResponse = await client.service("s1").login();
+      console.log('S1 login response:', loginResponse);
+
+      if (!loginResponse.success) {
+        throw new Error(loginResponse.message || 'S1 login failed');
+      }
+
+      const token = loginResponse.clientID;
+      const objs = loginResponse.objs;
+      
+      if (!token || !objs) {
+        throw new Error('Invalid login response: missing token or branch data');
+      }
+
+      // Step 3: Find HQ branch data (used for authentication)
+      const loginData = objs.filter((obj) => obj.BRANCHNAME === "HQ")[0];
+      
+      if (!loginData) {
+        throw new Error('HQ branch data not found in login response');
+      }
+
+      const appId = loginResponse.appid;
+
+      // Step 4: Authenticate with the S1 service to get a valid session token
+      const authResponse = await client.service("s1").authenticate({
+        service: "authenticate",
+        clientID: token,
+        company: loginData.COMPANY,
+        branch: loginData.BRANCH,
+        module: loginData.MODULE,
+        refid: loginData.REFID,
+        userid: loginData.USERID,
+        appId: appId,
+      });
+
+      console.log('S1 authentication response:', authResponse);
+
+      if (!authResponse.success) {
+        throw new Error(authResponse.message || 'S1 authentication failed');
+      }
+
+      // Step 5: Store the authenticated token and proceed
+      this.token = authResponse.clientID;
+      sessionStorage.setItem('s1Token', this.token);
+      
+      console.log('S1 token acquired successfully:', this.token);
+      
+      // Step 6: Now that we have a token, proceed with data fetching
+      this.loading = false;
+      this.fetchData();
+
+    } catch (error) {
+      console.error('S1 token acquisition failed:', error);
+      this.loading = false;
+      this.error = `Failed to acquire authentication token: ${error.message}. Please refresh the page and try again.`;
+    }
   }
 
   async fetchData() {
@@ -108,10 +181,12 @@ export class TopAbcContainer extends LitElement {
             params.mtrl = 2606178;
         }
       
-      const response = await client.service('top-abc').getTopAbcAnalysis({
-        token: this.token,
-        ...params
-      });
+      const response = await this.makeAuthenticatedCall(async () => {
+        return await client.service('top-abc').getTopAbcAnalysis({
+          token: this.token,
+          ...params
+        });
+      }, 'TOP ABC analysis fetch');
 
       console.log('API Response:', response);
 
@@ -159,11 +234,13 @@ export class TopAbcContainer extends LitElement {
 
       console.log('Loading saved ABC analysis for branch:', this.params.branch);
 
-      // Call the load saved analysis API
-      const response = await client.service('top-abc').loadSavedAnalysis({
-        token: this.token,
-        branch: this.params.branch
-      });
+      // Call the load saved analysis API with authentication retry
+      const response = await this.makeAuthenticatedCall(async () => {
+        return await client.service('top-abc').loadSavedAnalysis({
+          token: this.token,
+          branch: this.params.branch
+        });
+      }, 'load saved analysis');
 
       console.log('Load saved analysis response:', response);
       console.log('Response params:', response.params);
@@ -367,8 +444,10 @@ export class TopAbcContainer extends LitElement {
 
     console.log('Saving ABC analysis data:', savePayload);
 
-    // Call the save API
-    const response = await client.service('top-abc').saveTopAbcAnalysis(savePayload);
+    // Call the save API with authentication retry
+    const response = await this.makeAuthenticatedCall(async () => {
+      return await client.service('top-abc').saveTopAbcAnalysis(savePayload);
+    }, 'save analysis data');
 
     console.log('Save response:', response);
 
@@ -389,11 +468,13 @@ export class TopAbcContainer extends LitElement {
       console.log('Step 1: Resetting existing data for selected branch(es)...');
       this._showProgress('reset', 'Clearing existing data for selected branch(es) before chunked save...', 1, 3);
       
-      const resetResponse = await client.service('top-abc').resetTopAbcAnalysis({
-        token: this.token,
-        // dataReferinta: this.params.dataReferinta, // Removed dataReferinta
-        branch: this.params.branch
-      });
+      const resetResponse = await this.makeAuthenticatedCall(async () => {
+        return await client.service('top-abc').resetTopAbcAnalysis({
+          token: this.token,
+          // dataReferinta: this.params.dataReferinta, // Removed dataReferinta
+          branch: this.params.branch
+        });
+      }, 'reset analysis data');
 
       console.log('Reset response:', resetResponse); // Log the entire reset response object
 
@@ -435,7 +516,9 @@ export class TopAbcContainer extends LitElement {
           totalChunks: chunks.length
         };
 
-        const chunkResponse = await client.service('top-abc').saveTopAbcAnalysisChunk(chunkPayload);
+        const chunkResponse = await this.makeAuthenticatedCall(async () => {
+          return await client.service('top-abc').saveTopAbcAnalysisChunk(chunkPayload);
+        }, `save chunk ${chunkNumber}`);
         console.log(`Chunk ${chunkNumber} save response:`, chunkResponse); // Log the entire chunk save response object
 
         if (!chunkResponse.success) {
@@ -469,6 +552,71 @@ export class TopAbcContainer extends LitElement {
       
     } catch (error) {
       this._hideProgress();
+      throw error;
+    }
+  }
+
+  /**
+   * Make an authenticated API call with automatic token refresh on authentication errors
+   * @param {Function} apiCall - Function that makes the API call
+   * @param {string} operation - Description of the operation for error messages
+   * @returns {Promise} - The API response
+   */
+  async makeAuthenticatedCall(apiCall, operation = 'API call') {
+    try {
+      // First attempt with existing token
+      const response = await apiCall();
+      
+      // Check for authentication errors (common patterns)
+      if (!response.success && response.message && 
+          (response.message.includes('authentication') || 
+           response.message.includes('token') || 
+           response.message.includes('unauthorized') ||
+           response.message.includes('session'))) {
+        
+        console.log(`Authentication error detected during ${operation}, attempting token refresh...`);
+        
+        // Clear the existing token and acquire a new one
+        this.token = null;
+        sessionStorage.removeItem('s1Token');
+        
+        // Acquire a new token
+        await this.acquireS1Token();
+        
+        // Retry the API call with the new token
+        if (this.token) {
+          console.log(`Retrying ${operation} with new token...`);
+          return await apiCall();
+        } else {
+          throw new Error('Failed to acquire new authentication token');
+        }
+      }
+      
+      // Return the response if no authentication error
+      return response;
+      
+    } catch (error) {
+      // Check if this is a network/connection error that might be auth-related
+      if (error.message && error.message.includes('fetch')) {
+        console.log(`Network error during ${operation}, attempting token refresh...`);
+        
+        try {
+          // Try to acquire a new token
+          this.token = null;
+          sessionStorage.removeItem('s1Token');
+          await this.acquireS1Token();
+          
+          // Retry with new token if acquisition was successful
+          if (this.token) {
+            console.log(`Retrying ${operation} after network error...`);
+            return await apiCall();
+          }
+        } catch (retryError) {
+          console.error(`Token refresh failed after network error:`, retryError);
+        }
+      }
+      
+      // Re-throw the original error if not auth-related or retry failed
       throw error;
     }
   }

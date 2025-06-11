@@ -271,7 +271,7 @@ function getTopAbcAnalysis_combined(apiObj) {
 /**
  * Save TOP ABC Analysis Results API function
  * This function saves ABC analysis results to CCCTOPABC and CCCTOPABCSUMMARY tables
- * with proper transaction handling and audit trail
+ * with proper transaction handling. Previous calculations are completely removed to keep only the most recent.
  * Endpoint: /JS/TopAbcAnalysis/saveTopAbcAnalysis
  *
  * @param {Object} apiObj - Parameters passed from the client
@@ -387,21 +387,16 @@ function saveTopAbcAnalysis(apiObj) {
                 }
             }
             
-            // Step 1: Reset existing data for this branch and date (audit trail)
+            // Step 1: Delete all existing detail records for this branch (keep only most recent calculation)
             queryList.push(
-                "UPDATE CCCTOPABC " +
-                "SET ABC = '0' " +
-                "WHERE CCCTOPABCSUMMARYID IN (" +
-                    "SELECT CCCTOPABCSUMMARYID " +
-                    "FROM CCCTOPABCSUMMARY " +
-                    "WHERE DATACALCUL = " + dataReferinta + " AND BRANCH = " + branchNum +
-                ")"
+                "DELETE FROM CCCTOPABC " +
+                "WHERE BRANCH = " + branchNum
             );
             
-            // Step 2: Delete existing summary for this branch and date
+            // Step 2: Delete all existing summary records for this branch (keep only most recent calculation)
             queryList.push(
                 "DELETE FROM CCCTOPABCSUMMARY " +
-                "WHERE DATACALCUL = " + dataReferinta + " AND BRANCH = " + branchNum
+                "WHERE BRANCH = " + branchNum
             );
             
             // Step 3: Insert new summary record
@@ -537,7 +532,7 @@ function saveTopAbcAnalysis(apiObj) {
 /**
  * Save TOP ABC Analysis Results in Chunks API function
  * This function saves ABC analysis results in chunks to handle large datasets
- * without hitting request size limits. Uses append-only strategy for chunks.
+ * without hitting request size limits. Previous calculations are removed in the first chunk to keep only the most recent.
  * Endpoint: /JS/TopAbcAnalysis/saveTopAbcAnalysisChunk
  *
  * @param {Object} apiObj - Parameters passed from the client
@@ -622,8 +617,26 @@ function saveTopAbcAnalysisChunk(apiObj) {
         // Start transaction
         queryList.push("BEGIN TRAN");
         
-        // For first chunk only: handle summary data
+        // For first chunk only: handle summary data and cleanup previous calculations
         if (chunkNumber === 1 && apiObj.summary && Array.isArray(apiObj.summary)) {
+            // First, delete all existing calculations for these branches (keep only most recent)
+            for (var j = 0; j < branchList.length; j++) {
+                var branchCode = branchList[j];
+                var branchNum = parseInt(branchCode);
+                
+                // Delete all existing detail records for this branch
+                queryList.push(
+                    "DELETE FROM CCCTOPABC " +
+                    "WHERE BRANCH = " + branchNum
+                );
+                
+                // Delete all existing summary records for this branch
+                queryList.push(
+                    "DELETE FROM CCCTOPABCSUMMARY " +
+                    "WHERE BRANCH = " + branchNum
+                );
+            }
+            
             // Process summary insertion for each branch
             for (var j = 0; j < branchList.length; j++) {
                 var branchCode = branchList[j];
@@ -784,8 +797,8 @@ function saveTopAbcAnalysisChunk(apiObj) {
 
 /**
  * Reset TOP ABC Analysis Data API function
- * This function clears existing ABC analysis data for a specific branch
- * from CCCTOPABC and CCCTOPABCSUMMARY tables.
+ * This function completely removes existing ABC analysis data for a specific branch
+ * from CCCTOPABC and CCCTOPABCSUMMARY tables to keep only the most recent calculation.
  * Endpoint: /JS/TopAbcAnalysis/resetTopAbcAnalysis
  *
  * @param {Object} apiObj - Parameters passed from the client
@@ -814,15 +827,15 @@ function resetTopAbcAnalysis(apiObj) {
     try {
         X.RUNSQL("BEGIN TRAN", null);
 
-        // Update CCCTOPABC: Set ABC = '0' for audit trail
-        var updateTopAbcSql = "UPDATE CCCTOPABC SET ABC = '0' WHERE BRANCH IN (" + branchInClause + ")";
-        queryList.push(updateTopAbcSql);
+        // Delete CCCTOPABC records completely (no audit trail - keep only most recent calculation)
+        var deleteTopAbcSql = "DELETE FROM CCCTOPABC " +
+            "WHERE BRANCH IN (" + branchInClause + ")";
+        queryList.push(deleteTopAbcSql);
         
-        // Conditionally delete from CCCTOPABCSUMMARY:
-        // Delete summary records for the specified branch(es) only if they are not referenced by any CCCTOPABC record.
-        var deleteOrphanSummarySql = "DELETE CS FROM CCCTOPABCSUMMARY CS WHERE CS.BRANCH IN (" + branchInClause + ") " +
-                                     "AND NOT EXISTS (SELECT 1 FROM CCCTOPABC CD WHERE CD.CCCTOPABCSUMMARYID = CS.CCCTOPABCSUMMARYID)";
-        queryList.push(deleteOrphanSummarySql);
+        // Delete CCCTOPABCSUMMARY records completely
+        var deleteSummarySql = "DELETE FROM CCCTOPABCSUMMARY " +
+            "WHERE BRANCH IN (" + branchInClause + ")";
+        queryList.push(deleteSummarySql);
 
         executedQuery = queryList.join(';');
 
@@ -838,7 +851,7 @@ function resetTopAbcAnalysis(apiObj) {
 
         return {
             success: true,
-            message: "Reset complete for branch(es) " + apiObj.branch + ": CCCTOPABC items marked for audit (ABC='0'). CCCTOPABCSUMMARY entries without corresponding CCCTOPABC items have been removed.",
+            message: "Reset complete for branch(es) " + apiObj.branch + ": All previous ABC analysis data has been completely removed to keep only the most recent calculation.",
             duration: duration,
             query: executedQuery // Return the executed query
         };
