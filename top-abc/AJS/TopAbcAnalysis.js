@@ -366,13 +366,14 @@ function saveTopAbcAnalysis(apiObj) {
             for (var k = 0; k < apiObj.data.length; k++) {
                 var item = apiObj.data[k];
                 if (item.BRANCH == branchNum) {
-                    // Keep essential fields including VALUE and CUMULATIVEPERC for proper save/load
+                    // Keep essential fields including VALUE, SUMQTY and CUMULATIVEPERC for proper save/load
                     branchData.push({
                         MTRL: item.MTRL,
                         BRANCH: item.BRANCH,
                         SALESPERC: item.SALESPERC || item.SALESPRCNT || 0,
                         CUMULATIVEPERC: item.CUMULATIVEPERC || 0,
                         VALUE: item.VALUE || 0,
+                        SUMQTY: item.SUMQTY || 0, // Added quantity support
                         ABC: item.ABC
                     });
                     
@@ -433,11 +434,12 @@ function saveTopAbcAnalysis(apiObj) {
                 var salesPrcnt = item.SALESPERC || item.SALESPRCNT || 0;
                 var cumulativePerc = item.CUMULATIVEPERC || 0;
                 var value = item.VALUE || 0;
+                var sumQty = item.SUMQTY || 0; // Added quantity support
                 var abc = item.ABC || 'C';
                 
                 queryList.push(
                     "INSERT INTO CCCTOPABC (" +
-                        "CCCTOPABCSUMMARYID, MTRL, BRANCH, SALESPERC, CUMULATIVEPERC, VALUE, ABC" +
+                        "CCCTOPABCSUMMARYID, MTRL, BRANCH, SALESPERC, CUMULATIVEPERC, VALUE, SUMQTY, ABC" +
                     ") VALUES (" +
                         "@SummaryID_" + branchNum + ", " + 
                         mtrlValue + ", " + 
@@ -445,6 +447,7 @@ function saveTopAbcAnalysis(apiObj) {
                         salesPrcnt + ", " + 
                         cumulativePerc + ", " + 
                         value + ", " + 
+                        sumQty + ", " + 
                         "'" + abc + "'" +
                     ")"
                 );
@@ -707,11 +710,12 @@ function saveTopAbcAnalysisChunk(apiObj) {
                     var salesPrcnt = item.SALESPERC || item.SALESPRCNT || 0; // Use correct field name
                     var cumulativePerc = item.CUMULATIVEPERC || 0;
                     var value = item.VALUE || 0;
+                    var sumQty = item.SUMQTY || 0; // Added quantity support
                     var abc = item.ABC || 'C';
                     
                     queryList.push(
                         "INSERT INTO CCCTOPABC (" +
-                            "CCCTOPABCSUMMARYID, MTRL, BRANCH, SALESPERC, CUMULATIVEPERC, VALUE, ABC" +
+                            "CCCTOPABCSUMMARYID, MTRL, BRANCH, SALESPERC, CUMULATIVEPERC, VALUE, SUMQTY, ABC" +
                         ") VALUES (" +
                             "@SummaryID_" + branchNum + "_" + chunkNumber + ", " + 
                             mtrlValue + ", " + 
@@ -719,6 +723,7 @@ function saveTopAbcAnalysisChunk(apiObj) {
                             salesPrcnt + ", " + 
                             cumulativePerc + ", " + 
                             value + ", " + 
+                            sumQty + ", " + 
                             "'" + abc + "'" +
                         ")"
                     );

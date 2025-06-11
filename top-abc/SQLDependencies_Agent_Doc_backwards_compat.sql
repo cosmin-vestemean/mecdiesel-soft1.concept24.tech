@@ -220,6 +220,7 @@ BEGIN
         DESCRIPTION VARCHAR(MAX),
         BRANCH SMALLINT,
         VALUE FLOAT,
+        SUMQTY FLOAT,
         SALESPERC FLOAT,
         CUMULATIVEPERC FLOAT,
         ABC CHAR(1)
@@ -262,11 +263,13 @@ BEGIN
     -- Perform ABC Analysis
     DECLARE @abcResults TABLE (
         MTRL INT, MTRSUP INT, CODARTICOL VARCHAR(MAX), DENUMARTICOL VARCHAR(MAX), branch SMALLINT,
-        totalSales FLOAT, salesPercentage FLOAT, cumulativePercentage FLOAT, abcClass CHAR(1)
+        totalSales FLOAT, totalQty FLOAT, salesPercentage FLOAT, cumulativePercentage FLOAT, abcClass CHAR(1)
     );
 
     WITH ProductSales AS (
-        SELECT MTRL, MTRSUP, CODARTICOL, DENUMARTICOL, branch, SUM(valuewk) AS totalSales -- Modificat: folosim valoarea
+        SELECT MTRL, MTRSUP, CODARTICOL, DENUMARTICOL, branch, 
+               SUM(valuewk) AS totalSales, -- Modificat: folosim valoarea
+               SUM(pcswk) AS totalQty      -- Adaugat: folosim cantitatea
         FROM @salesData GROUP BY MTRL, MTRSUP, CODARTICOL, DENUMARTICOL, branch
     ),
     Totals AS (
@@ -283,7 +286,7 @@ BEGIN
         FROM RankedSales
     )
     INSERT INTO @abcResults
-    SELECT MTRL, MTRSUP, CODARTICOL, DENUMARTICOL, branch, totalSales, salesPercentage, cumulativePercentage,
+    SELECT MTRL, MTRSUP, CODARTICOL, DENUMARTICOL, branch, totalSales, totalQty, salesPercentage, cumulativePercentage,
            CASE 
                WHEN cumulativePercentage <= @thresholdA THEN 'A'
                WHEN cumulativePercentage <= (@thresholdA + @thresholdB) THEN 'B'
@@ -292,8 +295,8 @@ BEGIN
     FROM CumulativeSales ORDER BY salesPercentage DESC, totalSales DESC;
 
     -- Populate #DetailedRows
-    INSERT INTO #DetailedRows (MTRL, MTRSUP, CODE, DESCRIPTION, BRANCH, VALUE, SALESPERC, CUMULATIVEPERC, ABC)
-    SELECT MTRL, MTRSUP, CODARTICOL, DENUMARTICOL, branch, totalSales, salesPercentage, cumulativePercentage, abcClass
+    INSERT INTO #DetailedRows (MTRL, MTRSUP, CODE, DESCRIPTION, BRANCH, VALUE, SUMQTY, SALESPERC, CUMULATIVEPERC, ABC)
+    SELECT MTRL, MTRSUP, CODARTICOL, DENUMARTICOL, branch, totalSales, totalQty, salesPercentage, cumulativePercentage, abcClass
     FROM @abcResults ORDER BY salesPercentage DESC;
 
     -- Populate #SummaryRows
@@ -383,6 +386,7 @@ BEGIN
         DESCRIPTION VARCHAR(MAX),
         BRANCH SMALLINT,
         VALUE FLOAT,
+        SUMQTY FLOAT,
         SALESPERC FLOAT,
         CUMULATIVEPERC FLOAT,
         ABC CHAR(1)
@@ -397,7 +401,7 @@ BEGIN
     );
     
     -- Populate detailed rows from saved data
-    INSERT INTO #DetailedRows (MTRL, MTRSUP, CODE, DESCRIPTION, BRANCH, VALUE, SALESPERC, CUMULATIVEPERC, ABC)
+    INSERT INTO #DetailedRows (MTRL, MTRSUP, CODE, DESCRIPTION, BRANCH, VALUE, SUMQTY, SALESPERC, CUMULATIVEPERC, ABC)
     SELECT 
         d.MTRL,
         ISNULL(m.MTRSUP, 0) as MTRSUP,
@@ -405,6 +409,7 @@ BEGIN
         ISNULL(m.name, '') as DESCRIPTION,
         d.BRANCH,
         ISNULL(d.VALUE, 0) as VALUE, -- Use saved VALUE data
+        ISNULL(d.SUMQTY, 0) as SUMQTY, -- Use saved SUMQTY data
         ISNULL(d.SALESPERC, 0) as SALESPERC,
         ISNULL(d.CUMULATIVEPERC, 0) as CUMULATIVEPERC, -- Use saved CUMULATIVEPERC data
         ISNULL(d.ABC, '') as ABC

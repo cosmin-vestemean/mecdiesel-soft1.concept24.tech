@@ -143,10 +143,12 @@ export class TopAbcTable extends LitElement {
     const cumulativePercValue = parseFloat(item.CUMULATIVEPERC);
     const salesPercValue = parseFloat(item.SALESPERC);
     const valueValue = parseFloat(item.VALUE);
+    const qtyValue = parseFloat(item.SUMQTY);
 
     const cumulativePerc = !isNaN(cumulativePercValue) ? cumulativePercValue.toFixed(4) + '%' : 'N/A';
     const salesPerc = !isNaN(salesPercValue) ? salesPercValue.toFixed(4) + '%' : 'N/A';
     const valueDisplay = !isNaN(valueValue) ? valueValue.toFixed(4) : (item.VALUE || 'N/A');
+    const qtyDisplay = !isNaN(qtyValue) ? qtyValue.toFixed(2) : (item.SUMQTY || 'N/A');
 
     return html`
       <tr class="abc-class-${abcClass.toLowerCase()}">
@@ -154,6 +156,7 @@ export class TopAbcTable extends LitElement {
         <td>${item.DESCRIPTION || ''}</td>
         <td><span class="abc-badge abc-badge-${abcClass.toLowerCase()}">${abcClass}</span></td>
         <td>${valueDisplay}</td>
+        <td>${qtyDisplay}</td>
         <td>${cumulativePerc}</td>
         <td>${salesPerc}</td>
       </tr>
@@ -256,6 +259,7 @@ export class TopAbcTable extends LitElement {
               <th>Description</th>
               <th>Class</th>
               <th>Value</th>
+              <th>Quantity</th>
               <th>Cumulative %</th>
               <th>Sales %</th>
             </tr>

@@ -358,6 +358,7 @@ export class TopAbcContainer extends LitElement {
         'Description': item.DESCRIPTION,
         'Class': item.ABC,
         'Value': typeof item.VALUE === 'number' ? item.VALUE : parseFloat(item.VALUE || 0),
+        'Quantity': typeof item.SUMQTY === 'number' ? item.SUMQTY : parseFloat(item.SUMQTY || 0),
         'Cumulative %': typeof item.CUMULATIVEPERC === 'number' ? item.CUMULATIVEPERC : parseFloat(item.CUMULATIVEPERC || 0),
         'Sales %': typeof item.SALESPERC === 'number' ? item.SALESPERC : parseFloat(item.SALESPERC || 0),
         'Branch': item.BRANCH,
