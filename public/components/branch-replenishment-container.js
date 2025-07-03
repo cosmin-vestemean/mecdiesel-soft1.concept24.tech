@@ -366,6 +366,14 @@ export class BranchReplenishmentContainer extends LitElement {
     
     // Don't reset dropdown immediately, user might want to apply again with different successive setting
     // this.selectedReplenishmentStrategy = 'none';
+    this._toggleQuickPanel(false); // Hide quick panel after applying a strategy
+  }
+
+  _toggleQuickPanel(visible) {
+    const quickPanel = this.querySelector('quick-panel');
+    if (quickPanel) {
+      quickPanel.style.display = visible ? '' : 'none';
+    }
   }
 
   _handleResetData() {
