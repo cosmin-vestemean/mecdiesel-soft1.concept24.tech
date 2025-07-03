@@ -375,8 +375,14 @@ export class BranchReplenishmentContainer extends LitElement {
     this.searchTerm = '';
     this.transferFilter = 'all';
     this.destinationFilter = 'all';
+    this.abcFilter = 'all'; // Reset ABC filter
+    this.blacklistedFilter = 'all'; // Reset blacklisted filter
+    this.lichidareFilter = 'all'; // Reset lichidare filter
+    this.isSuccessiveStrategy = true; // Reset strategy mode
     this.selectedReplenishmentStrategy = 'none';
     this.error = '';
+    this.setConditionForNecesar = true;
+    this.setConditionForLimits = true;
     
     // Reset source and destination selections
     this.branchesEmit = '';

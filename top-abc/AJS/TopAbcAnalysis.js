@@ -465,7 +465,14 @@ function saveTopAbcAnalysis(apiObj) {
         var endT = new Date().getTime();
         var duration = (endT - startT) / 1000;
         
-        if (result && result.success !== false) {
+        // Check for SQL execution success - X.RUNSQL might return 0 for success
+        // Consider it successful if: result is not null/undefined AND no explicit error
+        var isSuccess = (result !== null && result !== undefined) && 
+                       (result.success === true || 
+                        (result.success !== false && !result.error && !result.Error) ||
+                        result === 0); // X.RUNSQL often returns 0 for successful execution
+        
+        if (isSuccess) {
             return {
                 success: true,
                 message: "Successfully saved ABC analysis results. Processed " + branchList.length + " branch(es), " + totalInserts + " detail records, " + summaryInserts + " summary records.",
@@ -491,16 +498,23 @@ function saveTopAbcAnalysis(apiObj) {
         } else {
             // If there was an error, the transaction should have been rolled back
             // No explicit rollback here, assuming X.RUNSQL handles transaction failure or it's in the catch.
-            var errorMessage = "Unknown error";
+            var errorMessage = "SQL execution failed";
             if (result && result.message) {
                 errorMessage = result.message;
+            } else if (result && result.error) {
+                errorMessage = result.error;
+            } else if (result && result.Error) {
+                errorMessage = result.Error;
+            } else if (result && typeof result === 'object') {
+                errorMessage = "SQL execution failed. Result: " + JSON.stringify(result);
             }
             return {
                 success: false,
                 message: "Error during save operation: " + errorMessage,
                 duration: duration,
                 query: executedQuery, // Add executed query to error response
-                queryCount: queryList.length
+                queryCount: queryList.length,
+                result: result // Include result for debugging
             };
         }
         
@@ -742,7 +756,14 @@ function saveTopAbcAnalysisChunk(apiObj) {
         var endT = new Date().getTime();
         var duration = (endT - startT) / 1000;
         
-        if (result && result.success !== false) {
+        // Check for SQL execution success - X.RUNSQL might return 0 for success
+        // Consider it successful if: result is not null/undefined AND no explicit error
+        var isSuccess = (result !== null && result !== undefined) && 
+                       (result.success === true || 
+                        (result.success !== false && !result.error && !result.Error) ||
+                        result === 0); // X.RUNSQL often returns 0 for successful execution
+        
+        if (isSuccess) {
             return {
                 success: true,
                 message: "Successfully saved chunk " + chunkNumber + "/" + totalChunks + ". Processed " + totalInserts + " detail records.",
@@ -759,16 +780,24 @@ function saveTopAbcAnalysisChunk(apiObj) {
                 }
             };
         } else {
-            var errorMessage = "Unknown error";
+            var errorMessage = "SQL execution failed";
             if (result && result.message) {
                 errorMessage = result.message;
+            } else if (result && result.error) {
+                errorMessage = result.error;
+            } else if (result && result.Error) {
+                errorMessage = result.Error;
+            } else if (result && typeof result === 'object') {
+                // Try to extract more details from the result object
+                errorMessage = "SQL execution failed. Result: " + JSON.stringify(result);
             }
             return {
                 success: false,
                 message: "Error saving chunk " + chunkNumber + ": " + errorMessage,
                 duration: duration,
                 query: executedQuery, // Add executed query to error response
-                queryCount: queryList.length
+                queryCount: queryList.length,
+                result: result // Include the full result object for debugging
             };
         }
         

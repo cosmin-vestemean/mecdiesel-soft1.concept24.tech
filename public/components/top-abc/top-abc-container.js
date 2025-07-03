@@ -526,7 +526,10 @@ export class TopAbcContainer extends LitElement {
           this._hideProgress();
           // Log the full response object for better debugging
           console.error(`Failed to save chunk ${chunkNumber}. Full response:`, chunkResponse);
-          throw new Error(`Failed to save chunk ${chunkNumber}: ${chunkResponse.message}`);
+          console.error(`Chunk payload was:`, chunkPayload);
+          console.error(`SQL Query executed:`, chunkResponse.query);
+          console.error(`Full result object:`, chunkResponse.result);
+          throw new Error(`Failed to save chunk ${chunkNumber}: ${chunkResponse.message || 'Unknown error'}`);
         }
 
         totalProcessed += chunk.length;
