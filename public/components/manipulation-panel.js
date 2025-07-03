@@ -8,6 +8,13 @@ export class ManipulationPanel extends LitElement {
       // Store-driven properties
       searchTerm: { type: String },
       transferFilter: { type: String },
+      destinationFilter: { type: String },
+      abcFilter: { type: String },
+      blacklistedFilter: { type: String },
+      lichidareFilter: { type: String },
+      numberFilters: { type: Object },
+      sortColumn: { type: String },
+      sortDirection: { type: String },
       totalCount: { type: Number },
       filteredCount: { type: Number },
     };
@@ -19,6 +26,13 @@ export class ManipulationPanel extends LitElement {
     // Initialize properties (will be updated by store)
     this.searchTerm = '';
     this.transferFilter = 'all';
+    this.destinationFilter = 'all';
+    this.abcFilter = 'all';
+    this.blacklistedFilter = 'all';
+    this.lichidareFilter = 'all';
+    this.numberFilters = {};
+    this.sortColumn = null;
+    this.sortDirection = 'asc';
     this.totalCount = 0;
     this.filteredCount = 0;
     
@@ -47,6 +61,13 @@ export class ManipulationPanel extends LitElement {
   _syncStateFromStore(state) {
     this.searchTerm = state.searchTerm;
     this.transferFilter = state.transferFilter;
+    this.destinationFilter = state.destinationFilter;
+    this.abcFilter = state.abcFilter;
+    this.blacklistedFilter = state.blacklistedFilter;
+    this.lichidareFilter = state.lichidareFilter;
+    this.numberFilters = state.numberFilters;
+    this.sortColumn = state.sortColumn;
+    this.sortDirection = state.sortDirection;
     this.totalCount = state.data.length;
     this.filteredCount = this._store.getFilteredData().length;
   }
@@ -76,27 +97,175 @@ export class ManipulationPanel extends LitElement {
     }
   }
 
+  _resetAllFilters() {
+    if (this._store) {
+      this._store.resetAllFilters();
+    }
+  }
+
+  _getActiveFilters() {
+    const filters = [];
+    
+    // Search term
+    if (this.searchTerm) {
+      filters.push({
+        type: 'search',
+        label: 'Search',
+        value: `"${this.searchTerm}"`,
+        icon: 'fas fa-search'
+      });
+    }
+    
+    // Transfer filter
+    if (this.transferFilter !== 'all') {
+      filters.push({
+        type: 'transfer',
+        label: 'Transfer',
+        value: this.transferFilter === 'positive' ? 'Has Transfer' : 'No Transfer',
+        icon: 'fas fa-exchange-alt'
+      });
+    }
+    
+    // Destination filter
+    if (this.destinationFilter !== 'all') {
+      filters.push({
+        type: 'destination',
+        label: 'Destination',
+        value: this.destinationFilter,
+        icon: 'fas fa-map-marker-alt'
+      });
+    }
+    
+    // ABC filter
+    if (this.abcFilter !== 'all') {
+      const abcValue = this.abcFilter === 'abc' ? 'A/B/C Classes' : 
+                      this.abcFilter === 'none' ? 'No Classification' : 
+                      `Class ${this.abcFilter}`;
+      filters.push({
+        type: 'abc',
+        label: 'ABC',
+        value: abcValue,
+        icon: 'fas fa-layer-group'
+      });
+    }
+    
+    // Blacklisted filter
+    if (this.blacklistedFilter !== 'all') {
+      filters.push({
+        type: 'blacklisted',
+        label: 'Blacklisted',
+        value: this.blacklistedFilter === 'yes' ? 'Yes' : this.blacklistedFilter === 'no' ? 'No' : 'None',
+        icon: 'fas fa-ban'
+      });
+    }
+    
+    // Lichidare filter
+    if (this.lichidareFilter !== 'all') {
+      filters.push({
+        type: 'lichidare',
+        label: 'In Lichidare',
+        value: this.lichidareFilter === 'yes' ? 'Yes' : this.lichidareFilter === 'no' ? 'No' : 'None',
+        icon: 'fas fa-exclamation-triangle'
+      });
+    }
+    
+    // Number filters
+    if (this.numberFilters && Object.keys(this.numberFilters).length > 0) {
+      Object.entries(this.numberFilters).forEach(([key, value]) => {
+        if (value !== 'all') {
+          const displayValue = value === 'positive' ? '> 0' : 
+                             value === 'negative' ? '< 0' : 
+                             value === 'zero' ? '= 0' : value;
+          // Make column name more readable
+          const columnName = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+          filters.push({
+            type: 'number',
+            label: columnName,
+            value: displayValue,
+            icon: 'fas fa-hashtag'
+          });
+        }
+      });
+    }
+    
+    return filters;
+  }
+
+  _getSortInfo() {
+    if (!this.sortColumn) return null;
+    
+    return {
+      column: this.sortColumn.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      direction: this.sortDirection,
+      icon: this.sortDirection === 'asc' ? 'fas fa-arrow-up' : 'fas fa-arrow-down'
+    };
+  }
+
+  _hasActiveFiltersOrSort() {
+    return this._getActiveFilters().length > 0 || this._getSortInfo() !== null;
+  }
+
   render() {
+    const activeFilters = this._getActiveFilters();
+    const sortInfo = this._getSortInfo();
+    const hasActiveFiltersOrSort = this._hasActiveFiltersOrSort();
+
     return html`
-      <div class="d-flex justify-content-between align-items-center mb-3 manipulation-panel">
-        <div class="d-flex gap-2 flex-grow-1">
-          <div class="input-group input-group-sm search-input-group">
-            <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-            <input type="text" class="form-control" placeholder="Search code/description..."
-                   .value=${this.searchTerm || ''}
-                   @input=${e => this._dispatchUpdate('searchTerm', e.target.value)}>
-            ${this.searchTerm ? html`
-              <button class="btn btn-outline-secondary btn-clear-search" @click=${() => this._dispatchUpdate('searchTerm', '')} title="Clear search">
-                <i class="bi bi-x"></i>
-              </button>` : ''}
+      <div class="manipulation-panel">
+        <!-- Main Controls Row -->
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div class="d-flex gap-2 flex-grow-1">
+            <div class="input-group input-group-sm search-input-group">
+              <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
+              <input type="text" class="form-control" placeholder="Search code/description..."
+                     .value=${this.searchTerm || ''}
+                     @input=${e => this._dispatchUpdate('searchTerm', e.target.value)}>
+              ${this.searchTerm ? html`
+                <button class="btn btn-outline-secondary btn-clear-search" @click=${() => this._dispatchUpdate('searchTerm', '')} title="Clear search">
+                  <i class="fas fa-times"></i>
+                </button>` : ''}
+            </div>
+            
+            <!-- Reset Button -->
+            ${hasActiveFiltersOrSort ? html`
+              <button class="btn btn-outline-danger btn-sm" @click=${this._resetAllFilters} title="Reset all filters and sorting">
+                <i class="fas fa-undo"></i> Reset Filters
+              </button>
+            ` : ''}
+          </div>
+          
+          <div class="text-muted small item-count-display ms-3">
+            ${this.filteredCount === this.totalCount
+              ? html`Showing all <span class="fw-bold">${this.totalCount}</span>`
+              : html`Showing <span class="fw-bold">${this.filteredCount}</span> of ${this.totalCount}`
+            } items
           </div>
         </div>
-        <div class="text-muted small item-count-display ms-3">
-          ${this.filteredCount === this.totalCount
-            ? html`Showing all <span class="fw-bold">${this.totalCount}</span>`
-            : html`Showing <span class="fw-bold">${this.filteredCount}</span> of ${this.totalCount}`
-          } items
-        </div>
+
+        <!-- Active Filters and Sort Info -->
+        ${hasActiveFiltersOrSort ? html`
+          <div class="active-filters-info">
+            <div class="d-flex flex-wrap align-items-center">
+              <span class="text-muted small fw-bold me-2">Active:</span>
+              
+              <!-- Active Filters -->
+              ${activeFilters.map(filter => html`
+                <span class="badge bg-primary d-flex align-items-center me-1 mb-1">
+                  <i class="${filter.icon}"></i>
+                  <span>${filter.label}: ${filter.value}</span>
+                </span>
+              `)}
+              
+              <!-- Sort Info -->
+              ${sortInfo ? html`
+                <span class="badge bg-info d-flex align-items-center me-1 mb-1">
+                  <i class="${sortInfo.icon}"></i>
+                  <span>Sort: ${sortInfo.column}</span>
+                </span>
+              ` : ''}
+            </div>
+          </div>
+        ` : ''}
       </div>
     `;
   }
