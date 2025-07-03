@@ -250,17 +250,17 @@ export class ManipulationPanel extends LitElement {
               
               <!-- Active Filters -->
               ${activeFilters.map(filter => html`
-                <span class="badge bg-primary d-flex align-items-center me-1 mb-1">
+                <span class="badge text-bg-primary d-flex align-items-center me-1 mb-1">
                   <i class="${filter.icon}"></i>
-                  <span>${filter.label}: ${filter.value}</span>
+                  <span class="text-bg-primary">${filter.label}: ${filter.value}</span>
                 </span>
               `)}
               
               <!-- Sort Info -->
               ${sortInfo ? html`
-                <span class="badge bg-info d-flex align-items-center me-1 mb-1">
+                <span class="badge text-bg-info d-flex align-items-center me-1 mb-1">
                   <i class="${sortInfo.icon}"></i>
-                  <span>Sort: ${sortInfo.column}</span>
+                  <span class="text-bg-info">Sort: ${sortInfo.column}</span>
                 </span>
               ` : ''}
             </div>

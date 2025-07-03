@@ -171,6 +171,11 @@
             <li class="nav-item" role="presentation">
               <button class="nav-link active" id="branchReplenishButton" data-bs-toggle="tab" type="button" role="tab">
                 Branch Replenishment
+                <i class="fas fa-info-circle ms-2 text-muted" 
+                   id="branchReplenishInfoIcon"
+                   style="font-size: 0.8rem; opacity: 0.7; cursor: pointer;" 
+                   title="View development documentation"
+                   onclick="openBranchReplenishmentDocs(event)"></i>
               </button>
             </li>
           </ul>
@@ -451,5 +456,30 @@
         $('#print_config').load('print_config.html');
       });
     </script>
+    
+    <!-- Branch Replenishment Documentation Functions -->
+    <script>
+      // Branch Replenishment Documentation Functions
+      window.openBranchReplenishmentDocs = function(event) {
+          // Prevent tab switching
+          event.preventDefault();
+          event.stopPropagation();
+          
+          // Get current view count from localStorage
+          const currentCount = parseInt(localStorage.getItem('branchReplenishmentDocsViewCount') || '0');
+          const newCount = currentCount + 1;
+          
+          // Update localStorage
+          localStorage.setItem('branchReplenishmentDocsViewCount', newCount.toString());
+          
+          // Open documentation in new tab
+          window.open('branch-replenishment-migration.html', '_blank');
+          
+          console.log(`📖 Documentation opened in new tab (viewed ${newCount} times)`);
+      };
+    </script>
+    
+    <!-- Initialize modules after everything is loaded -->
+    <script type="module" src="init.js"></script>
   </body>
 </html>

@@ -590,3 +590,28 @@ function UpdatePRJC(vPRJCID, vnewTRDR, vnewBOOL01) {
 }
 ```
 
+## 📚 Documentation System Overview
+
+The Ofertainvest project uses a professional, client-facing documentation system located in `public/docs/`. This system provides comprehensive technical documentation for stakeholders, clients, and team members.
+
+## 🚫 Critical Guidelines - What NOT to Include
+
+**NEVER autogenerate documentation:**
+- ❌ Do not create documentation files without explicit user request
+- ❌ Do not suggest creating new documentation pages unless asked
+- ❌ Only create or update documentation when specifically requested by the user
+
+**NEVER include development/billing metrics in documentation:**
+- ❌ "Lines of code" or "LOC"
+- ❌ "Hours worked" or time tracking
+- ❌ "Lines modified" or similar metrics
+- ❌ "Development effort" or billing references
+- ❌ "Time spent" or duration metrics
+- ❌ "Cost" or pricing information
+
+**Instead, focus on:**
+- ✅ **Business value** and **benefits**
+- ✅ **Technical features** and **capabilities**
+- ✅ **User experience** improvements
+- ✅ **System architecture** and **design patterns**
+- ✅ **Implementation details** and **best practices**
