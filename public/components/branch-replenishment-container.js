@@ -258,7 +258,7 @@ export class BranchReplenishmentContainer extends LitElement {
       let applyChange = false;
 
       // Determine if the strategy should be applied based on the successive flag
-      if (this.isSuccessiveStrategy) {
+      if (this.isSuccessiveStrategy && this.selectedReplenishmentStrategy !== 'clear') {
         const currentTransfer = parseFloat(updatedItem.transfer || 0);
         if (currentTransfer === 0) {
           applyChange = true;
