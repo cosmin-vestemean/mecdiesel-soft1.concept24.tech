@@ -1,59 +1,138 @@
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
+import { ContextConsumer } from 'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0/index.js';
 import { columnConfig, sortConfig } from '../config/table-column-config.js'; // Import the column config and sort config
+import { replenishmentStore, ReplenishmentStoreContext } from '../stores/replenishment-store.js';
 
 export class ReplenishmentDataTable extends LitElement {
   static get properties() {
     return {
-      tableData: { type: Array },
       columnConfig: { type: Array },
+      utilityFunctions: { type: Object },
+      loading: { type: Boolean },
+      
+      // Store-connected properties (these will be synced from store)
       destinationFilter: { type: String },
-      uniqueDestinations: { type: Array },
-      uniqueAbcValues: { type: Array },
       abcFilter: { type: String },
       blacklistedFilter: { type: String },
       lichidareFilter: { type: String },
-      utilityFunctions: { type: Object }, // Pass utility functions { getStockClass, getValueClass, etc. }
-      loading: { type: Boolean },
-      // Sorting properties
       sortColumn: { type: String },
       sortDirection: { type: String },
-      // Dynamic properties for number filters - safely create with imported columnConfig
-      ...Object.fromEntries(
-        (columnConfig || [])
-          .filter(col => col.type === 'number' && col.isHeaderFilter)
-          .map(col => [`numberFilter_${col.key}`, { type: String, state: true }])
-      )
+      uniqueDestinations: { type: Array },
+      
+      // Internal properties
+      _storeState: { type: Object },
     };
   }
 
-  constructor() {
-      super();
-      this.tableData = [];
-      this.columnConfig = [];
-      this.utilityFunctions = {};
-      this.destinationFilter = 'all';
-      this.abcFilter = 'all';
-      this.blacklistedFilter = 'all';
-      this.lichidareFilter = 'all';
-      this.sortColumn = null;
-      this.sortDirection = 'asc';
+  // Track columnConfig changes for debugging
+  updated(changedProperties) {
+    if (changedProperties.has('columnConfig')) {
+      console.log('📊 DataTable columnConfig updated:', {
+        hasColumnConfig: !!this.columnConfig,
+        isArray: Array.isArray(this.columnConfig),
+        length: this.columnConfig ? this.columnConfig.length : 0,
+        oldValue: changedProperties.get('columnConfig'),
+        newValue: this.columnConfig
+      });
       
-      // Performance optimization: Cache filtered data and derived values
-      this._cachedFilteredData = [];
-      this._cachedFilters = {};
-      this._cachedDerivedValues = new Map(); // For CSS classes and styles
-      this._cachedVisibleDataKeys = null; // Cache for keyboard navigation
-      this._cachedSortedData = []; // Cache for sorted data
-      this._lastSortState = null; // Track last sort state for cache invalidation
-      
-      // Initialize all number filters to 'all'
-      if (Array.isArray(columnConfig)) {
-        columnConfig
-          .filter(col => col.type === 'number' && col.isHeaderFilter)
-          .forEach(col => {
-            this[`numberFilter_${col.key}`] = 'all';
-          });
+      // If columnConfig just became available and we have store data, recalculate
+      if (this.columnConfig && Array.isArray(this.columnConfig) && this.columnConfig.length > 0) {
+        if (this._store && this._store.getState().data.length > 0) {
+          console.log('📊 DataTable recalculating derived values after columnConfig became available');
+          this._preCalculateDerivedValues();
+        }
       }
+    }
+  }
+
+  constructor() {
+    super();
+    
+    // Initialize context consumer
+    this._storeConsumer = new ContextConsumer(this, {
+      context: ReplenishmentStoreContext,
+      callback: (store) => {
+        console.log('📊 DataTable received store from context:', store);
+        this._store = store;
+        this._subscribeToStore();
+      }
+    });
+    
+    // Initialize properties
+    this.columnConfig = [];
+    this.utilityFunctions = {};
+    this.loading = false;
+    this.destinationFilter = 'all';
+    this.abcFilter = 'all';
+    this.blacklistedFilter = 'all';
+    this.lichidareFilter = 'all';
+    this.sortColumn = null;
+    this.sortDirection = 'asc';
+    this.uniqueDestinations = [];
+    this._storeState = {};
+    
+    // Performance optimization: Remove legacy caching as store handles it
+    this._cachedDerivedValues = new Map();
+  }
+
+  // --- Store Integration ---
+  _subscribeToStore() {
+    if (!this._store) return;
+    
+    // Subscribe to store updates
+    this._unsubscribeFromStore = this._store.subscribe((newState, previousState, action) => {
+      console.log('📊 DataTable received store update:', action.type, newState);
+      this._syncFromStore(newState);
+    });
+    
+    // Initial sync
+    this._syncFromStore(this._store.getState());
+  }
+
+  _syncFromStore(state) {
+    // Sync filter states from store
+    this.destinationFilter = state.destinationFilter;
+    this.abcFilter = state.abcFilter;
+    this.blacklistedFilter = state.blacklistedFilter;
+    this.lichidareFilter = state.lichidareFilter;
+    this.sortColumn = state.sortColumn;
+    this.sortDirection = state.sortDirection;
+    
+    // Sync data and computed values - let render method get filtered data
+    this.uniqueDestinations = this._store.getUniqueDestinations();
+    
+    // Store state for internal use
+    this._storeState = state;
+    
+    // Pre-calculate derived values for performance before re-rendering
+    // Only do this if we have valid columnConfig to avoid empty filter calls
+    if (this.columnConfig && Array.isArray(this.columnConfig) && this.columnConfig.length > 0) {
+      this._preCalculateDerivedValues();
+    }
+    
+    // Trigger re-render to show updated data
+    this.requestUpdate();
+    
+    // Only log filtered data count if we have valid columnConfig
+    if (this.columnConfig && Array.isArray(this.columnConfig) && this.columnConfig.length > 0) {
+      const validColumnConfig = this.columnConfig && Array.isArray(this.columnConfig) ? this.columnConfig : [];
+      console.log('📊 DataTable synced from store. Data items:', state.data.length, 'Filtered items:', this._store.getFilteredData(validColumnConfig).length);
+      console.log('📊 DataTable sync - columnConfig check:', {
+        hasColumnConfig: !!this.columnConfig,
+        isArray: Array.isArray(this.columnConfig),
+        length: this.columnConfig ? this.columnConfig.length : 0,
+        fallbackUsed: !this.columnConfig || !Array.isArray(this.columnConfig)
+      });
+    } else {
+      console.log('📊 DataTable synced from store. Data items:', state.data.length, 'Filtered items: Not calculated (no columnConfig)');
+      console.log('📊 DataTable sync - columnConfig check:', {
+        hasColumnConfig: !!this.columnConfig,
+        isArray: Array.isArray(this.columnConfig),
+        length: this.columnConfig ? this.columnConfig.length : 0,
+        fallbackUsed: true,
+        reason: 'columnConfig not available or invalid'
+      });
+    }
   }
 
   createRenderRoot() {
@@ -62,12 +141,39 @@ export class ReplenishmentDataTable extends LitElement {
   }
 
   _dispatchUpdate(property, value, itemKey = undefined, transferValue = undefined) {
-      const detail = { property, value };
-      if (itemKey !== undefined) detail.itemKey = itemKey;
-      if (transferValue !== undefined) detail.transferValue = transferValue;
-      this.dispatchEvent(new CustomEvent('update-property', {
-          detail, bubbles: true, composed: true
-      }));
+    // Use store directly instead of dispatching events
+    if (!this._store) return;
+    
+    console.log('📊 DataTable updating store:', property, value);
+    
+    switch (property) {
+      case 'destinationFilter':
+        this._store.setDestinationFilter(value);
+        break;
+      case 'abcFilter':
+        this._store.setAbcFilter(value);
+        break;
+      case 'blacklistedFilter':
+        this._store.setBlacklistedFilter(value);
+        break;
+      case 'lichidareFilter':
+        this._store.setLichidareFilter(value);
+        break;
+      case 'sort':
+        this._store.setSorting(value.column, value.direction);
+        break;
+      case 'itemTransfer':
+        if (itemKey !== undefined) {
+          this._store.updateItemTransfer(itemKey, transferValue);
+        }
+        break;
+      default:
+        if (property.startsWith('numberFilter_')) {
+          const columnKey = property.replace('numberFilter_', '');
+          this._store.setNumberFilter(columnKey, value);
+        }
+        break;
+    }
   }
 
   // --- Keyboard Navigation ---
@@ -82,13 +188,10 @@ export class ReplenishmentDataTable extends LitElement {
     let nextColKey = currentColKey;
     let moved = false;
 
-    // Use cached visible data keys for performance
-    // Cache should reflect filtered data, not all table data
-    if (!this._cachedVisibleDataKeys) {
-      const filteredData = this.getFilteredData();
-      this._cachedVisibleDataKeys = filteredData.map(item => item.keyField);
-    }
-    const visibleDataKeys = this._cachedVisibleDataKeys;
+    // Use store's filtered data for navigation
+    const validColumnConfig = this.columnConfig && Array.isArray(this.columnConfig) ? this.columnConfig : [];
+    const filteredData = this._store ? this._store.getFilteredData(validColumnConfig) : [];
+    const visibleDataKeys = filteredData.map(item => item.keyField);
     const currentItemIndex = visibleDataKeys.indexOf(currentKey);
 
     switch (e.key) {
@@ -147,112 +250,30 @@ export class ReplenishmentDataTable extends LitElement {
       }, 100);
     }
     
+    const validColumnConfig = this.columnConfig && Array.isArray(this.columnConfig) ? this.columnConfig : [];
+    const data = this._store ? this._store.getFilteredData(validColumnConfig) : [];
     // Performance check: warn about client-side sorting on large datasets
-    if (this.tableData && this.tableData.length > sortConfig.clientSortThreshold) {
-      console.warn(`Dataset size (${this.tableData.length}) exceeds client-side sorting threshold (${sortConfig.clientSortThreshold}). Consider implementing server-side sorting for better performance.`);
+    if (data && data.length > sortConfig.clientSortThreshold) {
+      console.warn(`Dataset size (${data.length}) exceeds client-side sorting threshold (${sortConfig.clientSortThreshold}). Consider implementing server-side sorting for better performance.`);
     }
     
+    let newDirection = 'asc';
     if (this.sortColumn === column.key) {
       // Toggle direction if same column
-      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+      newDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
     } else {
       // New column, use default sort order for this data type
-      this.sortColumn = column.key;
-      this.sortDirection = sortConfig.defaultSortOrder[column.type] || 'asc';
+      newDirection = sortConfig.defaultSortOrder[column.type] || 'asc';
     }
     
-    // Dispatch sort event to container (for potential server-side sorting)
+    // Update store with new sort settings
     this._dispatchUpdate('sort', {
-      column: this.sortColumn,
-      direction: this.sortDirection,
+      column: column.key,
+      direction: newDirection,
       dataType: column.type
     });
-    
-    // Clear sorting cache only - filtering cache should remain valid
-    this._cachedSortedData = [];
-    this._lastSortState = null;
-    
-    // Clear keyboard navigation cache as sort order affects navigation
-    this._cachedVisibleDataKeys = null;
-    
-    // Request update to trigger re-render
-    this.requestUpdate();
   }
 
-  sortData(data) {
-    if (!this.sortColumn || !data || data.length === 0) {
-      return data;
-    }
-    
-    // Create a comprehensive cache key that includes both sort state and data characteristics
-    const dataFingerprint = this._createDataFingerprint(data);
-    const currentSortState = `${this.sortColumn}-${this.sortDirection}-${dataFingerprint}`;
-    
-    // Check cache validity with comprehensive key
-    if (this._lastSortState === currentSortState && this._cachedSortedData.length > 0) {
-      return this._cachedSortedData;
-    }
-    
-    const sortColumn = this.columnConfig.find(col => col.key === this.sortColumn);
-    if (!sortColumn) {
-      return data;
-    }
-    
-    const sorted = [...data].sort((a, b) => {
-      let aVal = a[this.sortColumn];
-      let bVal = b[this.sortColumn];
-      
-      // Handle different data types
-      switch (sortColumn.type) {
-        case 'number':
-          aVal = parseFloat(aVal) || 0;
-          bVal = parseFloat(bVal) || 0;
-          break;
-        case 'boolean':
-          // Convert various boolean formats to actual booleans for comparison
-          aVal = this.parseBooleanValue(aVal);
-          bVal = this.parseBooleanValue(bVal);
-          break;
-        case 'string':
-          aVal = (aVal || '').toString().toLowerCase();
-          bVal = (bVal || '').toString().toLowerCase();
-          break;
-        default:
-          aVal = aVal || '';
-          bVal = bVal || '';
-      }
-      
-      let comparison = 0;
-      if (aVal < bVal) {
-        comparison = -1;
-      } else if (aVal > bVal) {
-        comparison = 1;
-      }
-      
-      return this.sortDirection === 'desc' ? -comparison : comparison;
-    });
-    
-    // Cache the result with comprehensive key
-    this._cachedSortedData = sorted;
-    this._lastSortState = currentSortState;
-    
-    return sorted;
-  }
-
-  /**
-   * Create a fingerprint of the data to detect changes
-   * @param {Array} data - The data array to fingerprint
-   * @returns {String} - A string representing the data characteristics
-   */
-  _createDataFingerprint(data) {
-    if (!data || data.length === 0) return 'empty';
-    
-    // Create a lightweight fingerprint based on data length and first/last item keys
-    const firstKey = data[0]?.keyField || 'unknown';
-    const lastKey = data[data.length - 1]?.keyField || 'unknown';
-    return `${data.length}-${firstKey}-${lastKey}`;
-  }
-  
   parseBooleanValue(value) {
     if (typeof value === 'boolean') return value;
     if (typeof value === 'number') return value > 0;
@@ -274,24 +295,24 @@ export class ReplenishmentDataTable extends LitElement {
     
     if (isCurrentSort) {
       if (this.sortDirection === 'asc') {
-        iconClass = 'bi-arrow-up';
+        iconClass = 'fa-sort-up';
         iconColor = '#198754'; // Green for ascending
         title = 'Sorted ascending (click for descending)';
       } else {
-        iconClass = 'bi-arrow-down';
+        iconClass = 'fa-sort-down';
         iconColor = '#dc3545'; // Red for descending
         title = 'Sorted descending (click for ascending)';
       }
       opacity = '1';
     } else {
-      iconClass = 'bi-arrow-up-down';
+      iconClass = 'fa-sort';
       iconColor = '#6c757d'; // Gray for unsorted
       opacity = '0.5';
       title = 'Click to sort';
     }
     
     return html`
-      <i class="bi ${iconClass} sort-icon ms-1 ${isCurrentSort ? 'active' : ''}" 
+      <i class="fas ${iconClass} sort-icon ms-1 ${isCurrentSort ? 'active' : ''}" 
          style="opacity: ${opacity}; font-size: 0.8em; color: ${iconColor}; transition: all 0.15s ease-in-out;"
          title="${title}"></i>
     `;
@@ -437,7 +458,7 @@ export class ReplenishmentDataTable extends LitElement {
 
   getNumberFilterStatus(columnKey, filterValue) {
     // Helper to highlight the active filter button
-    const activeFilter = this[`numberFilter_${columnKey}`] || 'all';
+    const activeFilter = this._storeState.numberFilters?.[columnKey] || 'all';
     return activeFilter === filterValue ? 'active' : '';
   }
 
@@ -548,9 +569,17 @@ export class ReplenishmentDataTable extends LitElement {
   _preCalculateDerivedValues() {
     this._cachedDerivedValues.clear();
     
-    if (!this.tableData || !this.utilityFunctions) return;
+    const validColumnConfig = this.columnConfig && Array.isArray(this.columnConfig) ? this.columnConfig : [];
+    const data = this._store ? this._store.getFilteredData(validColumnConfig) : [];
+    console.log('📊 DataTable _preCalculateDerivedValues - columnConfig check:', {
+      hasColumnConfig: !!this.columnConfig,
+      isArray: Array.isArray(this.columnConfig),
+      length: this.columnConfig ? this.columnConfig.length : 0,
+      fallbackUsed: !this.columnConfig || !Array.isArray(this.columnConfig)
+    });
+    if (!data || !this.utilityFunctions) return;
     
-    this.tableData.forEach(item => {
+    data.forEach(item => {
       const keyField = item.keyField;
       const derivedValues = {};
       
@@ -581,178 +610,15 @@ export class ReplenishmentDataTable extends LitElement {
     });
   }
 
-  /**
-   * Check if filters have changed to determine if cache is valid
-   */
-  _filtersChanged() {
-    const currentFilters = {
-      destinationFilter: this.destinationFilter,
-      abcFilter: this.abcFilter,
-      blacklistedFilter: this.blacklistedFilter,
-      lichidareFilter: this.lichidareFilter
-    };
-    
-    // Add number filters
-    if (this.columnConfig) {
-      this.columnConfig
-        .filter(col => col.type === 'number' && col.isHeaderFilter && col.visible)
-        .forEach(col => {
-          currentFilters[`numberFilter_${col.key}`] = this[`numberFilter_${col.key}`];
-        });
-    }
-    
-    // Compare with cached filters
-    const filterKeys = Object.keys(currentFilters);
-    const cachedKeys = Object.keys(this._cachedFilters);
-    
-    if (filterKeys.length !== cachedKeys.length) return true;
-    
-    return filterKeys.some(key => currentFilters[key] !== this._cachedFilters[key]);
-  }  /**
-   * Apply number filters to filter the displayed data with caching
-   * @returns {Array} The filtered data
-   */
+  // --- Legacy method for backward compatibility ---
   getFilteredData() {
-    // Check if we can use cached data
-    if (!this._filtersChanged() && this._cachedFilteredData.length > 0) {
-      return this._cachedFilteredData;
+    // Use store's filtered data if available
+    if (this._store) {
+      const validColumnConfig = this.columnConfig && Array.isArray(this.columnConfig) ? this.columnConfig : [];
+      return this._store.getFilteredData(validColumnConfig);
     }
-    
-    // Start with all data
-    let filtered = [...this.tableData];
-    
-    // Apply destination filter if set and not 'all'
-    if (this.destinationFilter && this.destinationFilter !== 'all') {
-      // Find the destination column key
-      const destColumn = this.columnConfig.find(col => col.isHeaderFilter && col.type === 'string');
-      if (destColumn) {
-        filtered = filtered.filter(item => item[destColumn.key] === this.destinationFilter);
-      }
-    }
-    
-    // Apply ABC classification filter
-    if (this.abcFilter && this.abcFilter !== 'all') {
-      const abcColumn = this.columnConfig.find(col => col.key === 'abc_class');
-      if (abcColumn) {
-        filtered = filtered.filter(item => {
-          const abcValue = item[abcColumn.key];
-          if (this.abcFilter === 'none') {
-            return !abcValue || abcValue === '' || abcValue === null || abcValue === undefined;
-          } else if (this.abcFilter === 'abc') {
-            // Show only items with ABC classifications (A, B, C) - exclude None/empty values
-            return abcValue === 'A' || abcValue === 'B' || abcValue === 'C';
-          }
-          return abcValue === this.abcFilter;
-        });
-      }
-    }
-    
-    // Apply Blacklisted filter
-    if (this.blacklistedFilter && this.blacklistedFilter !== 'all') {
-      const blacklistedColumn = this.columnConfig.find(col => col.key === 'Blacklisted');
-      if (blacklistedColumn) {
-        filtered = filtered.filter(item => {
-          const blacklistedValue = item[blacklistedColumn.key];
-          if (this.blacklistedFilter === 'yes') {
-            // Handle multiple formats: true, 1, '1', 'true', 'Da', 'Yes'
-            return blacklistedValue === true || 
-                   blacklistedValue === 1 || 
-                   blacklistedValue === '1' || 
-                   blacklistedValue === 'true' ||
-                   (typeof blacklistedValue === 'string' && 
-                    (blacklistedValue.toLowerCase() === 'da' || blacklistedValue.toLowerCase() === 'yes'));
-          } else if (this.blacklistedFilter === 'no') {
-            // Handle multiple formats: false, 0, '0', 'false', 'Nu', 'No', '-'
-            return blacklistedValue === false || 
-                   blacklistedValue === 0 || 
-                   blacklistedValue === '0' || 
-                   blacklistedValue === 'false' ||
-                   (typeof blacklistedValue === 'string' && 
-                    (blacklistedValue.toLowerCase() === 'nu' || 
-                     blacklistedValue.toLowerCase() === 'no' || 
-                     blacklistedValue === '-'));
-          } else if (this.blacklistedFilter === 'none') {
-            return blacklistedValue === null || blacklistedValue === undefined || blacklistedValue === '';
-          }
-          return true;
-        });
-      }
-    }
-    
-    // Apply InLichidare filter
-    if (this.lichidareFilter && this.lichidareFilter !== 'all') {
-      const lichidareColumn = this.columnConfig.find(col => col.key === 'InLichidare');
-      if (lichidareColumn) {
-        filtered = filtered.filter(item => {
-          const lichidareValue = item[lichidareColumn.key];
-          if (this.lichidareFilter === 'yes') {
-            // Handle multiple formats: true, 1, '1', 'true', 'Da', 'Yes'
-            return lichidareValue === true || 
-                   lichidareValue === 1 || 
-                   lichidareValue === '1' || 
-                   lichidareValue === 'true' ||
-                   (typeof lichidareValue === 'string' && 
-                    (lichidareValue.toLowerCase() === 'da' || lichidareValue.toLowerCase() === 'yes'));
-          } else if (this.lichidareFilter === 'no') {
-            // Handle multiple formats: false, 0, '0', 'false', 'Nu', 'No', '-'
-            return lichidareValue === false || 
-                   lichidareValue === 0 || 
-                   lichidareValue === '0' || 
-                   lichidareValue === 'false' ||
-                   (typeof lichidareValue === 'string' && 
-                    (lichidareValue.toLowerCase() === 'nu' || 
-                     lichidareValue.toLowerCase() === 'no' || 
-                     lichidareValue === '-'));
-          } else if (this.lichidareFilter === 'none') {
-            return lichidareValue === null || lichidareValue === undefined || lichidareValue === '';
-          }
-          return true;
-        });
-      }
-    }
-    
-    // Apply all number filters
-    if (this.columnConfig) {
-      this.columnConfig
-        .filter(col => col.type === 'number' && col.isHeaderFilter && col.visible)
-        .forEach(col => {
-          const filterValue = this[`numberFilter_${col.key}`];
-          if (filterValue && filterValue !== 'all') {
-            filtered = filtered.filter(item => {
-              const value = parseFloat(item[col.key]);
-              if (isNaN(value)) return false;
-              
-              switch (filterValue) {
-                case 'positive': return value > 0;
-                case 'negative': return value < 0;
-                case 'zero': return value === 0;
-                default: return true;
-              }
-            });
-          }
-        });
-    }
-    
-    // Cache the filtered results
-    this._cachedFilteredData = filtered;
-    this._cachedFilters = {
-      destinationFilter: this.destinationFilter,
-      abcFilter: this.abcFilter,
-      blacklistedFilter: this.blacklistedFilter,
-      lichidareFilter: this.lichidareFilter
-    };
-    
-    // Cache number filters
-    if (this.columnConfig) {
-      this.columnConfig
-        .filter(col => col.type === 'number' && col.isHeaderFilter && col.visible)
-        .forEach(col => {
-          this._cachedFilters[`numberFilter_${col.key}`] = this[`numberFilter_${col.key}`];
-        });
-    }
-    
-    // Apply sorting and return
-    return filtered;
+    // Fallback to provided tableData
+    return []; // Return empty array if store is not available
   }
 
   /**
@@ -761,15 +627,9 @@ export class ReplenishmentDataTable extends LitElement {
    * @param {String} direction - The sort direction ('asc' or 'desc')
    */
   triggerSort(columnKey, direction) {
-    this.sortColumn = columnKey;
-    this.sortDirection = direction;
-
-    // Invalidate cache for sorted data
-    this._cachedSortedData = [];
-    this._lastSortState = null;
-
-    // Request update to re-render the table with new sort order
-    this.requestUpdate();
+    if (this._store) {
+      this._store.setSorting(columnKey, direction);
+    }
   }
 
   /**
@@ -793,11 +653,18 @@ export class ReplenishmentDataTable extends LitElement {
       `;
     }
 
-    // Apply filters to the data
-    const filteredData = this.getFilteredData();
-
-    // Sort the data if a sort column is set
-    const sortedData = this.sortColumn ? this.sortData(filteredData) : filteredData;
+    // Get filtered and sorted data from store
+    // Ensure we always pass a valid columnConfig to prevent filtering issues
+    const validColumnConfig = this.columnConfig && Array.isArray(this.columnConfig) ? this.columnConfig : [];
+    const displayData = this._store ? this._store.getFilteredData(validColumnConfig) : [];
+    
+    console.log('📊 DataTable render - Store available:', !!this._store, 'DisplayData length:', displayData.length);
+    console.log('📊 DataTable columnConfig check:', {
+      hasColumnConfig: !!this.columnConfig,
+      columnConfigLength: this.columnConfig ? this.columnConfig.length : 0,
+      numberFilterColumns: this.columnConfig ? this.columnConfig.filter(col => col.type === 'number' && col.isHeaderFilter && col.visible).length : 0,
+      validColumnConfigLength: validColumnConfig.length
+    });
 
     return html`
       <div class="table-responsive data-table-container">
@@ -807,8 +674,8 @@ export class ReplenishmentDataTable extends LitElement {
             ${this.renderHeader()}
           </thead>
           <tbody class="small">
-            ${sortedData && sortedData.length > 0
-              ? sortedData.map((item, index) => this.renderRow(item, index))
+            ${displayData && displayData.length > 0
+              ? displayData.map((item, index) => this.renderRow(item, index))
               : html`<tr><td colspan="${(this.columnConfig && Array.isArray(this.columnConfig)) ? this.columnConfig.filter(c => c.visible).length : 1}" class="text-center text-muted p-2">No data available for the current selection and filters.</td></tr>`
             }
           </tbody>
@@ -820,47 +687,37 @@ export class ReplenishmentDataTable extends LitElement {
   updated(changedProperties) {
     super.updated(changedProperties);
     
-    // Pre-calculate derived values when data or utility functions change
-    if (changedProperties.has('tableData') || changedProperties.has('utilityFunctions')) {
+    // Pre-calculation is now triggered by store updates via _syncFromStore
+    if (changedProperties.has('utilityFunctions')) {
       this._preCalculateDerivedValues();
-      // Clear all caches when data changes
-      this._cachedFilteredData = [];
-      this._cachedFilters = {};
-      this._cachedSortedData = [];
-      this._lastSortState = null;
-      this._cachedVisibleDataKeys = null;
     }
-    
-    // Clear navigation cache when filters change (affects visible rows)
-    if (changedProperties.has('destinationFilter') || 
-        changedProperties.has('abcFilter') ||
-        changedProperties.has('blacklistedFilter') ||
-        changedProperties.has('lichidareFilter') ||
-        Object.keys(changedProperties).some(key => key.startsWith('numberFilter_'))) {
-      this._cachedVisibleDataKeys = null;
-      // Note: We don't clear filter cache here as it's handled by _filtersChanged()
-    }
-    
-    // Clear sorting cache when sort properties change
-    if (changedProperties.has('sortColumn') || changedProperties.has('sortDirection')) {
-      this._cachedSortedData = [];
-      this._lastSortState = null;
-      this._cachedVisibleDataKeys = null; // Sort order affects navigation
-    }
-    
-    // No longer initializing tooltips here for performance - using basic HTML title attributes
   }
 
   connectedCallback() {
     super.connectedCallback();
     
-    // Listen for filter-changed events from the container
-    document.addEventListener('filter-changed', (e) => {
-      console.log('Data table received filter-changed event:', e.detail);
-      
-      // Force the table to re-render when filters change
-      this.requestUpdate();
-    });
+    // Store connection is handled by ContextConsumer
+    console.log('📊 DataTable connected to DOM. Store available:', !!this._store);
+    
+    // If store is not available yet, try to get it manually
+    if (!this._store) {
+      console.log('📊 Store not available in connectedCallback, checking for manual assignment...');
+      // Fallback: try to import and use the store directly
+      import('../stores/replenishment-store.js').then(({ replenishmentStore }) => {
+        console.log('📊 Manual store assignment:', replenishmentStore);
+        this._store = replenishmentStore;
+        this._subscribeToStore();
+      });
+    }
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    
+    // Clean up store subscription
+    if (this._unsubscribeFromStore) {
+      this._unsubscribeFromStore();
+    }
   }
 }
 customElements.define('replenishment-data-table', ReplenishmentDataTable);

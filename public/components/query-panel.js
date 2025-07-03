@@ -1,25 +1,76 @@
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
+import { ContextConsumer } from 'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0/index.js';
+import { ReplenishmentStoreContext } from '../stores/replenishment-store.js';
 
 export class QueryPanel extends LitElement {
   static get properties() {
     return {
+      // Store-driven properties
       branches: { type: Object },
       branchesEmit: { type: String },
       selectedDestBranches: { type: Array },
       setConditionForNecesar: { type: Boolean },
       setConditionForLimits: { type: Boolean },
       loading: { type: Boolean },
-      // Internal state for dropdown
+      
+      // Internal UI state for dropdown
       showDestDropdown: { type: Boolean, state: true },
       destSearchTerm: { type: String, state: true },
     };
   }
 
   constructor() {
-      super();
-      this.showDestDropdown = false;
-      this.destSearchTerm = '';
-      this.closeDestDropdown = this.closeDestDropdown.bind(this);
+    super();
+    
+    // Initialize UI state
+    this.showDestDropdown = false;
+    this.destSearchTerm = '';
+    this.closeDestDropdown = this.closeDestDropdown.bind(this);
+    
+    // Initialize store-driven properties (will be updated by store)
+    this.branches = {};
+    this.branchesEmit = '';
+    this.selectedDestBranches = [];
+    this.setConditionForNecesar = true;
+    this.setConditionForLimits = true;
+    this.loading = false;
+    
+    // Set up store context consumer
+    this._storeConsumer = new ContextConsumer(this, {
+      context: ReplenishmentStoreContext,
+      callback: (store) => {
+        this._store = store;
+        this._subscribeToStore();
+      }
+    });
+  }
+
+  _subscribeToStore() {
+    if (this._store && !this._unsubscribeFromStore) {
+      this._unsubscribeFromStore = this._store.subscribe((newState, previousState, action) => {
+        console.log('📋 QueryPanel received store update:', action.type);
+        this._syncStateFromStore(newState);
+      });
+      
+      // Initial sync
+      this._syncStateFromStore(this._store.getState());
+    }
+  }
+
+  _syncStateFromStore(state) {
+    this.branchesEmit = state.branchesEmit;
+    this.selectedDestBranches = state.selectedDestBranches;
+    this.setConditionForNecesar = state.setConditionForNecesar;
+    this.setConditionForLimits = state.setConditionForLimits;
+    this.loading = state.loading;
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    // Clean up store subscription
+    if (this._unsubscribeFromStore) {
+      this._unsubscribeFromStore();
+    }
   }
 
   createRenderRoot() {
@@ -28,11 +79,22 @@ export class QueryPanel extends LitElement {
 
   // --- Event Dispatchers ---
   _dispatchUpdate(property, value) {
-    this.dispatchEvent(new CustomEvent('update-property', {
-      detail: { property, value },
-      bubbles: true,
-      composed: true
-    }));
+    console.log(`QueryPanel updating ${property}:`, value);
+    
+    // Update store directly instead of emitting events
+    if (this._store) {
+      if (property === 'branchesEmit') {
+        this._store.setBranchesEmit(value);
+      } else if (property === 'selectedDestBranches') {
+        this._store.setSelectedDestBranches(value);
+      } else if (property === 'setConditionForNecesar') {
+        this._store.setConditionForNecesar(value);
+      } else if (property === 'setConditionForLimits') {
+        this._store.setConditionForLimits(value);
+      }
+    } else {
+      console.warn('Store not available yet for QueryPanel');
+    }
   }
 
   _emitAction(actionName) {

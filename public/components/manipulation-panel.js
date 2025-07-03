@@ -1,48 +1,78 @@
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
+import { ContextConsumer } from 'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0/index.js';
+import { ReplenishmentStoreContext } from '../stores/replenishment-store.js';
 
 export class ManipulationPanel extends LitElement {
   static get properties() {
     return {
-      searchTerm: { type: String, state: true },
-      transferFilter: { type: String, state: true },
-      totalCount: { type: Number, state: true },
-      filteredCount: { type: Number, state: true },
+      // Store-driven properties
+      searchTerm: { type: String },
+      transferFilter: { type: String },
+      totalCount: { type: Number },
+      filteredCount: { type: Number },
     };
   }
 
   constructor() {
     super();
+    
+    // Initialize properties (will be updated by store)
     this.searchTerm = '';
     this.transferFilter = 'all';
     this.totalCount = 0;
     this.filteredCount = 0;
+    
+    // Set up store context consumer
+    this._storeConsumer = new ContextConsumer(this, {
+      context: ReplenishmentStoreContext,
+      callback: (store) => {
+        this._store = store;
+        this._subscribeToStore();
+      }
+    });
+  }
+
+  _subscribeToStore() {
+    if (this._store && !this._unsubscribeFromStore) {
+      this._unsubscribeFromStore = this._store.subscribe((newState, previousState, action) => {
+        console.log('🔍 ManipulationPanel received store update:', action.type);
+        this._syncStateFromStore(newState);
+      });
+      
+      // Initial sync
+      this._syncStateFromStore(this._store.getState());
+    }
+  }
+
+  _syncStateFromStore(state) {
+    this.searchTerm = state.searchTerm;
+    this.transferFilter = state.transferFilter;
+    this.totalCount = state.data.length;
+    this.filteredCount = this._store.getFilteredData().length;
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    // Clean up store subscription
+    if (this._unsubscribeFromStore) {
+      this._unsubscribeFromStore();
+    }
   }
 
   createRenderRoot() { return this; } // Render in light DOM
 
   _dispatchUpdate(property, value) {
-    console.log(`ManipulationPanel dispatching ${property}:`, value);
+    console.log(`ManipulationPanel updating ${property}:`, value);
     
-    // Dispatch the generic update-property event
-    this.dispatchEvent(new CustomEvent('update-property', {
-      detail: { property, value },
-      bubbles: true,
-      composed: true
-    }));
-    
-    // Also dispatch specific property-changed events that the container is now listening for
-    if (property === 'searchTerm') {
-      this.dispatchEvent(new CustomEvent('searchTerm-changed', {
-        detail: { value },
-        bubbles: true,
-        composed: true
-      }));
-    } else if (property === 'transferFilter') {
-      this.dispatchEvent(new CustomEvent('transferFilter-changed', {
-        detail: { value },
-        bubbles: true,
-        composed: true
-      }));
+    // Update store directly instead of emitting events
+    if (this._store) {
+      if (property === 'searchTerm') {
+        this._store.setSearchTerm(value);
+      } else if (property === 'transferFilter') {
+        this._store.setTransferFilter(value);
+      }
+    } else {
+      console.warn('Store not available yet for ManipulationPanel');
     }
   }
 

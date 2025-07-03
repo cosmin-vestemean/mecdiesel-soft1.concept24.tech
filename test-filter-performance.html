@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Filter Functionality Test</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body class="bg-light">
+    <div class="container mt-4">
+        <h1 class="mb-4">🔧 Filter Functionality Test</h1>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Test Instructions</h5>
+            </div>
+            <div class="card-body">
+                <p>This test verifies that filters work correctly with the optimized LitElement approach:</p>
+                <ol>
+                    <li>Load some data using the "Load Data" button</li>
+                    <li>Try the destination filter dropdown</li>
+                    <li>Try the blacklist filter dropdown</li>
+                    <li>Try the lichidare filter dropdown</li>
+                    <li>Try applying replenishment strategies</li>
+                    <li>Check that all filters work smoothly without excessive updates</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5>Branch Replenishment Container</h5>
+            </div>
+            <div class="card-body">
+                <branch-replenishment-container id="testContainer"></branch-replenishment-container>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Performance Monitor</h5>
+            </div>
+            <div class="card-body">
+                <div id="performanceMonitor" class="row">
+                    <div class="col-md-6">
+                        <strong>Render Count:</strong> <span id="renderCount">0</span>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Last Update:</strong> <span id="lastUpdate">-</span>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <button id="startMonitoring" class="btn btn-primary btn-sm">Start Monitoring</button>
+                    <button id="stopMonitoring" class="btn btn-secondary btn-sm">Stop Monitoring</button>
+                    <button id="clearLog" class="btn btn-warning btn-sm">Clear Log</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Test Results</h5>
+            </div>
+            <div class="card-body">
+                <div id="testResults" class="alert alert-info">
+                    <strong>Test Status:</strong> Ready to test filters.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import components -->
+    <script type="module" src="./components/branch-replenishment-container.js"></script>
+    <script type="module" src="./dataFetching.js"></script>
+    <script type="module" src="./socketConfig.js"></script>
+
+    <script>
+        let monitoringInterval;
+        let container;
+        let renderCount = 0;
+        let originalRender;
+
+        function updateTestResults(message, type = 'info') {
+            const resultsDiv = document.getElementById('testResults');
+            const timestamp = new Date().toLocaleTimeString();
+            const alertClass = type === 'success' ? 'alert-success' : 
+                              type === 'error' ? 'alert-danger' : 
+                              type === 'warning' ? 'alert-warning' : 'alert-info';
+            
+            resultsDiv.className = `alert ${alertClass}`;
+            resultsDiv.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            console.log(`[Filter Test] ${message}`);
+        }
+
+        function startPerformanceMonitoring() {
+            if (!container) return;
+            
+            // Hook into the container's render method
+            if (!originalRender) {
+                originalRender = container.render;
+                container.render = function(...args) {
+                    renderCount++;
+                    document.getElementById('renderCount').textContent = renderCount;
+                    document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+                    
+                    // Call original render
+                    return originalRender.apply(this, args);
+                };
+            }
+            
+            updateTestResults('Performance monitoring started. Render count will update when filters change.', 'info');
+        }
+
+        function stopPerformanceMonitoring() {
+            if (container && originalRender) {
+                container.render = originalRender;
+                originalRender = null;
+            }
+            updateTestResults('Performance monitoring stopped.', 'info');
+        }
+
+        function clearLog() {
+            renderCount = 0;
+            document.getElementById('renderCount').textContent = '0';
+            document.getElementById('lastUpdate').textContent = '-';
+            updateTestResults('Performance log cleared.', 'info');
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            container = document.getElementById('testContainer');
+            
+            // Start monitoring button
+            document.getElementById('startMonitoring').addEventListener('click', startPerformanceMonitoring);
+            
+            // Stop monitoring button
+            document.getElementById('stopMonitoring').addEventListener('click', stopPerformanceMonitoring);
+            
+            // Clear log button
+            document.getElementById('clearLog').addEventListener('click', clearLog);
+
+            // Listen for filter changes
+            container.addEventListener('filter-changed', function(e) {
+                const { property, value, source } = e.detail;
+                updateTestResults(`Filter changed: ${property} = ${value} (from ${source})`, 'info');
+            });
+
+            // Listen for data load events
+            container.addEventListener('data-loaded', function(e) {
+                const { dataCount, filtersReset } = e.detail;
+                updateTestResults(`Data loaded: ${dataCount} items, filters reset: ${filtersReset}`, 'success');
+            });
+
+            updateTestResults('Test ready. Load some data and try the filters to test performance.', 'info');
+        });
+    </script>
+</body>
+</html>

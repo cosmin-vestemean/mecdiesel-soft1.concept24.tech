@@ -35,16 +35,16 @@
     transition: all 0.15s ease-in-out;
 }
 
-/* Bootstrap icon colors for sorting */
-.sort-icon.bi-arrow-up {
+/* Font Awesome icon colors for sorting */
+.sort-icon.fa-sort-up {
     color: #198754; /* Green for ascending */
 }
 
-.sort-icon.bi-arrow-down {
+.sort-icon.fa-sort-down {
     color: #dc3545; /* Red for descending */
 }
 
-.sort-icon.bi-arrow-up-down {
+.sort-icon.fa-sort {
     color: #6c757d; /* Gray for unsorted */
 }
 

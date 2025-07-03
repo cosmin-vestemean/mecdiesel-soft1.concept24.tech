@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Store Filter Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; background: #f0f0f0; border-radius: 5px; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; }
+        .debug { background: #e2e3e5; border: 1px solid #d6d8db; }
+    </style>
+</head>
+<body>
+    <h1>Store Filter Test</h1>
+    <div id="results"></div>
+
+    <script type="module">
+        import { replenishmentStore } from './public/stores/replenishment-store.js';
+        import { columnConfig } from './public/config/table-column-config.js';
+        
+        const results = document.getElementById('results');
+        
+        function addResult(message, type = 'debug') {
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.textContent = message;
+            results.appendChild(div);
+            console.log(message);
+        }
+        
+        function runTest() {
+            addResult('=== Store Filter Test Started ===');
+            
+            // Test data
+            const testData = [
+                { keyField: 'test-1', Cod: 'T001', stoc_emit: 10, min_emit: 5 },
+                { keyField: 'test-2', Cod: 'T002', stoc_emit: -5, min_emit: 0 },
+                { keyField: 'test-3', Cod: 'T003', stoc_emit: 0, min_emit: -2 },
+                { keyField: 'test-4', Cod: 'T004', stoc_emit: null, min_emit: undefined }
+            ];
+            
+            // Set test data
+            replenishmentStore.setData(testData);
+            addResult(`✓ Test data set: ${testData.length} items`);
+            
+            // Test 1: No filter
+            replenishmentStore.resetAllFilters();
+            let filtered = replenishmentStore.getFilteredData(columnConfig);
+            addResult(`Test 1 - No filter: ${filtered.length} items (expected: 4)`, 
+                     filtered.length === 4 ? 'success' : 'error');
+            
+            // Test 2: Positive filter
+            replenishmentStore.setNumberFilter('stoc_emit', 'positive');
+            filtered = replenishmentStore.getFilteredData(columnConfig);
+            addResult(`Test 2 - Positive filter: ${filtered.length} items (expected: 1)`, 
+                     filtered.length === 1 ? 'success' : 'error');
+            if (filtered.length > 0) {
+                addResult(`  → Found: ${filtered.map(item => `${item.Cod}(${item.stoc_emit})`).join(', ')}`);
+            }
+            
+            // Test 3: Negative filter
+            replenishmentStore.resetAllFilters();
+            replenishmentStore.setNumberFilter('stoc_emit', 'negative');
+            filtered = replenishmentStore.getFilteredData(columnConfig);
+            addResult(`Test 3 - Negative filter: ${filtered.length} items (expected: 1)`, 
+                     filtered.length === 1 ? 'success' : 'error');
+            if (filtered.length > 0) {
+                addResult(`  → Found: ${filtered.map(item => `${item.Cod}(${item.stoc_emit})`).join(', ')}`);
+            }
+            
+            // Test 4: Zero filter
+            replenishmentStore.resetAllFilters();
+            replenishmentStore.setNumberFilter('stoc_emit', 'zero');
+            filtered = replenishmentStore.getFilteredData(columnConfig);
+            addResult(`Test 4 - Zero filter: ${filtered.length} items (expected: 1)`, 
+                     filtered.length === 1 ? 'success' : 'error');
+            if (filtered.length > 0) {
+                addResult(`  → Found: ${filtered.map(item => `${item.Cod}(${item.stoc_emit})`).join(', ')}`);
+            }
+            
+            // Test 5: Sorting
+            replenishmentStore.resetAllFilters();
+            replenishmentStore.setSorting('stoc_emit', 'asc');
+            filtered = replenishmentStore.getFilteredData(columnConfig);
+            addResult(`Test 5 - Sorting ascending: ${filtered.length} items`);
+            if (filtered.length > 0) {
+                const values = filtered.map(item => item.stoc_emit);
+                addResult(`  → Values: ${values.join(', ')}`);
+                // Check if sorted correctly (nulls should be treated as 0)
+                const isSorted = values.every((val, i) => i === 0 || (val || 0) >= (values[i-1] || 0));
+                addResult(`  → Correctly sorted: ${isSorted}`, isSorted ? 'success' : 'error');
+            }
+            
+            addResult('=== Store Filter Test Completed ===');
+        }
+        
+        // Run test when page loads
+        runTest();
+    </script>
+</body>
+</html>

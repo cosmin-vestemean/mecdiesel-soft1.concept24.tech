@@ -1,7 +1,11 @@
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
+import { ContextProvider } from 'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0/index.js';
 import { connectToS1 } from '../dataFetching.js';
 import { client } from '../socketConfig.js';
 import { columnConfig } from '../config/table-column-config.js'; // Import column config
+
+// Import store
+import { replenishmentStore, ReplenishmentStoreContext } from '../stores/replenishment-store.js';
 
 // Import child components
 import './query-panel.js';
@@ -12,50 +16,52 @@ import './data-table.js';
 export class BranchReplenishmentContainer extends LitElement {
   static get properties() {
     return {
-      // State managed by the container
-      branchesEmit: { type: String, state: true },
-      selectedDestBranches: { type: Array, state: true },
-      fiscalYear: { type: Number, state: true },
-      data: { type: Array, state: true },
-      loading: { type: Boolean, state: true },
-      error: { type: String, state: true },
-      searchTerm: { type: String, state: true },
-      setConditionForNecesar: { type: Boolean, state: true },
-      setConditionForLimits: { type: Boolean, state: true },
-      selectedReplenishmentStrategy: { type: String, state: true },
-      transferFilter: { type: String, state: true },
-      destinationFilter: { type: String, state: true },
-      abcFilter: { type: String, state: true },
-      blacklistedFilter: { type: String, state: true },
-      lichidareFilter: { type: String, state: true },
-      isSuccessiveStrategy: { type: Boolean, state: true },
-      queryPanelVisible: { type: Boolean, state: true }, // New property to track query panel visibility
+      // Properties synced from store (no longer state: true)
+      branchesEmit: { type: String },
+      selectedDestBranches: { type: Array },
+      fiscalYear: { type: Number },
+      data: { type: Array },
+      loading: { type: Boolean },
+      error: { type: String },
+      searchTerm: { type: String },
+      setConditionForNecesar: { type: Boolean },
+      setConditionForLimits: { type: Boolean },
+      selectedReplenishmentStrategy: { type: String },
+      transferFilter: { type: String },
+      destinationFilter: { type: String },
+      abcFilter: { type: String },
+      blacklistedFilter: { type: String },
+      lichidareFilter: { type: String },
+      isSuccessiveStrategy: { type: Boolean },
+      queryPanelVisible: { type: Boolean },
 
-      // Passed down, potentially static
+      // Local properties
       branches: { type: Object },
     };
   }
 
   constructor() {
     super();
-    this.branchesEmit = '';
-    this.selectedDestBranches = [];
-    this.fiscalYear = new Date().getFullYear(); // Keep for potential future use
-    this.data = [];
-    this.loading = false;
-    this.error = '';
-    this.searchTerm = '';
-    this.setConditionForNecesar = true;
-    this.setConditionForLimits = true;
-    this.selectedReplenishmentStrategy = 'none';
-    this.transferFilter = 'all';
-    this.destinationFilter = 'all';
-    this.abcFilter = 'all';
-    this.blacklistedFilter = 'all';
-    this.lichidareFilter = 'all';
-    this.isSuccessiveStrategy = true;
-    this.queryPanelVisible = true; // Initially visible
-    this.branches = { // Keep branches data here or fetch if dynamic
+    
+    // Initialize the store context provider
+    this._storeProvider = new ContextProvider(this, {
+      context: ReplenishmentStoreContext,
+      initialValue: replenishmentStore
+    });
+    
+    console.log('📦 Container initialized context provider with store:', replenishmentStore);
+    
+    // Subscribe to store changes
+    this._unsubscribeFromStore = replenishmentStore.subscribe((newState, previousState, action) => {
+      console.log('📦 Container received store update:', action.type, newState);
+      this._syncStateFromStore(newState);
+    });
+    
+    // Initialize state from store
+    this._syncStateFromStore(replenishmentStore.getState());
+    
+    // Keep branches data here for now (will be moved to store later)
+    this.branches = { 
       '1200': 'CLUJ', '1300': 'CONSTANTA', '1400': 'GALATI',
       '1500': 'PLOIESTI', '1600': 'IASI', '1700': 'SIBIU', '1800': 'CRAIOVA',
       '1900': 'ORADEA', '2000': 'PITESTI', '2100': 'BRASOV', '2200': 'BUCURESTI',
@@ -68,54 +74,91 @@ export class BranchReplenishmentContainer extends LitElement {
     return this; // Render in light DOM
   }
 
+  // --- Store Integration ---
+  _syncStateFromStore(state) {
+    // Sync reactive properties from store state
+    this.branchesEmit = state.branchesEmit;
+    this.selectedDestBranches = state.selectedDestBranches;
+    this.fiscalYear = state.fiscalYear;
+    this.data = state.data;
+    this.loading = state.loading;
+    this.error = state.error;
+    this.searchTerm = state.searchTerm;
+    this.setConditionForNecesar = state.setConditionForNecesar;
+    this.setConditionForLimits = state.setConditionForLimits;
+    this.selectedReplenishmentStrategy = state.selectedReplenishmentStrategy;
+    this.transferFilter = state.transferFilter;
+    this.destinationFilter = state.destinationFilter;
+    this.abcFilter = state.abcFilter;
+    this.blacklistedFilter = state.blacklistedFilter;
+    this.lichidareFilter = state.lichidareFilter;
+    this.isSuccessiveStrategy = state.isSuccessiveStrategy;
+    this.queryPanelVisible = state.queryPanelVisible;
+    
+    console.log('📦 Container synced from store - branchesEmit:', this.branchesEmit, 'selectedDestBranches:', this.selectedDestBranches);
+  }
+
   // --- Data Fetching and Actions ---
   async _handleLoadData() {
-    this.loading = true;
-    this.error = '';
+    replenishmentStore.setLoading(true);
+    replenishmentStore.setError('');
+    
+    // Only reset search-related filters, not all filters
+    replenishmentStore.resetSearchFilters();
+    
     try {
-      if (!this.branchesEmit) throw new Error('Please select a source branch');
-      if (this.selectedDestBranches.length === 0) throw new Error('Please select at least one destination branch');
+      const currentState = replenishmentStore.getState();
+      if (!currentState.branchesEmit) throw new Error('Please select a source branch');
+      if (currentState.selectedDestBranches.length === 0) throw new Error('Please select at least one destination branch');
 
-      const branchesDest = this.selectedDestBranches.join(',');
+      const branchesDest = currentState.selectedDestBranches.join(',');
       const token = await new Promise((resolve, reject) => {
         connectToS1((token) => token ? resolve(token) : reject(new Error('Failed to get token')));
       });
 
       const response = await client.service('s1').getAnalyticsForBranchReplenishment({
         clientID: token,
-        branchesEmit: this.branchesEmit,
+        branchesEmit: currentState.branchesEmit,
         branchesDest: branchesDest,
-        fiscalYear: this.fiscalYear,
+        fiscalYear: currentState.fiscalYear,
         company: 1000, // Assuming company is fixed or add as property
-        setConditionForNecesar: this.setConditionForNecesar,
-        setConditionForLimits: this.setConditionForLimits
+        setConditionForNecesar: currentState.setConditionForNecesar,
+        setConditionForLimits: currentState.setConditionForLimits
       });
 
-      // Ensure each item has a unique keyField
-      this.data = (Array.isArray(response) ? response : []).map((item, index) => ({
-        ...item,
-        // Create a unique key if not provided by backend (adjust if backend provides one)
-        keyField: item.keyField || `${item.mtrl}-${item.branchD}-${index}`
-      }));
-
-      // Cache unique destinations once when data loads
-      this._cachedUniqueDestinations = this._calculateUniqueDestinations();
+      // Set data in store
+      replenishmentStore.setData(response);
 
       // Hide query panel after successfully loading data
-      this.queryPanelVisible = false;
+      replenishmentStore.setQueryPanelVisible(false);
 
-      // Update the quick panel with current query panel state
-      const quickPanel = this.querySelector('quick-panel');
-      if (quickPanel) {
-        quickPanel.queryPanelVisible = false;
-      }
+      // Dispatch custom event to indicate data has been loaded
+      this.dispatchEvent(new CustomEvent('data-loaded', {
+        bubbles: true,
+        composed: true,
+        detail: { 
+          dataCount: Array.isArray(response) ? response.length : 0,
+          filtersReset: true
+        }
+      }));
 
     } catch (error) {
       console.error('Error loading branch replenishment data:', error);
-      this.error = `Error loading data: ${error.message}`;
-      this.data = [];
+      replenishmentStore.setError(`Error loading data: ${error.message}`);
+      replenishmentStore.setData([]);
+      
+      // Dispatch event even on error since filters were still reset
+      this.dispatchEvent(new CustomEvent('data-loaded', {
+        bubbles: true,
+        composed: true,
+        detail: { 
+          dataCount: 0,
+          filtersReset: true,
+          error: error.message
+        }
+      }));
     } finally {
-      this.loading = false;
+      replenishmentStore.setLoading(false);
     }
   }
 
@@ -228,14 +271,17 @@ export class BranchReplenishmentContainer extends LitElement {
 
   // --- Strategy Application ---
   _handleApplyStrategy() {
-    if (!this.data.length || this.selectedReplenishmentStrategy === 'none') {
+    const currentState = replenishmentStore.getState();
+    
+    if (!currentState.data.length || currentState.selectedReplenishmentStrategy === 'none') {
       console.warn('Strategy application skipped: No data or no strategy selected');
       return;
     }
 
-    console.log(`🎯 Applying strategy: ${this.selectedReplenishmentStrategy}, Successive: ${this.isSuccessiveStrategy}`);
+    console.log(`🎯 Applying strategy: ${currentState.selectedReplenishmentStrategy}, Successive: ${currentState.isSuccessiveStrategy}`);
     
-    const currentFilteredDataKeys = new Set(this.filteredData.map(item => item.keyField));
+    const currentFilteredData = replenishmentStore.getFilteredData();
+    const currentFilteredDataKeys = new Set(currentFilteredData.map(item => item.keyField));
     let dataUpdated = false;
     let applicableCount = 0;
     let skippedReasons = {
@@ -247,7 +293,7 @@ export class BranchReplenishmentContainer extends LitElement {
     };
 
     // Create a new array to ensure Lit detects the change
-    const newData = this.data.map(item => {
+    const newData = currentState.data.map(item => {
       // Only apply strategy to items currently visible in the filtered view
       if (!currentFilteredDataKeys.has(item.keyField)) {
         skippedReasons.notInFilter++;
@@ -258,7 +304,7 @@ export class BranchReplenishmentContainer extends LitElement {
       let applyChange = false;
 
       // Determine if the strategy should be applied based on the successive flag
-      if (this.isSuccessiveStrategy && this.selectedReplenishmentStrategy !== 'clear') {
+      if (currentState.isSuccessiveStrategy) {
         const currentTransfer = parseFloat(updatedItem.transfer || 0);
         if (currentTransfer === 0) {
           applyChange = true;
@@ -274,7 +320,7 @@ export class BranchReplenishmentContainer extends LitElement {
       if (applyChange) {
         const isBlacklisted = this.isItemBlacklisted(updatedItem);
         
-        switch (this.selectedReplenishmentStrategy) {
+        switch (currentState.selectedReplenishmentStrategy) {
           case 'min':
             if (!isBlacklisted) {
               const minQty = parseFloat(updatedItem.cant_min || 0);
@@ -311,7 +357,7 @@ export class BranchReplenishmentContainer extends LitElement {
             break;
           case 'skip_blacklisted':
             if (isBlacklisted) {
-              if (!this.isSuccessiveStrategy) {
+              if (!currentState.isSuccessiveStrategy) {
                 // Clear transfers for blacklisted items when not in successive mode
                 updatedItem.transfer = 0;
                 dataUpdated = true;
@@ -349,133 +395,53 @@ export class BranchReplenishmentContainer extends LitElement {
 
     // Report results
     console.log(`📊 Strategy Application Results:`, {
-      strategy: this.selectedReplenishmentStrategy,
-      successive: this.isSuccessiveStrategy,
-      totalItems: this.data.length,
+      strategy: currentState.selectedReplenishmentStrategy,
+      successive: currentState.isSuccessiveStrategy,
+      totalItems: currentState.data.length,
       filteredItems: currentFilteredDataKeys.size,
       applicableItems: applicableCount,
       results: skippedReasons
     });
 
     if (dataUpdated) {
-      this.data = newData; // Trigger update with modified data
+      replenishmentStore.setData(newData);
       console.log(`✅ Strategy applied successfully! Updated ${skippedReasons.applied} items.`);
     } else {
       console.warn(`⚠️  No items were updated. Check if items meet strategy criteria.`);
     }
     
     // Don't reset dropdown immediately, user might want to apply again with different successive setting
-    // this.selectedReplenishmentStrategy = 'none';
+    // replenishmentStore.setReplenishmentStrategy('none');
   }
 
   _handleResetData() {
-    // Reset data and show the query panel again
-    this.data = [];
-    this._cachedUniqueDestinations = [];
-    this.searchTerm = '';
-    this.transferFilter = 'all';
-    this.destinationFilter = 'all';
-    this.abcFilter = 'all'; // Reset ABC filter
-    this.blacklistedFilter = 'all'; // Reset blacklisted filter
-    this.lichidareFilter = 'all'; // Reset lichidare filter
-    this.isSuccessiveStrategy = true; // Reset strategy mode
-    this.selectedReplenishmentStrategy = 'none';
-    this.error = '';
-    this.setConditionForNecesar = true;
-    this.setConditionForLimits = true;
-    
-    // Reset source and destination selections
-    this.branchesEmit = '';
-    this.selectedDestBranches = [];
-    
-    // Show the query panel for new selection
-    this.queryPanelVisible = true;
-    
-    // Update the quick panel with current query panel state
-    const quickPanel = this.querySelector('quick-panel');
-    if (quickPanel) {
-      quickPanel.queryPanelVisible = true;
-    }
-    
-    // Reset data table
-    const dataTable = this.querySelector('replenishment-data-table');
-    if (dataTable) {
-      dataTable.tableData = [];
-      // Reset any table filters
-      if (dataTable.resetNumberFilters && typeof dataTable.resetNumberFilters === 'function') {
-        dataTable.resetNumberFilters();
-      }
-    }
-    
-    // Update the UI
-    this.requestUpdate();
+    // Reset all data and states through the store
+    replenishmentStore.resetData();
     
     console.log('Data reset complete. Ready for new data selection.');
   }
 
+  // --- Reset Methods ---
+  _resetSearchFilters() {
+    console.log('🔄 Resetting search filters only...');
+    replenishmentStore.resetSearchFilters();
+    console.log('✅ Search filters have been reset');
+  }
+
+  _resetFiltersAndStates() {
+    console.log('🔄 Starting complete filter and state reset...');
+    replenishmentStore.resetAllFilters();
+    console.log('✅ All filters and states have been reset to defaults');
+  }
+
   // --- Filtering Logic ---
   get filteredData() {
-    console.log('Computing filteredData - searchTerm:', this.searchTerm, 'transferFilter:', this.transferFilter);
-    let filtered = this.data;
-
-    // Apply search term filter (only on Code and Description by default)
-    if (this.searchTerm) {
-      const term = this.searchTerm.toLowerCase();
-      console.log('Filtering by search term:', term);
-      // Hardcode the specific columns we want to search - Code and Description only
-      const searchColumns = ['Cod', 'Descriere'];
-
-      filtered = filtered.filter(item =>
-        searchColumns.some(key => {
-          const matches = item[key] &&
-            typeof item[key] === 'string' &&
-            item[key].toLowerCase().includes(term);
-          if (matches) console.log('Match found in', key, ':', item[key]);
-          return matches;
-        })
-      );
-    }
-
-    // Apply transfer value filter
-    if (this.transferFilter !== 'all') {
-      console.log('Filtering by transfer:', this.transferFilter);
-      filtered = filtered.filter(item => {
-        const transfer = parseFloat(item.transfer || 0);
-        const matches = this.transferFilter === 'positive' ? transfer > 0 : transfer === 0;
-        if (matches) console.log('Transfer match:', transfer);
-        return matches;
-      });
-    }
-
-    // Note: Destination filtering is now handled by the data table's getFilteredData() method
-    // to avoid double-filtering issues with the header filter dropdowns
-
-    console.log(`📋 Filtered results: ${filtered.length} items (from ${this.data.length} total)`);
-    
-    // Sample a few items to debug strategy issues
-    if (filtered.length > 0) {
-      const sample = filtered.slice(0, 3);
-      console.log('🔍 Sample filtered items for strategy debugging:', sample.map(item => ({
-        mtrl: item.mtrl,
-        keyField: item.keyField,
-        cant_min: item.cant_min,
-        cant_max: item.cant_max,
-        transfer: item.transfer,
-        Blacklisted: item.Blacklisted
-      })));
-    }
-    
-    return filtered;
+    // Always use store's filtered data
+    return replenishmentStore.getFilteredData(columnConfig);
   }
 
   get uniqueDestinations() {
-    return this._cachedUniqueDestinations || [];
-  }
-
-  _calculateUniqueDestinations() {
-    if (!this.data || this.data.length === 0) return [];
-    const destColKey = columnConfig.find(c => c.isHeaderFilter)?.key || 'Destinatie';
-    return [...new Set(this.data.map(item => item[destColKey]))].sort();
+    return replenishmentStore.getUniqueDestinations();
   }
 
   // --- Utility Methods (Passed down or used internally) ---
@@ -543,101 +509,38 @@ export class BranchReplenishmentContainer extends LitElement {
 
 
   // --- Event Handlers for Child Component Updates ---
-  _handleQueryUpdate(e) {
-    const { property, value } = e.detail;
-    if (property === 'selectedDestBranches') {
-      // Create a new array to ensure reactivity
-      this.selectedDestBranches = Array.isArray(value) ? [...value] : [];
-    } else if (property === 'branchesEmit') {
-      this.branchesEmit = value;
-    } else if (property === 'setConditionForNecesar') {
-      this.setConditionForNecesar = Boolean(value);
-      console.log('Updated setConditionForNecesar:', this.setConditionForNecesar);
-    } else if (property === 'setConditionForLimits') {
-      this.setConditionForLimits = Boolean(value);
-      console.log('Updated setConditionForLimits:', this.setConditionForLimits);
-    } else if (this.hasOwnProperty(property)) {
-      this[property] = value;
-    }
-  }
+  // QueryPanel, ManipulationPanel, and DataTable now connect directly to store
 
   _handleManipulationUpdate(e) {
     const { property, value } = e.detail;
-    if (this.hasOwnProperty(property)) {
-      console.log(`Manipulation update - Previous ${property}:`, this[property]);
-      this[property] = value;
-      console.log(`Manipulation update - New ${property}:`, value);
-
-      // Per Lit documentation - dispatch a 'filter-changed' event that will
-      // notify all children of the filter change
-      this.dispatchEvent(new CustomEvent('filter-changed', {
-        bubbles: true,
-        composed: true,
-        detail: { property, value, source: 'manipulation' }
-      }));
+    
+    // Update store instead of direct property assignment
+    if (property === 'searchTerm') {
+      replenishmentStore.setSearchTerm(value);
+      console.log(`Manipulation update - Updated ${property}:`, value);
+    } else if (property === 'transferFilter') {
+      replenishmentStore.setTransferFilter(value);
+      console.log(`Manipulation update - Updated ${property}:`, value);
     }
+
+    // Dispatch a filter-changed event for child components to listen to
+    this.dispatchEvent(new CustomEvent('filter-changed', {
+      bubbles: true,
+      composed: true,
+      detail: { property, value, source: 'manipulation' }
+    }));
   }
 
   _handleStrategyUpdate(e) {
     const { property, value } = e.detail;
-    if (this.hasOwnProperty(property)) {
-      console.log(`Strategy update - Previous ${property}:`, this[property]);
-      this[property] = value;
-      console.log(`Strategy update - New ${property}:`, value);
-      this.requestUpdate();
-    }
-  }
-
-  _handleTableUpdate(e) {
-    const { property, value, itemKey, transferValue } = e.detail;
-    if (property === 'destinationFilter') {
-      this.destinationFilter = value;
-    } else if (property === 'abcFilter') {
-      this.abcFilter = value;
-      console.log(`Updated ABC filter to:`, value);
-    } else if (property === 'blacklistedFilter') {
-      this.blacklistedFilter = value;
-      console.log(`Updated Blacklisted filter to:`, value);
-    } else if (property === 'lichidareFilter') {
-      this.lichidareFilter = value;
-      console.log(`Updated InLichidare filter to:`, value);
-    } else if (property.startsWith('numberFilter_')) {
-      // Handle number filter events from the data table
-      const dataTable = this.querySelector('replenishment-data-table');
-      if (dataTable) {
-        dataTable[property] = value;
-        console.log(`Updated number filter ${property} to:`, value);
-        dataTable.requestUpdate();
-      }
-    } else if (property === 'sort') {
-      // Handle sorting events from the data table
-      console.log(`📊 Sort event received:`, value);
-      
-      // For now, just log the sort event - in future this could trigger server-side sorting
-      // The data table handles client-side sorting internally, so no action needed here
-      // unless implementing server-side sorting for large datasets
-      
-      if (value && value.column && value.direction) {
-        console.log(`🔄 Sorting by column "${value.column}" in "${value.direction}" order (${value.dataType} type)`);
-        
-        // Future: Could implement server-side sorting here
-        // if (this.data.length > sortConfig.clientSortThreshold) {
-        //   this._handleServerSideSort(value.column, value.direction);
-        // }
-      }
-    } else if (property === 'itemTransfer' && itemKey !== undefined) {
-      // Update transfer value for a specific item
-      const dataIndex = this.data.findIndex(item => item.keyField === itemKey);
-      if (dataIndex > -1) {
-        // Create a new array with the updated item to trigger Lit update
-        const newData = [...this.data];
-        // Ensure transfer is a non-negative number
-        const newTransferValue = Math.max(0, parseFloat(transferValue || 0));
-        if (!isNaN(newTransferValue)) {
-          newData[dataIndex] = { ...newData[dataIndex], transfer: newTransferValue };
-          this.data = newData;
-        }
-      }
+    
+    // Update store instead of direct property assignment
+    if (property === 'selectedReplenishmentStrategy') {
+      replenishmentStore.setReplenishmentStrategy(value);
+      console.log(`Strategy update - Updated ${property}:`, value);
+    } else if (property === 'isSuccessiveStrategy') {
+      replenishmentStore.setSuccessiveStrategy(value);
+      console.log(`Strategy update - Updated ${property}:`, value);
     }
   }
 
@@ -647,128 +550,21 @@ export class BranchReplenishmentContainer extends LitElement {
   }
 
   firstUpdated() {
-    console.log('Container firstUpdated - adding direct listeners');
+    console.log('Container firstUpdated - setting up event listeners');
 
     // Get references to the child panels
     const manipulationPanel = this.querySelector('manipulation-panel');
     const strategyPanel = this.querySelector('strategy-panel');
+    // DataTable now connects directly to store, no need for event listener
 
     if (manipulationPanel) {
-      console.log('Found manipulation panel, adding direct listener');
-      manipulationPanel.addEventListener('update-property', (e) => {
-        console.log('Direct listener caught event from manipulation panel:', e.detail);
-        const { property, value } = e.detail;
-
-        // Directly set the property on this component
-        if (this.hasOwnProperty(property)) {
-          this[property] = value;
-          console.log(`Container: Updated ${property} to`, value);
-
-          // Force a complete re-render
-          this.requestUpdate();
-
-          // Find and update the data table directly
-          this._updateDataTable();
-        }
-      });
-    } else {
-      console.warn('Manipulation panel not found in firstUpdated');
+      console.log('Found manipulation panel, adding event listener');
+      manipulationPanel.addEventListener('update-property', this._handleManipulationUpdate.bind(this));
     }
 
     if (strategyPanel) {
-      console.log('Found strategy panel, adding direct listener');
-      strategyPanel.addEventListener('update-property', (e) => {
-        console.log('Direct listener caught event from strategy panel:', e.detail);
-        const { property, value } = e.detail;
-
-        // Directly set the property on this component
-        if (this.hasOwnProperty(property)) {
-          this[property] = value;
-          console.log(`Container: Updated ${property} to`, value);
-
-          // Force a complete re-render
-          this.requestUpdate();
-
-          // Find and update the data table directly
-          this._updateDataTable();
-        }
-      });
-    } else {
-      console.warn('Strategy panel not found in firstUpdated');
-    }
-  }
-
-  // New helper method to directly update the data table
-  _updateDataTable() {
-    // Calculate filtered data
-    const filteredData = [...this.filteredData];
-    console.log('Directly updating data table with', filteredData.length, 'items');
-
-    // Find and update the data-table directly
-    const dataTable = this.querySelector('replenishment-data-table');
-    if (dataTable) {
-      console.log('Found data table component, setting tableData directly');
-
-      // Force a new array reference to trigger reactivity
-      dataTable.tableData = [...filteredData];
-      console.log('Data table tableData property set with', dataTable.tableData.length, 'items');
-
-      // Update counts
-      const manipulationPanel = this.querySelector('manipulation-panel');
-      if (manipulationPanel) {
-        manipulationPanel.filteredCount = filteredData.length;
-        manipulationPanel.totalCount = this.data.length;
-        console.log('Updated manipulation panel counts:', manipulationPanel.filteredCount, 'of', manipulationPanel.totalCount);
-      }
-
-      // Force the data table to update
-      if (typeof dataTable.requestUpdate === 'function') {
-        console.log('Forcing data table to update');
-
-        // EXTREME SOLUTION: Force redraw by replacing the entire table
-        setTimeout(() => {
-          console.log('REDRAW: Recreating data table to ensure update');
-          // Get the parent node
-          const tableParent = dataTable.parentNode;
-          if (tableParent) {
-            // Clone the data table node
-            const newTable = dataTable.cloneNode(false);
-
-            // IMPORTANT - Get the column config from the imported module
-            // This ensures the new table has the proper column configuration
-            const importedColumnConfig = columnConfig || [];
-
-            // Set properties on the new table
-            newTable.tableData = [...filteredData];
-            newTable.columnConfig = importedColumnConfig; // Use the imported config
-            newTable.destinationFilter = this.destinationFilter;
-            newTable.uniqueDestinations = this.uniqueDestinations;
-            newTable.utilityFunctions = {
-              getStockClassEmit: this.getStockClassEmit,
-              getStockClassDest: this.getStockClassDest,
-              getValueClass: this.getValueClass,
-              getBlacklistedClass: this.getBlacklistedClass,
-              getLichidareClass: this.getLichidareClass
-            };
-            newTable.loading = this.loading;
-
-            // Log to verify column config is properly set
-            console.log('Setting column config on new table:', importedColumnConfig.length, 'columns');
-
-            // Replace the old table with the new one
-            tableParent.replaceChild(newTable, dataTable);
-
-            // Add event listener for update-property
-            newTable.addEventListener('update-property', (e) => {
-              this._handleTableUpdate(e);
-            });
-
-            console.log('REDRAW: Data table replaced successfully');
-          }
-        }, 0);
-      }
-    } else {
-      console.warn('Could not find data table to update directly');
+      console.log('Found strategy panel, adding event listener');
+      strategyPanel.addEventListener('update-property', this._handleStrategyUpdate.bind(this));
     }
   }
 
@@ -779,14 +575,26 @@ export class BranchReplenishmentContainer extends LitElement {
 
   // --- Rendering ---
   render() {
-    // Force filteredData calculation on each render
-    const currentFilteredData = [...this.filteredData];
+    // Get filtered data from store
+    const currentFilteredData = replenishmentStore.getFilteredData(columnConfig);
     const totalCount = this.data.length;
     const filteredCount = currentFilteredData.length;
     console.log('Render - filtered count:', filteredCount, 'total:', totalCount);
 
     return html`
       <div class="container-fluid mt-2">
+        <!-- Development Notice Badge -->
+        <div class="alert alert-info alert-dismissible fade show d-flex align-items-center" role="alert">
+          <svg class="me-2" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/>
+          </svg>
+          <div class="flex-grow-1">
+            <strong>🔧 Store Integration In Progress:</strong> Branch Replenishment is being migrated to use centralized state management with Lit Context. 
+            Currently debugging final issues with number filters and sorting for optimal performance and consistency.
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+
         ${this.error ? html`<div class="alert alert-danger alert-dismissible fade show" role="alert">
                             ${this.error}
                             <button type="button" class="btn-close" @click=${() => this.error = ''} aria-label="Close"></button>
@@ -796,16 +604,10 @@ export class BranchReplenishmentContainer extends LitElement {
         <div class="query-panel-container ${this.queryPanelVisible ? 'visible' : 'hidden'}">
           <query-panel
             .branches=${this.branches}
-            .branchesEmit=${this.branchesEmit}
-            .selectedDestBranches=${this.selectedDestBranches}
-            .setConditionForNecesar=${this.setConditionForNecesar}
-            .setConditionForLimits=${this.setConditionForLimits}
-            .loading=${this.loading}
             @load-data=${this._handleLoadData}
             @save-data=${this._handleSaveData}
             @export-data=${this._handleExportData}
-            @reset-data=${this._handleResetData}
-            @update-property=${this._handleQueryUpdate}>
+            @reset-data=${this._handleResetData}>
           </query-panel>
         </div>
 
@@ -818,8 +620,6 @@ export class BranchReplenishmentContainer extends LitElement {
               .transferFilter=${this.transferFilter}
               .totalCount=${totalCount}
               .filteredCount=${filteredCount}
-              @searchTerm-changed=${e => { this.searchTerm = e.detail.value; this._updateDataTable(); }}
-              @transferFilter-changed=${e => { this.transferFilter = e.detail.value; this._updateDataTable(); }}
               @update-property=${this._handleManipulationUpdate}>
             </manipulation-panel>
           </div>
@@ -832,35 +632,25 @@ export class BranchReplenishmentContainer extends LitElement {
           .loading=${this.loading}
           .queryPanelVisible=${this.queryPanelVisible}
           ?disabled=${!this.data || this.data.length === 0}
-          @selectedReplenishmentStrategy-changed=${e => {
-        console.log('Container caught selectedReplenishmentStrategy-changed event:', e.detail.value);
-        this.selectedReplenishmentStrategy = e.detail.value;
-        this.requestUpdate();
-      }}
           @toggle-query-panel=${this._handleToggleQueryPanel}
           @apply-strategy=${this._handleApplyStrategy}
           @update-property=${this._handleStrategyUpdate}>
         </quick-panel>
 
+        <!-- DataTable with store integration - pass data as fallback -->
         <replenishment-data-table
-          .tableData=${currentFilteredData}
+          .tableData=${this.data}
           .columnConfig=${columnConfig}
-          .destinationFilter=${this.destinationFilter}
-          .abcFilter=${this.abcFilter}
-          .blacklistedFilter=${this.blacklistedFilter}
-          .lichidareFilter=${this.lichidareFilter}
-          .uniqueDestinations=${this.uniqueDestinations}
           .utilityFunctions=${{
-        getStockClassEmit: this.getStockClassEmit,
-        getStockClassDest: this.getStockClassDest,
-        getValueClass: this.getValueClass,
-        getBlacklistedClass: this.getBlacklistedClass,
-        getLichidareClass: this.getLichidareClass,
-        getSalesPercClass: this.getSalesPercClass,
-        getAbcBadgeClass: this.getAbcBadgeClass
-      }}
-          .loading=${this.loading}
-          @update-property=${this._handleTableUpdate}>
+            getStockClassEmit: this.getStockClassEmit,
+            getStockClassDest: this.getStockClassDest,
+            getValueClass: this.getValueClass,
+            getBlacklistedClass: this.getBlacklistedClass,
+            getLichidareClass: this.getLichidareClass,
+            getSalesPercClass: this.getSalesPercClass,
+            getAbcBadgeClass: this.getAbcBadgeClass
+          }}
+          .loading=${this.loading}>
         </replenishment-data-table>
       </div>
     `;
@@ -868,16 +658,17 @@ export class BranchReplenishmentContainer extends LitElement {
 
   // Handle toggle query panel event from quick panel
   _handleToggleQueryPanel() {
-    console.log('Toggling query panel visibility. Current state:', this.queryPanelVisible);
-    this.queryPanelVisible = !this.queryPanelVisible;
+    const currentState = replenishmentStore.getState();
+    console.log('Toggling query panel visibility. Current state:', currentState.queryPanelVisible);
+    replenishmentStore.setQueryPanelVisible(!currentState.queryPanelVisible);
+  }
 
-    // Update the quick panel with current query panel state
-    const quickPanel = this.querySelector('quick-panel');
-    if (quickPanel) {
-      quickPanel.queryPanelVisible = this.queryPanelVisible;
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    // Clean up store subscription
+    if (this._unsubscribeFromStore) {
+      this._unsubscribeFromStore();
     }
-
-    this.requestUpdate();
   }
 }
 

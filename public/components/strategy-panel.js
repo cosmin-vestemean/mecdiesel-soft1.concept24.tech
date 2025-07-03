@@ -1,50 +1,98 @@
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
+import { ContextConsumer } from 'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0/index.js';
+import { ReplenishmentStoreContext } from '../stores/replenishment-store.js';
 
 export class QuickPanel extends LitElement {
   static get properties() {
     return {
-      selectedReplenishmentStrategy: { type: String, state: true },
-      isSuccessiveStrategy: { type: Boolean, state: true },
-      loading: { type: Boolean, state: true },
-      disabled: { type: Boolean, state: true }, // Disable if no data
+      // UI state
       expanded: { type: Boolean, state: true }, // Track if floating panel is expanded
-      queryPanelVisible: { type: Boolean } // Whether the query panel is currently visible
+      disabled: { type: Boolean, state: true }, // Disable if no data
+      
+      // Store-driven properties (no longer state: true)
+      selectedReplenishmentStrategy: { type: String },
+      isSuccessiveStrategy: { type: Boolean },
+      loading: { type: Boolean },
+      queryPanelVisible: { type: Boolean }
     };
   }
 
   constructor() {
     super();
+    
+    // Initialize UI state
+    this.expanded = false; // Start collapsed
+    this.disabled = false;
+    
+    // Initialize store-driven properties (will be updated by store)
     this.selectedReplenishmentStrategy = 'none';
     this.isSuccessiveStrategy = true;
     this.loading = false;
-    this.disabled = false;
-    this.expanded = false; // Start collapsed
-    this.queryPanelVisible = true; // Initially visible
+    this.queryPanelVisible = true;
+    
+    // Set up store context consumer
+    this._storeConsumer = new ContextConsumer(this, {
+      context: ReplenishmentStoreContext,
+      callback: (store) => {
+        this._store = store;
+        this._subscribeToStore();
+      }
+    });
+  }
+
+  _subscribeToStore() {
+    if (this._store && !this._unsubscribeFromStore) {
+      this._unsubscribeFromStore = this._store.subscribe((newState, previousState, action) => {
+        console.log('🎯 QuickPanel received store update:', action.type);
+        this._syncStateFromStore(newState);
+      });
+      
+      // Initial sync
+      this._syncStateFromStore(this._store.getState());
+    }
+  }
+
+  _syncStateFromStore(state) {
+    this.selectedReplenishmentStrategy = state.selectedReplenishmentStrategy;
+    this.isSuccessiveStrategy = state.isSuccessiveStrategy;
+    this.loading = state.loading;
+    this.queryPanelVisible = state.queryPanelVisible;
+    this.disabled = !state.data || state.data.length === 0;
   }
 
   createRenderRoot() { return this; } // Render in light DOM
 
   _dispatchUpdate(property, value) {
-    console.log(`QuickPanel dispatching ${property}:`, value);
-    this.dispatchEvent(new CustomEvent('update-property', {
-      detail: { property, value },
-      bubbles: true, composed: true
-    }));
+    console.log(`QuickPanel updating ${property}:`, value);
     
-    // Also dispatch specific property-changed events like we did for manipulation panel
-    if (property === 'selectedReplenishmentStrategy') {
-      console.log('Dispatching specific selectedReplenishmentStrategy-changed event:', value);
-      this.dispatchEvent(new CustomEvent('selectedReplenishmentStrategy-changed', {
-        detail: { value },
-        bubbles: true,
-        composed: true
-      }));
+    // Update store directly instead of emitting events
+    if (this._store) {
+      if (property === 'selectedReplenishmentStrategy') {
+        this._store.setReplenishmentStrategy(value);
+      } else if (property === 'isSuccessiveStrategy') {
+        this._store.setSuccessiveStrategy(value);
+      }
+    } else {
+      console.warn('Store not available yet for QuickPanel');
     }
   }
 
   _emitAction(actionName) {
     console.log(`QuickPanel emitting action: ${actionName}`);
-    this.dispatchEvent(new CustomEvent(actionName, { bubbles: true, composed: true }));
+    
+    // Handle actions that should go through the store
+    if (actionName === 'apply-strategy') {
+      // Apply strategy is handled by the container's _handleApplyStrategy method
+      // We still need to emit the event for the container to handle
+      this.dispatchEvent(new CustomEvent(actionName, { bubbles: true, composed: true }));
+    } else if (actionName === 'toggle-query-panel') {
+      // Update query panel visibility through store
+      if (this._store) {
+        this._store.setQueryPanelVisible(!this.queryPanelVisible);
+      }
+    } else {
+      this.dispatchEvent(new CustomEvent(actionName, { bubbles: true, composed: true }));
+    }
   }
 
   togglePanel() {
@@ -118,6 +166,14 @@ export class QuickPanel extends LitElement {
         </div>
       </div>
     `;
+  }
+  
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    // Clean up store subscription
+    if (this._unsubscribeFromStore) {
+      this._unsubscribeFromStore();
+    }
   }
 }
 customElements.define('quick-panel', QuickPanel);
