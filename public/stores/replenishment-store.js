@@ -464,17 +464,18 @@ export class ReplenishmentStore {
                  (typeof blacklistedValue === 'string' && 
                   (blacklistedValue.toLowerCase() === 'da' || blacklistedValue.toLowerCase() === 'yes'));
         } else if (this._state.blacklistedFilter === 'no') {
-          // Handle multiple formats: false, 0, '0', 'false', 'Nu', 'No', '-'
+          // Handle multiple formats: false, 0, '0', 'false', 'Nu', 'No', '-' AND null/undefined/empty
           return blacklistedValue === false || 
                  blacklistedValue === 0 || 
                  blacklistedValue === '0' || 
                  blacklistedValue === 'false' ||
+                 blacklistedValue === null || 
+                 blacklistedValue === undefined || 
+                 blacklistedValue === '' ||
                  (typeof blacklistedValue === 'string' && 
                   (blacklistedValue.toLowerCase() === 'nu' || 
                    blacklistedValue.toLowerCase() === 'no' || 
                    blacklistedValue === '-'));
-        } else if (this._state.blacklistedFilter === 'none') {
-          return blacklistedValue === null || blacklistedValue === undefined || blacklistedValue === '';
         }
         return true;
       });
@@ -493,17 +494,18 @@ export class ReplenishmentStore {
                  (typeof lichidareValue === 'string' && 
                   (lichidareValue.toLowerCase() === 'da' || lichidareValue.toLowerCase() === 'yes'));
         } else if (this._state.lichidareFilter === 'no') {
-          // Handle multiple formats: false, 0, '0', 'false', 'Nu', 'No', '-'
+          // Handle multiple formats: false, 0, '0', 'false', 'Nu', 'No', '-' AND null/undefined/empty
           return lichidareValue === false || 
                  lichidareValue === 0 || 
                  lichidareValue === '0' || 
                  lichidareValue === 'false' ||
+                 lichidareValue === null || 
+                 lichidareValue === undefined || 
+                 lichidareValue === '' ||
                  (typeof lichidareValue === 'string' && 
                   (lichidareValue.toLowerCase() === 'nu' || 
                    lichidareValue.toLowerCase() === 'no' || 
                    lichidareValue === '-'));
-        } else if (this._state.lichidareFilter === 'none') {
-          return lichidareValue === null || lichidareValue === undefined || lichidareValue === '';
         }
         return true;
       });

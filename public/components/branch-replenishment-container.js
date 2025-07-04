@@ -594,7 +594,6 @@ export class BranchReplenishmentContainer extends LitElement {
             .branches=${this.branches}
             @load-data=${this._handleLoadData}
             @save-data=${this._handleSaveData}
-            @export-data=${this._handleExportData}
             @reset-data=${this._handleResetData}>
           </query-panel>
         </div>
@@ -608,7 +607,8 @@ export class BranchReplenishmentContainer extends LitElement {
               .transferFilter=${this.transferFilter}
               .totalCount=${totalCount}
               .filteredCount=${filteredCount}
-              @update-property=${this._handleManipulationUpdate}>
+              @update-property=${this._handleManipulationUpdate}
+              @export-data=${this._handleExportData}>
             </manipulation-panel>
           </div>
         </div>

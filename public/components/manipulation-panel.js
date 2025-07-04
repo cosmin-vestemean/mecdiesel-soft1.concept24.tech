@@ -103,6 +103,14 @@ export class ManipulationPanel extends LitElement {
     }
   }
 
+  _exportData() {
+    // Emit export-data event that will be handled by the container
+    this.dispatchEvent(new CustomEvent('export-data', { 
+      bubbles: true, 
+      composed: true 
+    }));
+  }
+
   _getActiveFilters() {
     const filters = [];
     
@@ -226,12 +234,17 @@ export class ManipulationPanel extends LitElement {
                 </button>` : ''}
             </div>
             
-            <!-- Reset Button -->
+            <!-- Reset Button and Export Button -->
             ${hasActiveFiltersOrSort ? html`
               <button class="btn btn-outline-danger btn-sm" @click=${this._resetAllFilters} title="Reset all filters and sorting">
                 <i class="fas fa-undo"></i> Reset Filters
               </button>
             ` : ''}
+            
+            <!-- Export Button -->
+            <button class="btn btn-outline-success btn-sm" @click=${this._exportData} title="Export filtered data to Excel">
+              <i class="bi bi-file-excel me-1"></i> Export
+            </button>
           </div>
           
           <div class="text-muted small item-count-display ms-3">

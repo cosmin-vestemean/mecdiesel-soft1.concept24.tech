@@ -413,7 +413,6 @@ export class ReplenishmentDataTable extends LitElement {
             <option value="all">All</option>
             <option value="yes">Yes</option>
             <option value="no">No</option>
-            <option value="none">None</option>
         </select>
       </div>
     `;
