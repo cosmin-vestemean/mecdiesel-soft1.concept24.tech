@@ -269,16 +269,10 @@ export class QueryPanel extends LitElement {
               </div>
             </div>
             <div class="col-lg-3 text-lg-end">
-               <div class="btn-group btn-group-sm">
-                  <button id="saveToS1Button" class="btn btn-success" @click=${() => this._emitAction('save-data')} ?disabled=${this.loading}
-                          data-bs-toggle="tooltip" data-bs-placement="top" title="Save transfer orders to SoftOne ERP">
-                    <i class="bi bi-save me-1"></i> Save to S1
-                  </button>
-                  <button class="btn btn-danger" @click=${() => this._emitAction('reset-data')} ?disabled=${this.loading}
-                          data-bs-toggle="tooltip" data-bs-placement="top" title="Clear all data and start over">
-                    <i class="bi bi-x-circle me-1"></i> Reset
-                  </button>
-               </div>
+               <button class="btn btn-danger btn-sm" @click=${() => this._emitAction('reset-data')} ?disabled=${this.loading}
+                       data-bs-toggle="tooltip" data-bs-placement="top" title="Clear all data and start over">
+                 <i class="bi bi-x-circle me-1"></i> Reset
+               </button>
             </div>
           </div>
         </div>

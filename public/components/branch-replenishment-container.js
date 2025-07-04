@@ -12,6 +12,7 @@ import './query-panel.js';
 import './manipulation-panel.js';
 import './strategy-panel.js'; // Will be used as quick-panel
 import './data-table.js';
+import './s1-transfer-modal.js';
 
 export class BranchReplenishmentContainer extends LitElement {
   static get properties() {
@@ -275,67 +276,51 @@ export class BranchReplenishmentContainer extends LitElement {
   }
 
   /**
-   * Show confirmation dialog with transfer summary
+   * Show confirmation dialog with transfer summary using the new modal
    */
   async _showConfirmationDialog(transferOrders) {
-    const totalOrders = transferOrders.length;
-    const totalItems = transferOrders.reduce((sum, order) => sum + order.totalItems, 0);
-    const totalQuantity = transferOrders.reduce((sum, order) => sum + order.totalQuantity, 0);
-    const totalBlacklistedItems = transferOrders.reduce((sum, order) => sum + order.blacklistedItemsCount, 0);
-
-    const ordersList = transferOrders.map(order => {
-      let orderLine = `• ${order.sourceName} → ${order.destinationName}: ${order.totalItems} produse (cantitate: ${order.totalQuantity.toFixed(2)})`;
+    try {
+      // Get current token
+      const token = await this.acquireS1Token();
       
-      if (order.blacklistedItemsCount > 0) {
-        orderLine += ` ⚠️  ${order.blacklistedItemsCount} blacklisted`;
+      // Create modal if it doesn't exist
+      let modal = document.querySelector('s1-transfer-modal');
+      if (!modal) {
+        modal = document.createElement('s1-transfer-modal');
+        document.body.appendChild(modal);
       }
-      
-      return orderLine;
-    }).join('\n');
 
-    let message = `🚀 CONFIRMARE TRANSFER ÎN SOFTONE ERP
+      // Show confirmation
+      modal.showConfirmation(transferOrders, token);
 
-📊 SUMAR GENERAL:
-• ${totalOrders} comenzi de transfer
-• ${totalItems} produse în total  
-• Cantitate totală: ${totalQuantity.toFixed(2)}`;
+      return new Promise((resolve) => {
+        const handleConfirmed = () => {
+          cleanup();
+          resolve(true);
+        };
 
-    if (totalBlacklistedItems > 0) {
-      message += `
-• ⚠️  ${totalBlacklistedItems} produse blacklisted incluse`;
+        const handleCancelled = () => {
+          cleanup();
+          resolve(false);
+        };
+
+        const cleanup = () => {
+          modal.removeEventListener('confirmed', handleConfirmed);
+          modal.removeEventListener('cancelled', handleCancelled);
+        };
+
+        modal.addEventListener('confirmed', handleConfirmed);
+        modal.addEventListener('cancelled', handleCancelled);
+      });
+    } catch (error) {
+      console.error('Error showing confirmation dialog:', error);
+      // Fallback to old alert-based confirmation
+      return confirm('Confirmați transferul în SoftOne?');
     }
-
-    message += `
-
-📋 DETALII COMENZI:
-${ordersList}`;
-
-    if (totalBlacklistedItems > 0) {
-      message += `
-
-⚠️  ATENȚIE - PRODUSE BLACKLISTED:
-• Există ${totalBlacklistedItems} produse marcate ca blacklisted
-• Acestea sunt incluse deoarece ați completat manual cantitățile
-• Verificați dacă acest lucru este intenționat`;
-    }
-
-    message += `
-
-🔒 INFORMAȚII IMPORTANTE:
-• Comenzile vor fi create în SoftOne ERP cu seria 3130
-• Form: "Mec - Comenzi sucursale"
-• 🧪 TRANSFER REAL DE TEST: Comentariu "TEST TEST TEST A NU SE PROCESA"
-• ⚠️  ATENȚIE: Aceasta va fi o comandă REALĂ în SoftOne!
-• Procesul NU poate fi anulat după confirmare
-• Verificați toate datele înainte de a continua
-
-Doriți să continuați cu transferul REAL?`;
-
-    return confirm(message);
   }
 
   /**
-   * Process all transfer orders to SoftOne
+   * Process all transfer orders to SoftOne with modal integration
    */
   async _processSoftOneTransfers(transferOrders) {
     console.log('🔄 [LOADING STATE] Starting SoftOne transfers processing...');
@@ -350,6 +335,19 @@ Doriți să continuați cu transferul REAL?`;
     const results = [];
     let successCount = 0;
     let errorCount = 0;
+    
+    // Get modal reference
+    let modal = document.querySelector('s1-transfer-modal');
+    if (!modal) {
+      modal = document.createElement('s1-transfer-modal');
+      document.body.appendChild(modal);
+    }
+
+    // Setup modal event listeners
+    this._setupModalEventListeners(modal);
+
+    // Start processing in modal
+    modal.startProcessing();
     
     // Add timeout protection (30 minutes max for all transfers)
     const TOTAL_TIMEOUT_MS = 30 * 60 * 1000;
@@ -370,6 +368,9 @@ Doriți să continuați cu transferul REAL?`;
         const order = transferOrders[i];
         console.log(`📤 [DEBUG] Processing order ${i + 1}/${transferOrders.length} for ${order.destinationName}...`);
 
+        // Update modal with processing status
+        modal.updateProgress(i, 'processing');
+
         try {
           console.log(`📤 [DEBUG] Calling _sendSingleTransferOrder for ${order.destinationName}...`);
           const result = await this._sendSingleTransferOrder(order);
@@ -378,9 +379,14 @@ Doriți să continuați cu transferul REAL?`;
           if (result.success) {
             successCount++;
             console.log(`✅ [DEBUG] Order ${i + 1} successful: ID ${result.id}`);
+            modal.updateProgress(i, 'success', result);
           } else {
             errorCount++;
             console.error(`❌ [DEBUG] Order ${i + 1} failed:`, result.message || 'Unknown error');
+            
+            // Enhanced error details for modal
+            const enhancedError = await this._enhanceErrorDetails(result);
+            modal.updateProgress(i, 'failed', enhancedError);
           }
           
           results.push({
@@ -393,9 +399,28 @@ Doriți să continuați cu transferul REAL?`;
           errorCount++;
           console.error(`❌ [DEBUG] Order ${i + 1} failed with exception:`, error);
           
+          // Build structured error for consistency with SoftOne responses
+          const errorResult = { 
+            success: false, 
+            message: `Exception during transfer: ${error.message}`,
+            messages: [`Exception during transfer`, error.message || 'Unknown error'],
+            error: error.code || error.response?.code || -1, // Error code for lookup
+            originalError: error,
+            // Additional context
+            destinationName: order.destinationName,
+            orderInfo: {
+              destination: order.destinationName,
+              items: order.details?.length || 0,
+              totalQuantity: order.details?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0
+            }
+          };
+          
+          const enhancedError = await this._enhanceErrorDetails(errorResult);
+          modal.updateProgress(i, 'failed', enhancedError);
+          
           results.push({
             order,
-            result: { success: false, message: error.message },
+            result: errorResult,
             orderNumber: i + 1
           });
         }
@@ -410,11 +435,10 @@ Doriți să continuați cu transferul REAL?`;
       console.log(`📊 [DEBUG] All orders processed. Success: ${successCount}, Errors: ${errorCount}`);
       console.log(`📊 [DEBUG] Results:`, results);
 
-      // Show final results
-      console.log(`📊 [LOADING STATE] Calling _showTransferResults...`);
-      console.log(`📊 [LOADING STATE] Loading state before showing results:`, replenishmentStore.getState().loading);
-      this._showTransferResults(results, successCount, errorCount);
-      console.log(`📊 [LOADING STATE] _showTransferResults completed.`);
+      // Show final results in modal
+      console.log(`📊 [LOADING STATE] Showing modal results...`);
+      modal.showResults();
+      console.log(`📊 [LOADING STATE] Modal results displayed.`);
 
     } catch (error) {
       console.error(`❌ [LOADING STATE] Critical error in _processSoftOneTransfers:`, error);
@@ -475,22 +499,35 @@ Doriți să continuați cu transferul REAL?`;
             realMode: true
           };
         } else {
-          // SoftOne returned error - check for error codes and determine if retryable
-          const errorCode = response.code || 0;
-          const errorMessage = response.message || 'Unknown SoftOne error';
+          // SoftOne returned error - build enhanced error details structure
+          const errorCode = response.code || response.error || 0;
+          const errorMessage = response.message || response.messages || 'Unknown SoftOne error';
           
           // Determine if error is retryable based on SoftOne error codes
           const isRetryableError = this._isSoftOneErrorRetryable(errorCode);
           
           console.error(`❌ SoftOne error [${errorCode}] for ${order.destinationName}:`, errorMessage);
-          return {
+          
+          // Build structured error response for modal enhancement
+          const errorResult = {
             success: false,
-            message: `SoftOne error [${errorCode}]: ${errorMessage}`,
+            message: Array.isArray(errorMessage) ? errorMessage.join('; ') : errorMessage,
+            messages: Array.isArray(errorMessage) ? errorMessage : [errorMessage],
+            error: errorCode, // This is the error code that will be looked up
             response: response,
             noRetry: !isRetryableError,
             realMode: true,
-            errorCode: errorCode
+            // Additional debugging info
+            originalResponse: response,
+            destinationName: order.destinationName,
+            orderInfo: {
+              destination: order.destinationName,
+              items: order.details?.length || 0,
+              totalQuantity: order.details?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0
+            }
           };
+          
+          return errorResult;
         }
         
       } catch (error) {
@@ -512,15 +549,28 @@ Doriți să continuați cu transferul REAL?`;
       }
     }
     
-    // All attempts failed
+    // All attempts failed - build enhanced error structure
     console.error(`❌ [REAL MODE] All attempts failed for ${order.destinationName}`);
-    return {
+    
+    const failedResult = {
       success: false,
       message: `Transfer failed after ${maxRetries} attempts: ${lastError?.message || 'Unknown error'}`,
-      error: lastError,
+      messages: [`Transfer failed after ${maxRetries} attempts`, lastError?.message || 'Unknown error'],
+      error: lastError?.code || lastError?.response?.code || -1, // Error code for lookup
       attempts: attempt,
-      realMode: true
+      realMode: true,
+      // Additional context for debugging
+      lastError: lastError,
+      destinationName: order.destinationName,
+      orderInfo: {
+        destination: order.destinationName,
+        items: order.details?.length || 0,
+        totalQuantity: order.details?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0,
+        maxRetries: maxRetries
+      }
     };
+    
+    return failedResult;
   }
 
   /**
@@ -630,57 +680,17 @@ Doriți să continuați cu transferul REAL?`;
   }
 
   /**
-   * Show final transfer results to user
+   * Show final transfer results (now handled by modal, keeping for compatibility)
    */
   _showTransferResults(results, successCount, errorCount) {
-    console.log('📋 [LOADING STATE] Preparing transfer results dialog...');
-    console.log('📋 [LOADING STATE] Results summary:', { total: results.length, success: successCount, errors: errorCount });
+    console.log('📋 [LOADING STATE] Transfer results now shown in modal');
+    console.log('📋 [LOADING STATE] Results summary:', { 
+      total: results.length, 
+      success: successCount, 
+      errors: errorCount 
+    });
     
     const totalOrders = results.length;
-    
-    let message = `🎉 TRANSFER REAL ÎN SOFTONE COMPLETAT!\n\n`;
-    message += `📊 REZULTATE FINALE:\n`;
-    message += `• Comenzi procesate: ${totalOrders}\n`;
-    message += `• ✅ Succese: ${successCount}\n`;
-    message += `• ❌ Erori: ${errorCount}\n`;
-    message += `• 📈 Rata de succes: ${((successCount / totalOrders) * 100).toFixed(1)}%\n`;
-    message += `• 🧪 Comentariu test: "TEST TEST TEST A NU SE PROCESA"\n\n`;
-
-    if (successCount > 0) {
-      message += `✅ COMENZI REUȘITE:\n`;
-      results.filter(r => r.result.success).forEach(r => {
-        const itemCount = r.order.totalItems;
-        const quantity = r.order.totalQuantity.toFixed(2);
-        const blacklisted = r.order.blacklistedItemsCount > 0 ? ` (${r.order.blacklistedItemsCount} blacklisted)` : '';
-        message += `• ${r.order.destinationName}: ID S1 #${r.result.id}\n`;
-        message += `  └ ${itemCount} produse, cantitate ${quantity}${blacklisted}\n`;
-      });
-      message += `\n`;
-    }
-
-    if (errorCount > 0) {
-      message += `❌ COMENZI EȘUATE (necesită atenție):\n`;
-      results.filter(r => !r.result.success).forEach(r => {
-        const itemCount = r.order.totalItems;
-        const quantity = r.order.totalQuantity.toFixed(2);
-        message += `• ${r.order.destinationName}: ${r.result.message || 'Eroare necunoscută'}\n`;
-        message += `  └ ${itemCount} produse, cantitate ${quantity} - NETRANSFERATE\n`;
-      });
-      message += `\n`;
-    }
-
-    if (errorCount > 0) {
-      message += `🔄 ACȚIUNI URMĂTOARE:\n`;
-      message += `• Verificați erorile raportate mai sus\n`;
-      message += `• Pentru comenzile eșuate, încercați din nou mai târziu\n`;
-      message += `• Contactați suportul tehnic dacă problemele persistă\n`;
-    } else {
-      message += `🎊 TOATE COMENZILE AU FOST TRANSFERATE CU SUCCES!\n`;
-      message += `Puteți verifica comenzile în SoftOne folosind ID-urile de mai sus.`;
-    }
-
-    alert(message);
-    console.log('📋 [LOADING STATE] Transfer results dialog shown to user');
     console.log('📋 [LOADING STATE] Final raport transfer:', {
       totalOrders,
       successCount,
@@ -688,6 +698,8 @@ Doriți să continuați cu transferul REAL?`;
       successRate: ((successCount / totalOrders) * 100).toFixed(1) + '%',
       results
     });
+    
+    // Results are now displayed in the modal, no more alert dialogs
   }
 
   _handleExportData() {
@@ -1237,8 +1249,10 @@ Doriți să continuați cu transferul REAL?`;
               .transferFilter=${this.transferFilter}
               .totalCount=${totalCount}
               .filteredCount=${filteredCount}
+              .loading=${this.loading}
               @update-property=${this._handleManipulationUpdate}
-              @export-data=${this._handleExportData}>
+              @export-data=${this._handleExportData}
+              @save-data=${this._handleSaveData}>
             </manipulation-panel>
           </div>
         </div>
@@ -1287,6 +1301,314 @@ Doriți să continuați cu transferul REAL?`;
     if (this._unsubscribeFromStore) {
       this._unsubscribeFromStore();
     }
+  }
+
+  /**
+   * Setup modal event listeners for handling user interactions
+   */
+  _setupModalEventListeners(modal) {
+    // Handle retry single order
+    modal.addEventListener('retry-order', async (e) => {
+      const { orderIndex, order } = e.detail;
+      console.log(`🔄 Retrying order ${orderIndex} for ${order.destinationName}`);
+      
+      try {
+        const result = await this._sendSingleTransferOrder(order);
+        
+        if (result.success) {
+          console.log(`✅ Retry successful for ${order.destinationName}`);
+          modal.updateProgress(orderIndex, 'success', result);
+        } else {
+          console.log(`❌ Retry failed for ${order.destinationName}`);
+          const enhancedError = await this._enhanceErrorDetails(result);
+          modal.updateProgress(orderIndex, 'failed', enhancedError);
+        }
+      } catch (error) {
+        console.error(`❌ Retry error for ${order.destinationName}:`, error);
+        const errorResult = { 
+          success: false, 
+          message: error.message,
+          error: error.code || -1
+        };
+        const enhancedError = await this._enhanceErrorDetails(errorResult);
+        modal.updateProgress(orderIndex, 'failed', enhancedError);
+      }
+    });
+
+    // Handle retry all failed
+    modal.addEventListener('retry-all-failed', async (e) => {
+      const { failedOrders } = e.detail;
+      console.log(`🔄 Retrying ${failedOrders.length} failed orders`);
+      
+      for (const failedItem of failedOrders) {
+        const { order, index } = failedItem;
+        
+        try {
+          modal.updateProgress(index, 'processing');
+          const result = await this._sendSingleTransferOrder(order);
+          
+          if (result.success) {
+            modal.updateProgress(index, 'success', result);
+          } else {
+            const enhancedError = await this._enhanceErrorDetails(result);
+            modal.updateProgress(index, 'failed', enhancedError);
+          }
+        } catch (error) {
+          const errorResult = { 
+            success: false, 
+            message: error.message,
+            error: error.code || -1
+          };
+          const enhancedError = await this._enhanceErrorDetails(errorResult);
+          modal.updateProgress(index, 'failed', enhancedError);
+        }
+        
+        // Small delay between retries
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
+      // Refresh results view
+      modal.showResults();
+    });
+
+    // Handle cancel remaining transfers
+    modal.addEventListener('cancel-remaining', () => {
+      console.log('🛑 User cancelled remaining transfers');
+      // This would be implemented if we support cancellation during processing
+    });
+
+    // Handle modal close
+    modal.addEventListener('closed', () => {
+      console.log('📋 Transfer modal closed');
+      // Optional: Clean up or refresh data
+    });
+  }
+
+  /**
+   * Enhance error details with SoftOne documentation lookup
+   * @param {Object} result - Error result object with structure:
+   *   {
+   *     success: false,
+   *     message: string,
+   *     messages: string[],
+   *     error: number, // Error code for lookup
+   *     ...other properties
+   *   }
+   */
+  async _enhanceErrorDetails(result) {
+    const enhancedError = {
+      ...result,
+      message: result.message || 'Unknown error',
+      messages: result.messages || [result.message || 'Unknown error'],
+      error: result.error || result.code || -1, // Normalize error code field
+      softOneDocumentation: null,
+      // Add timestamp for debugging
+      enhancedAt: new Date().toISOString()
+    };
+
+    // Try to lookup error code in SoftOne documentation
+    const errorCode = enhancedError.error;
+    if (errorCode && errorCode !== -1) {
+      try {
+        console.log(`🔍 Looking up SoftOne error code: ${errorCode}`);
+        enhancedError.softOneDocumentation = await this._lookupSoftOneErrorCode(errorCode);
+        console.log(`📖 Documentation found for error ${errorCode}:`, enhancedError.softOneDocumentation);
+      } catch (lookupError) {
+        console.warn('Failed to lookup SoftOne error code:', lookupError);
+        enhancedError.softOneDocumentation = `Error code: ${errorCode} - verificați documentația SoftOne pentru detalii suplimentare`;
+      }
+    } else {
+      console.warn('No valid error code found for documentation lookup:', result);
+      enhancedError.softOneDocumentation = 'Nu s-a găsit un cod de eroare valid pentru documentație';
+    }
+
+    return enhancedError;
+  }
+
+  /**
+   * Lookup SoftOne error code in documentation with enhanced descriptions
+   * @param {number|string} errorCode - The SoftOne error code
+   * @returns {string} Enhanced error description with documentation links
+   */
+  async _lookupSoftOneErrorCode(errorCode) {
+    // Common SoftOne error codes with enhanced descriptions and solutions
+    const commonErrors = {
+      '-101': {
+        description: 'Invalid Request, session has expired! (Web Account time expiration)',
+        solution: 'Sesiunea a expirat. Aplicația va încerca să se reconecteze automat.',
+        category: 'Authentication'
+      },
+      '-100': {
+        description: 'Invalid Request, session has expired! (Deep linking smart command)',
+        solution: 'Sesiunea a expirat în timpul execuției comenzii. Reîncercați operația.',
+        category: 'Authentication'
+      },
+      '-12': {
+        description: 'Invalid Web Service call',
+        solution: 'Apelul serviciului web este invalid. Verificați parametrii transmisi.',
+        category: 'Request Validation'
+      },
+      '-11': {
+        description: 'Invalid Request. Licence must include a "Web Service Connector" module',
+        solution: 'Licența SoftOne nu include modulul "Web Service Connector". Contactați administratorul.',
+        category: 'Licensing'
+      },
+      '-10': {
+        description: 'Login fails. Username contains illegal characters',
+        solution: 'Numele de utilizator conține caractere invalide. Verificați configurația.',
+        category: 'Authentication'
+      },
+      '-9': {
+        description: 'Invalid Request. Ensure that your request is valid',
+        solution: 'Cererea este invalidă. Verificați formatul și conținutul datelor transmise.',
+        category: 'Request Validation'
+      },
+      '-8': {
+        description: 'Invalid request. User account is not active!',
+        solution: 'Contul de utilizator nu este activ. Contactați administratorul.',
+        category: 'Authentication'
+      },
+      '-7': {
+        description: 'Session has expired (Web Account "FinalDate" expired)',
+        solution: 'Sesiunea a expirat. Aplicația va încerca să se reconecteze automat.',
+        category: 'Authentication'
+      },
+      '-6': {
+        description: 'Invalid AppId. Ensure that your request includes a valid AppId',
+        solution: 'AppId invalid. Verificați configurația aplicației.',
+        category: 'Configuration'
+      },
+      '-5': {
+        description: 'Web Services Licenses Exceeded!',
+        solution: 'S-a depășit numărul de licențe pentru servicii web. Contactați administratorul.',
+        category: 'Licensing'
+      },
+      '-4': {
+        description: 'Number of registered devices exceeded!',
+        solution: 'S-a depășit numărul de dispozitive înregistrate. Contactați administratorul.',
+        category: 'Licensing'
+      },
+      '-3': {
+        description: 'Access denied. Selected module not activated!',
+        solution: 'Modulul selectat nu este activat în licență. Contactați administratorul.',
+        category: 'Licensing'
+      },
+      '-2': {
+        description: 'Authenticate fails due to invalid credentials',
+        solution: 'Autentificare eșuată - credențiale invalide. Verificați username/password.',
+        category: 'Authentication'
+      },
+      '-1': {
+        description: 'Invalid request. Please login first',
+        solution: 'Cerere invalidă - este necesară autentificarea. Aplicația va încerca să se reconecteze.',
+        category: 'Authentication'
+      },
+      '0': {
+        description: 'Business error',
+        solution: 'Eroare de business logic. Verificați datele introduse și regulile de validare.',
+        category: 'Business Logic'
+      },
+      '11': {
+        description: 'Internal error',
+        solution: 'Eroare internă SoftOne. Reîncercați operația sau contactați suportul.',
+        category: 'Internal'
+      },
+      '12': {
+        description: 'Deprecated service',
+        solution: 'Serviciul este depreciat. Contactați echipa de dezvoltare pentru actualizare.',
+        category: 'Deprecated'
+      },
+      '13': {
+        description: 'Invalid request, "reqID" expired',
+        solution: 'ID-ul cererii a expirat. Reîncercați operația.',
+        category: 'Request Validation'
+      },
+      '14': {
+        description: 'Invalid request.(WS)',
+        solution: 'Cerere invalidă pentru serviciul web. Verificați formatul datelor.',
+        category: 'Request Validation'
+      },
+      '20': {
+        description: 'Internal error',
+        solution: 'Eroare internă SoftOne. Reîncercați operația sau contactați suportul.',
+        category: 'Internal'
+      },
+      '99': {
+        description: 'Internal error',
+        solution: 'Eroare internă SoftOne. Reîncercați operația sau contactați suportul.',
+        category: 'Internal'
+      },
+      '101': {
+        description: 'Invalid request. Insufficient access rights to perform the operation!',
+        solution: 'Drepturi de acces insuficiente. Contactați administratorul pentru permisiuni.',
+        category: 'Authorization'
+      },
+      '102': {
+        description: '"ReqId" not found on Server!',
+        solution: 'ID-ul cererii nu a fost găsit pe server. Reîncercați operația.',
+        category: 'Request Validation'
+      },
+      '112': {
+        description: 'Invalid editor',
+        solution: 'Editor invalid. Verificați configurația editorului folosit.',
+        category: 'Configuration'
+      },
+      '213': {
+        description: 'Invalid request, "reqID" expired',
+        solution: 'ID-ul cererii a expirat. Reîncercați operația.',
+        category: 'Request Validation'
+      },
+      '1001': {
+        description: 'Please ensure :Username, Password, User is Active and has Administrator right',
+        solution: 'Verificați: username, password, utilizatorul este activ și are drepturi de administrator.',
+        category: 'Authentication'
+      },
+      '1002': {
+        description: 'Invalid domain (\'DOMAIN\') or already in use',
+        solution: 'Domeniul este invalid sau deja în folosire. Verificați configurația.',
+        category: 'Configuration'
+      },
+      '1010': {
+        description: 'General Web Account Error',
+        solution: 'Eroare generală de cont web. Verificați configurația contului.',
+        category: 'Authentication'
+      },
+      '2001': {
+        description: 'Invalid request, Data does not exist',
+        solution: 'Datele solicitate nu există. Verificați că înregistrările sunt valide.',
+        category: 'Data Validation'
+      }
+    };
+
+    const codeStr = errorCode.toString();
+    const errorInfo = commonErrors[codeStr];
+    
+    if (errorInfo) {
+      return `🔍 ${errorInfo.description}
+
+💡 Soluție: ${errorInfo.solution}
+
+📂 Categorie: ${errorInfo.category}
+
+📖 Pentru mai multe detalii, consultați documentația oficială SoftOne la:
+https://www.softone.gr/ws/#errorcodes`;
+    }
+
+    // For unknown error codes, provide general guidance with more helpful info
+    return `⚠️ Cod de eroare necunoscut: ${errorCode}
+
+Acest cod de eroare nu este recunoscut în baza de date comună de erori SoftOne.
+
+💡 Recomandări:
+• Verificați că toate câmpurile obligatorii sunt completate corect
+• Asigurați-vă că datele respectă formatul așteptat
+• Verificați că utilizatorul are permisiunile necesare
+• Consultați logurile SoftOne pentru detalii suplimentare
+
+📖 Pentru documentația completă și coduri de eroare actualizate:
+https://www.softone.gr/ws/#errorcodes
+
+🆘 Dacă problema persistă, contactați echipa de suport cu codul ${errorCode}.`;
   }
 }
 

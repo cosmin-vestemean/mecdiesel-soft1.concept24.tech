@@ -17,6 +17,7 @@ export class ManipulationPanel extends LitElement {
       sortDirection: { type: String },
       totalCount: { type: Number },
       filteredCount: { type: Number },
+      loading: { type: Boolean },
     };
   }
 
@@ -35,6 +36,7 @@ export class ManipulationPanel extends LitElement {
     this.sortDirection = 'asc';
     this.totalCount = 0;
     this.filteredCount = 0;
+    this.loading = false;
     
     // Set up store context consumer
     this._storeConsumer = new ContextConsumer(this, {
@@ -70,6 +72,7 @@ export class ManipulationPanel extends LitElement {
     this.sortDirection = state.sortDirection;
     this.totalCount = state.data.length;
     this.filteredCount = this._store.getFilteredData().length;
+    this.loading = state.loading;
   }
 
   disconnectedCallback() {
@@ -106,6 +109,14 @@ export class ManipulationPanel extends LitElement {
   _exportData() {
     // Emit export-data event that will be handled by the container
     this.dispatchEvent(new CustomEvent('export-data', { 
+      bubbles: true, 
+      composed: true 
+    }));
+  }
+
+  _saveData() {
+    // Emit save-data event that will be handled by the container
+    this.dispatchEvent(new CustomEvent('save-data', { 
       bubbles: true, 
       composed: true 
     }));
@@ -234,17 +245,22 @@ export class ManipulationPanel extends LitElement {
                 </button>` : ''}
             </div>
             
-            <!-- Reset Button and Export Button -->
+            <!-- Reset Button and Action Button Group -->
             ${hasActiveFiltersOrSort ? html`
               <button class="btn btn-outline-danger btn-sm" @click=${this._resetAllFilters} title="Reset all filters and sorting">
                 <i class="fas fa-undo"></i> Reset Filters
               </button>
             ` : ''}
             
-            <!-- Export Button -->
-            <button class="btn btn-outline-success btn-sm" @click=${this._exportData} title="Export filtered data to Excel">
-              <i class="bi bi-file-excel me-1"></i> Export
-            </button>
+            <!-- Action Button Group: Export and Save to S1 -->
+            <div class="btn-group btn-group-sm" role="group">
+              <button class="btn btn-outline-success" @click=${this._exportData} title="Export filtered data to Excel" ?disabled=${this.loading}>
+                <i class="bi bi-file-excel me-1"></i> Export
+              </button>
+              <button class="btn btn-success" @click=${this._saveData} title="Save transfer orders to SoftOne ERP" ?disabled=${this.loading}>
+                <i class="bi bi-save me-1"></i> Save to S1
+              </button>
+            </div>
           </div>
           
           <div class="text-muted small item-count-display ms-3">
