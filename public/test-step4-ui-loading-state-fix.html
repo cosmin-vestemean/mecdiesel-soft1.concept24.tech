@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Step 4 - UI Loading State Fix Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        .red-btn { background-color: #dc3545; }
+        .red-btn:hover { background-color: #c82333; }
+        .green-btn { background-color: #28a745; }
+        .green-btn:hover { background-color: #218838; }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-loading { background-color: #ffc107; animation: pulse 1s infinite; }
+        .status-success { background-color: #28a745; }
+        .status-error { background-color: #dc3545; }
+        .status-idle { background-color: #6c757d; }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .log-container {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #000;
+            color: #00ff00;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Step 4 - UI Loading State Fix Test</h1>
+        <div class="test-section info">
+            <h3>📋 Test Purpose</h3>
+            <p>This test verifies that the frontend UI properly clears the loading state after transfer completion, regardless of success or failure scenarios.</p>
+            <p><strong>Key Points:</strong></p>
+            <ul>
+                <li>✅ Loading state should always be cleared in the finally block</li>
+                <li>✅ Result dialog should always be shown</li>
+                <li>✅ Error handling should prevent UI from getting stuck</li>
+                <li>✅ Spinner should disappear after transfer</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h3>🎛️ Store State Monitor</h3>
+            <div id="store-status">
+                <p><span class="status-indicator status-idle"></span><strong>Loading:</strong> <span id="loading-status">false</span></p>
+                <p><span class="status-indicator status-idle"></span><strong>Error:</strong> <span id="error-status">none</span></p>
+                <p><span class="status-indicator status-idle"></span><strong>Data Count:</strong> <span id="data-count">0</span></p>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>🧪 Test Scenarios</h3>
+            <button onclick="testNormalTransfer()" class="green-btn">✅ Test Normal Transfer</button>
+            <button onclick="testTransferWithErrors()" class="red-btn">❌ Test Error Scenario</button>
+            <button onclick="testCancelledTransfer()">🚫 Test Cancelled Transfer</button>
+            <button onclick="testNetworkTimeout()">🌐 Test Network Timeout</button>
+            <button onclick="monitorLoadingState()">👁️ Monitor Loading State</button>
+            <button onclick="clearLogs()">🧹 Clear Logs</button>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Test Logs</h3>
+            <div id="test-logs" class="log-container"></div>
+        </div>
+
+        <!-- Branch Replenishment Component -->
+        <div class="test-section">
+            <h3>🔧 Branch Replenishment Component</h3>
+            <branch-replenishment-container id="testComponent"></branch-replenishment-container>
+        </div>
+    </div>
+
+    <!-- Import required scripts -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/feathers-client.js"></script>
+    <script src="/socketConfig.js"></script>
+    <script src="/stores/replenishment-store.js"></script>
+    <script src="/components/branch-replenishment-container.js"></script>
+
+    <script>
+        let logContainer = document.getElementById('test-logs');
+        let storeMonitorInterval = null;
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const colors = {
+                info: '#00ff00',
+                success: '#00ff00',
+                warning: '#ffff00',
+                error: '#ff0000',
+                debug: '#00ffff'
+            };
+            
+            const color = colors[type] || '#00ff00';
+            logContainer.innerHTML += `<div style="color: ${color}">[${timestamp}] ${message}</div>`;
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function clearLogs() {
+            logContainer.innerHTML = '';
+            log('🧹 Logs cleared', 'info');
+        }
+
+        function updateStoreStatus() {
+            const state = replenishmentStore.getState();
+            
+            // Update loading status
+            const loadingEl = document.getElementById('loading-status');
+            const loadingIndicator = loadingEl.parentElement.querySelector('.status-indicator');
+            loadingEl.textContent = state.loading;
+            
+            if (state.loading) {
+                loadingIndicator.className = 'status-indicator status-loading';
+            } else {
+                loadingIndicator.className = 'status-indicator status-idle';
+            }
+
+            // Update error status
+            const errorEl = document.getElementById('error-status');
+            const errorIndicator = errorEl.parentElement.querySelector('.status-indicator');
+            if (state.error) {
+                errorEl.textContent = state.error;
+                errorIndicator.className = 'status-indicator status-error';
+            } else {
+                errorEl.textContent = 'none';
+                errorIndicator.className = 'status-indicator status-idle';
+            }
+
+            // Update data count
+            document.getElementById('data-count').textContent = state.data ? state.data.length : 0;
+        }
+
+        function monitorLoadingState() {
+            if (storeMonitorInterval) {
+                clearInterval(storeMonitorInterval);
+                storeMonitorInterval = null;
+                log('📊 Stopped monitoring store state', 'warning');
+                return;
+            }
+
+            log('📊 Started monitoring store state every 100ms', 'info');
+            storeMonitorInterval = setInterval(() => {
+                updateStoreStatus();
+            }, 100);
+        }
+
+        // Setup test data
+        function setupTestData() {
+            log('🔧 Setting up test data...', 'debug');
+            
+            // Mock test data
+            const testData = [
+                {
+                    MTRL: '2492805',
+                    MTRLDESC: 'Test Product 1',
+                    QTY1: '0',
+                    ABC: 'A',
+                    stoc_destinatie: '0',
+                    stoc_sursa: '10'
+                },
+                {
+                    MTRL: '2492806', 
+                    MTRLDESC: 'Test Product 2',
+                    QTY1: '0',
+                    ABC: 'B',
+                    stoc_destinatie: '0',
+                    stoc_sursa: '5'
+                }
+            ];
+
+            // Mock branches
+            const testBranches = [
+                { company: '001', companyname: 'Test Source', code: '001' },
+                { company: '002', companyname: 'Test Dest 1', code: '002' },
+                { company: '003', companyname: 'Test Dest 2', code: '003' }
+            ];
+
+            // Setup store state
+            replenishmentStore.setData(testData);
+            replenishmentStore.setBranchesEmit({ company: '001', companyname: 'Test Source', code: '001' });
+            replenishmentStore.setBranches(testBranches);
+            replenishmentStore.setSelectedDestBranches([
+                { company: '002', companyname: 'Test Dest 1', code: '002' }
+            ]);
+
+            // Set some transfer quantities
+            testData[0].QTY1 = '1';
+            testData[1].QTY1 = '1';
+            replenishmentStore.setData(testData);
+
+            log('✅ Test data setup complete', 'success');
+            updateStoreStatus();
+        }
+
+        async function testNormalTransfer() {
+            log('🧪 Starting normal transfer test...', 'info');
+            setupTestData();
+            
+            const component = document.getElementById('testComponent');
+            if (!component) {
+                log('❌ Component not found!', 'error');
+                return;
+            }
+
+            try {
+                // Monitor loading state changes
+                let loadingStates = [];
+                const originalSetLoading = replenishmentStore.setLoading;
+                replenishmentStore.setLoading = function(state) {
+                    loadingStates.push({ state, timestamp: Date.now() });
+                    log(`🔄 Loading state changed to: ${state}`, state ? 'warning' : 'success');
+                    originalSetLoading.call(this, state);
+                };
+
+                // Trigger save data
+                log('🚀 Triggering _handleSaveData...', 'debug');
+                await component._handleSaveData();
+                
+                // Restore original function
+                replenishmentStore.setLoading = originalSetLoading;
+                
+                // Wait a bit to see final state
+                setTimeout(() => {
+                    const finalState = replenishmentStore.getState();
+                    log(`📊 Final loading state: ${finalState.loading}`, finalState.loading ? 'error' : 'success');
+                    log(`📊 Loading state changes: ${loadingStates.map(s => s.state).join(' → ')}`, 'debug');
+                    
+                    if (!finalState.loading) {
+                        log('✅ TEST PASSED: Loading state properly cleared', 'success');
+                    } else {
+                        log('❌ TEST FAILED: Loading state not cleared!', 'error');
+                    }
+                }, 2000);
+
+            } catch (error) {
+                log(`❌ Test error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testTransferWithErrors() {
+            log('🧪 Starting error scenario test...', 'warning');
+            setupTestData();
+            
+            // Temporarily break the socket service to simulate error
+            const originalClient = window.client;
+            window.client = {
+                service: () => ({
+                    setData: () => Promise.reject(new Error('Simulated network error'))
+                })
+            };
+
+            const component = document.getElementById('testComponent');
+            try {
+                await component._handleSaveData();
+                
+                setTimeout(() => {
+                    const finalState = replenishmentStore.getState();
+                    log(`📊 Final loading state after error: ${finalState.loading}`, finalState.loading ? 'error' : 'success');
+                    
+                    if (!finalState.loading) {
+                        log('✅ ERROR TEST PASSED: Loading state cleared after error', 'success');
+                    } else {
+                        log('❌ ERROR TEST FAILED: Loading state stuck after error!', 'error');
+                    }
+                    
+                    // Restore client
+                    window.client = originalClient;
+                }, 1000);
+
+            } catch (error) {
+                log(`Expected error caught: ${error.message}`, 'warning');
+                window.client = originalClient;
+            }
+        }
+
+        async function testCancelledTransfer() {
+            log('🧪 Starting cancelled transfer test...', 'info');
+            setupTestData();
+            
+            const component = document.getElementById('testComponent');
+            
+            // Mock the confirmation dialog to return false (cancelled)
+            const originalConfirm = component._showConfirmationDialog;
+            component._showConfirmationDialog = () => Promise.resolve(false);
+            
+            try {
+                await component._handleSaveData();
+                
+                setTimeout(() => {
+                    const finalState = replenishmentStore.getState();
+                    log(`📊 Final loading state after cancel: ${finalState.loading}`, finalState.loading ? 'error' : 'success');
+                    
+                    if (!finalState.loading) {
+                        log('✅ CANCEL TEST PASSED: Loading state OK after cancel', 'success');
+                    } else {
+                        log('❌ CANCEL TEST FAILED: Loading state stuck after cancel!', 'error');
+                    }
+                    
+                    // Restore function
+                    component._showConfirmationDialog = originalConfirm;
+                }, 500);
+
+            } catch (error) {
+                log(`❌ Cancel test error: ${error.message}`, 'error');
+                component._showConfirmationDialog = originalConfirm;
+            }
+        }
+
+        async function testNetworkTimeout() {
+            log('🧪 Starting network timeout test...', 'warning');
+            setupTestData();
+            
+            // Mock slow/timeout network
+            const originalClient = window.client;
+            window.client = {
+                service: () => ({
+                    setData: () => new Promise((resolve, reject) => {
+                        setTimeout(() => reject(new Error('Network timeout')), 5000);
+                    })
+                })
+            };
+
+            const component = document.getElementById('testComponent');
+            try {
+                // Don't wait for completion, just trigger
+                component._handleSaveData();
+                
+                // Check loading state periodically
+                let checkCount = 0;
+                const checkInterval = setInterval(() => {
+                    checkCount++;
+                    const state = replenishmentStore.getState();
+                    log(`⏱️ Check ${checkCount}: Loading = ${state.loading}`, 'debug');
+                    
+                    if (checkCount >= 10 || !state.loading) {
+                        clearInterval(checkInterval);
+                        window.client = originalClient;
+                        
+                        if (!state.loading) {
+                            log('✅ TIMEOUT TEST PASSED: Loading cleared within timeout', 'success');
+                        } else {
+                            log('❌ TIMEOUT TEST FAILED: Loading state still active', 'error');
+                        }
+                    }
+                }, 1000);
+
+            } catch (error) {
+                log(`❌ Timeout test error: ${error.message}`, 'error');
+                window.client = originalClient;
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            log('🚀 UI Loading State Fix Test initialized', 'success');
+            updateStoreStatus();
+            
+            // Monitor store changes
+            replenishmentStore.subscribe(updateStoreStatus);
+        });
+    </script>
+</body>
+</html>

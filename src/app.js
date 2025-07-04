@@ -387,6 +387,104 @@ class s1Service {
       return { success: false, error: errorMsg };
     }
   }
+
+  async setData(data, params) {
+    const startTime = Date.now();
+    console.log('🚀 [BACKEND] SoftOne setData called with payload:', {
+      service: data.service,
+      appId: data.appId,
+      OBJECT: data.OBJECT,
+      FORM: data.FORM,
+      clientID: data.clientID ? `${data.clientID.substring(0, 10)}...` : 'MISSING',
+      dataStructure: {
+        ITEDOC: data.DATA?.ITEDOC?.length || 0,
+        MTRDOC: data.DATA?.MTRDOC?.length || 0,
+        ITELINES: data.DATA?.ITELINES?.length || 0
+      }
+    });
+    
+    try {
+      // Validate required fields
+      if (!data.clientID) {
+        console.error('❌ [BACKEND] Missing clientID for setData operation');
+        return { success: false, error: "Missing clientID for setData operation" };
+      }
+      
+      if (!data.OBJECT || !data.DATA) {
+        console.error('❌ [BACKEND] Missing OBJECT or DATA:', { 
+          hasOBJECT: !!data.OBJECT, 
+          hasDATA: !!data.DATA 
+        });
+        return { success: false, error: "Missing OBJECT or DATA for setData operation" };
+      }
+
+      // Log payload details for debugging
+      console.log('📋 [BACKEND] Request payload structure:', {
+        ITEDOC_details: data.DATA.ITEDOC?.[0],
+        MTRDOC_details: data.DATA.MTRDOC?.[0],
+        ITELINES_count: data.DATA.ITELINES?.length,
+        first_item: data.DATA.ITELINES?.[0]
+      });
+
+      console.log('🌐 [BACKEND] Making request to SoftOne...');
+      
+      // Make the setData call to SoftOne
+      const requestPayload = {
+        service: "setData",
+        clientID: data.clientID,
+        appId: data.appId || "2002",
+        OBJECT: data.OBJECT,
+        FORM: data.FORM || "",
+        KEY: data.KEY || "",
+        DATA: data.DATA
+      };
+      
+      const response = await request({
+        method: "POST",
+        uri: "/",
+        body: requestPayload,
+        json: true,
+        gzip: true,
+      });
+
+      const duration = Date.now() - startTime;
+      console.log(`📥 [BACKEND] SoftOne response received in ${duration}ms:`, {
+        success: response.success,
+        id: response.id,
+        code: response.code,
+        message: response.message,
+        hasError: !!response.error,
+        responseSize: JSON.stringify(response).length
+      });
+
+      if (response.success) {
+        console.log(`✅ [BACKEND] SoftOne transfer successful! Order ID: ${response.id}`);
+      } else {
+        console.error(`❌ [BACKEND] SoftOne transfer failed:`, {
+          code: response.code,
+          message: response.message,
+          error: response.error
+        });
+      }
+      
+      // Return the response as-is (SoftOne returns success/error structure)
+      return response;
+
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`❌ [BACKEND] Error in setData after ${duration}ms:`, {
+        message: error.message,
+        stack: error.stack?.split('\n').slice(0, 3),
+        requestFailed: true
+      });
+      
+      return { 
+        success: false, 
+        error: error.message || "Unknown error during setData operation",
+        code: error.code || -1
+      };
+    }
+  }
 }
 
 //create a new custom service to connect to the external API
@@ -424,6 +522,7 @@ app.use("/s1", new s1Service(), {
     "getAnalyticsForBranchReplenishment",
     "getRegisteredUsers",
     "validateUserPwd",
+    "setData", // Added for SoftOne transfer orders
   ],
 });
 

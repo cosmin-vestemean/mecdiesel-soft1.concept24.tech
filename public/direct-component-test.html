@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Direct Component Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-area { border: 1px solid #ddd; padding: 20px; margin: 20px 0; border-radius: 5px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; background: #f8f9fa; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        #results { background: #000; color: #00ff00; padding: 10px; height: 300px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Direct Component Loading Test</h1>
+    
+    <div class="status">
+        <h3>📊 Current State:</h3>
+        <p>Loading: <span id="loading-state">unknown</span></p>
+        <p>Error: <span id="error-state">none</span></p>
+        <p>Data Count: <span id="data-count">0</span></p>
+    </div>
+
+    <div class="test-area">
+        <h3>🔧 Test Controls:</h3>
+        <button onclick="initializeTest()">1. Initialize Test</button>
+        <button onclick="testRealTransfer()">2. Test Real Transfer Flow</button>
+        <button onclick="testErrorScenario()">3. Test Error Scenario</button>
+        <button onclick="monitorState()" id="monitor-btn">👁️ Monitor State</button>
+    </div>
+
+    <div class="test-area">
+        <h3>📋 Instructions:</h3>
+        <ol>
+            <li>Click "Initialize Test" to set up the component</li>
+            <li>Use "Monitor State" to watch loading changes in real-time</li>
+            <li>Test different scenarios to verify loading state always clears</li>
+        </ol>
+    </div>
+
+    <div class="test-area">
+        <h3>📊 Test Results:</h3>
+        <div id="results"></div>
+    </div>
+
+    <!-- Include the actual component for testing -->
+    <div style="display: none;">
+        <branch-replenishment-container id="test-component"></branch-replenishment-container>
+    </div>
+
+    <!-- Load dependencies -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/feathers-client.js"></script>
+    
+    <script>
+        let monitorInterval = null;
+        let component = null;
+        let store = null;
+
+        function log(message, type = 'info') {
+            const time = new Date().toLocaleTimeString();
+            const colors = { info: '#00ff00', success: '#00ff00', warning: '#ffff00', error: '#ff0000' };
+            const color = colors[type] || '#00ff00';
+            const results = document.getElementById('results');
+            results.innerHTML += `<div style="color: ${color}">[${time}] ${message}</div>`;
+            results.scrollTop = results.scrollHeight;
+        }
+
+        function updateDisplay() {
+            if (!store) return;
+            
+            const state = store.getState();
+            document.getElementById('loading-state').textContent = state.loading;
+            document.getElementById('error-state').textContent = state.error || 'none';
+            document.getElementById('data-count').textContent = state.data ? state.data.length : 0;
+        }
+
+        async function initializeTest() {
+            log('🚀 Initializing test environment...', 'info');
+            
+            try {
+                // Import modules
+                log('📦 Loading modules...', 'info');
+                const storeModule = await import('./stores/replenishment-store.js');
+                await import('./components/branch-replenishment-container.js');
+                
+                store = storeModule.replenishmentStore;
+                component = document.getElementById('test-component');
+                
+                if (!component) {
+                    throw new Error('Component not found');
+                }
+                
+                log('✅ Modules loaded successfully', 'success');
+                
+                // Set up test data
+                const testData = [
+                    {
+                        mtrl: '2492805',
+                        mtrldesc: 'Test Product 1',
+                        transfer: 1,
+                        branchD: '1200',
+                        cant_min: 1,
+                        cant_max: 5,
+                        keyField: 'test1'
+                    }
+                ];
+                
+                store.setData(testData);
+                store.setBranchesEmit('1000');
+                store.setSelectedDestBranches(['1200']);
+                
+                log('✅ Test data configured', 'success');
+                
+                // Subscribe to store changes
+                store.subscribe(() => {
+                    updateDisplay();
+                });
+                
+                updateDisplay();
+                log('✅ Test environment ready!', 'success');
+                
+            } catch (error) {
+                log(`❌ Initialization failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testRealTransfer() {
+            if (!component || !store) {
+                log('❌ Test not initialized - run Initialize Test first', 'error');
+                return;
+            }
+            
+            log('🧪 Testing real transfer workflow...', 'info');
+            
+            try {
+                // Mock the SoftOne service
+                const originalClient = window.client;
+                window.client = {
+                    service: () => ({
+                        setData: (payload) => {
+                            log(`📤 Mock SoftOne call with payload: ${JSON.stringify(payload, null, 2)}`, 'info');
+                            return Promise.resolve({ success: true, id: 'MOCK123' });
+                        }
+                    })
+                };
+                
+                // Start monitoring
+                let loadingStates = [];
+                const unsubscribe = store.subscribe((state) => {
+                    loadingStates.push({ loading: state.loading, time: Date.now() });
+                    log(`📊 Loading state: ${state.loading}`, state.loading ? 'warning' : 'success');
+                });
+                
+                log('🚀 Triggering _handleSaveData...', 'info');
+                
+                // Call the actual method
+                await component._handleSaveData();
+                
+                // Restore original client
+                window.client = originalClient;
+                unsubscribe();
+                
+                // Check final state
+                setTimeout(() => {
+                    const finalState = store.getState();
+                    log(`📊 Final loading state: ${finalState.loading}`, finalState.loading ? 'error' : 'success');
+                    log(`📊 Loading state changes: ${loadingStates.map(s => s.loading).join(' → ')}`, 'info');
+                    
+                    if (!finalState.loading) {
+                        log('✅ SUCCESS: Loading state properly cleared!', 'success');
+                    } else {
+                        log('❌ FAILED: Loading state still active!', 'error');
+                    }
+                }, 2000);
+                
+            } catch (error) {
+                log(`❌ Test error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testErrorScenario() {
+            if (!component || !store) {
+                log('❌ Test not initialized - run Initialize Test first', 'error');
+                return;
+            }
+            
+            log('🧪 Testing error scenario...', 'warning');
+            
+            try {
+                // Mock a failing service
+                const originalClient = window.client;
+                window.client = {
+                    service: () => ({
+                        setData: () => Promise.reject(new Error('Simulated network error'))
+                    })
+                };
+                
+                log('🚀 Triggering _handleSaveData with error...', 'warning');
+                
+                // Call the method
+                await component._handleSaveData();
+                
+                // Restore original client
+                window.client = originalClient;
+                
+                // Check final state
+                setTimeout(() => {
+                    const finalState = store.getState();
+                    log(`📊 Final loading state after error: ${finalState.loading}`, finalState.loading ? 'error' : 'success');
+                    
+                    if (!finalState.loading) {
+                        log('✅ ERROR TEST PASSED: Loading cleared after error!', 'success');
+                    } else {
+                        log('❌ ERROR TEST FAILED: Loading stuck after error!', 'error');
+                    }
+                }, 1000);
+                
+            } catch (error) {
+                log(`Expected error: ${error.message}`, 'warning');
+            }
+        }
+
+        function monitorState() {
+            const btn = document.getElementById('monitor-btn');
+            
+            if (monitorInterval) {
+                clearInterval(monitorInterval);
+                monitorInterval = null;
+                btn.textContent = '👁️ Monitor State';
+                btn.style.background = '#007bff';
+                log('📊 Stopped monitoring', 'warning');
+            } else {
+                monitorInterval = setInterval(() => {
+                    updateDisplay();
+                }, 100);
+                btn.textContent = '⏹️ Stop Monitor';
+                btn.style.background = '#dc3545';
+                log('📊 Started monitoring (100ms)', 'info');
+            }
+        }
+
+        // Initialize
+        log('🚀 Direct component test loaded', 'info');
+        log('👉 Click "Initialize Test" to begin', 'info');
+    </script>
+</body>
+</html>

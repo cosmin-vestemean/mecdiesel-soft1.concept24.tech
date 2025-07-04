@@ -26,6 +26,7 @@ client.use("s1", socketClient.service("s1"), {
     "getAnalyticsForBranchReplenishment",
     "getRegisteredUsers", // Keep registered method
     "validateUserPwd", // Keep registered method
+    "setData", // Added for SoftOne transfer orders
   ],
 });
 
