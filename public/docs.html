@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SoftOne Branch Replenishment - Documentation Hub</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary-blue: #0d6efd;
+            --secondary-blue: #6c757d;
+            --success-green: #198754;
+            --warning-orange: #fd7e14;
+            --danger-red: #dc3545;
+            --info-cyan: #0dcaf0;
+            --light-gray: #f8f9fa;
+            --dark-gray: #343a40;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-attachment: fixed;
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .documentation-hub {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            margin: 2rem auto;
+            max-width: 1400px;
+            overflow: hidden;
+        }
+
+        .header-section {
+            background: linear-gradient(135deg, var(--primary-blue) 0%, var(--secondary-blue) 100%);
+            color: white;
+            padding: 3rem 2rem;
+            text-align: center;
+        }
+
+        .header-section h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .header-section p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-bottom: 0;
+        }
+
+        .docs-grid {
+            padding: 3rem 2rem;
+        }
+
+        .doc-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            height: 100%;
+            overflow: hidden;
+            border: none;
+        }
+
+        .doc-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .doc-card-header {
+            padding: 1.5rem;
+            text-align: center;
+            color: white;
+            position: relative;
+        }
+
+        .doc-card-header.migration {
+            background: linear-gradient(135deg, var(--success-green) 0%, #20c997 100%);
+        }
+
+        .doc-card-header.implementation {
+            background: linear-gradient(135deg, var(--primary-blue) 0%, #6610f2 100%);
+        }
+
+        .doc-card-header.error-handling {
+            background: linear-gradient(135deg, var(--warning-orange) 0%, #fd7e14 100%);
+        }
+
+        .doc-card-header.general {
+            background: linear-gradient(135deg, var(--info-cyan) 0%, #0dcaf0 100%);
+        }
+
+        .doc-card-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.9;
+        }
+
+        .doc-card-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .doc-card-subtitle {
+            font-size: 1rem;
+            opacity: 0.8;
+            margin-bottom: 0;
+        }
+
+        .doc-card-body {
+            padding: 1.5rem;
+        }
+
+        .doc-card-description {
+            color: var(--secondary-blue);
+            margin-bottom: 1rem;
+            line-height: 1.5;
+        }
+
+        .doc-card-meta {
+            border-top: 1px solid #e9ecef;
+            padding-top: 1rem;
+            margin-top: 1rem;
+        }
+
+        .doc-card-badge {
+            font-size: 0.8rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+            display: inline-block;
+        }
+
+        .doc-card-date {
+            color: var(--secondary-blue);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .stats-section {
+            background: var(--light-gray);
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary-blue);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: var(--secondary-blue);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.9rem;
+        }
+
+        .back-button {
+            position: fixed;
+            top: 2rem;
+            left: 2rem;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: none;
+            border-radius: 50px;
+            padding: 0.75rem 1.5rem;
+            color: var(--primary-blue);
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .back-button:hover {
+            background: white;
+            color: var(--primary-blue);
+            transform: translateX(-5px);
+        }
+
+        @media (max-width: 768px) {
+            .header-section h1 {
+                font-size: 2rem;
+            }
+            
+            .docs-grid {
+                padding: 2rem 1rem;
+            }
+            
+            .back-button {
+                top: 1rem;
+                left: 1rem;
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <a href="../" class="back-button">
+        <i class="fas fa-arrow-left me-2"></i>Back to App
+    </a>
+
+    <div class="documentation-hub">
+        <!-- Header Section -->
+        <div class="header-section">
+            <h1><i class="fas fa-book-open me-3"></i>Documentation Hub</h1>
+            <p>Complete documentation for SoftOne Branch Replenishment System</p>
+        </div>
+
+        <!-- Stats Section -->
+        <div class="stats-section">
+            <div class="row">
+                <div class="col-md-3 col-6 mb-3">
+                    <div class="stat-item">
+                        <div class="stat-number">4</div>
+                        <div class="stat-label">Documents</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6 mb-3">
+                    <div class="stat-item">
+                        <div class="stat-number">100%</div>
+                        <div class="stat-label">Complete</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6 mb-3">
+                    <div class="stat-item">
+                        <div class="stat-number">2025</div>
+                        <div class="stat-label">Updated</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6 mb-3">
+                    <div class="stat-item">
+                        <div class="stat-number">v2.0</div>
+                        <div class="stat-label">Version</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Documentation Cards -->
+        <div class="docs-grid">
+            <div class="row g-4">
+                <!-- Store Migration Documentation -->
+                <div class="col-lg-4 col-md-6">
+                    <div class="doc-card" onclick="openDoc('docs/branch-replenishment-migration.html')">
+                        <div class="doc-card-header migration">
+                            <div class="doc-card-icon">
+                                <i class="fas fa-database"></i>
+                            </div>
+                            <h3 class="doc-card-title">Store Migration</h3>
+                            <p class="doc-card-subtitle">Data Architecture & State Management</p>
+                        </div>
+                        <div class="doc-card-body">
+                            <p class="doc-card-description">
+                                Comprehensive guide covering the migration from legacy data handling to modern store-based architecture. 
+                                Includes store integration, context providers, and performance optimizations.
+                            </p>
+                            <div class="doc-card-meta">
+                                <span class="badge bg-success doc-card-badge">Migration</span>
+                                <span class="badge bg-info doc-card-badge">Store</span>
+                                <span class="badge bg-primary doc-card-badge">Architecture</span>
+                                <div class="doc-card-date mt-2">
+                                    <i class="fas fa-calendar-alt me-2"></i>Last updated: June 2025
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Transfer Order Creation Implementation -->
+                <div class="col-lg-4 col-md-6">
+                    <div class="doc-card" onclick="openDoc('docs/transfer-order-creation-implementation.html')">
+                        <div class="doc-card-header implementation">
+                            <div class="doc-card-icon">
+                                <i class="fas fa-exchange-alt"></i>
+                            </div>
+                            <h3 class="doc-card-title">Transfer Order Creation</h3>
+                            <p class="doc-card-subtitle">Complete Implementation Guide</p>
+                        </div>
+                        <div class="doc-card-body">
+                            <p class="doc-card-description">
+                                Complete documentation of the modern transfer order creation system. Covers modal interface, 
+                                real-time progress tracking, error handling, and professional UI/UX implementation.
+                            </p>
+                            <div class="doc-card-meta">
+                                <span class="badge bg-primary doc-card-badge">Implementation</span>
+                                <span class="badge bg-warning doc-card-badge">Modal</span>
+                                <span class="badge bg-success doc-card-badge">UI/UX</span>
+                                <div class="doc-card-date mt-2">
+                                    <i class="fas fa-calendar-alt me-2"></i>Last updated: June 2025
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Enhanced Error Details -->
+                <div class="col-lg-4 col-md-6">
+                    <div class="doc-card" onclick="openDoc('docs/enhanced-error-details.html')">
+                        <div class="doc-card-header error-handling">
+                            <div class="doc-card-icon">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <h3 class="doc-card-title">Enhanced Error Handling</h3>
+                            <p class="doc-card-subtitle">SoftOne Error Management</p>
+                        </div>
+                        <div class="doc-card-body">
+                            <p class="doc-card-description">
+                                Advanced error handling system with SoftOne error code lookup, structured error responses, 
+                                and enhanced user experience for error recovery and troubleshooting.
+                            </p>
+                            <div class="doc-card-meta">
+                                <span class="badge bg-danger doc-card-badge">Error Handling</span>
+                                <span class="badge bg-warning doc-card-badge">SoftOne</span>
+                                <span class="badge bg-info doc-card-badge">Recovery</span>
+                                <div class="doc-card-date mt-2">
+                                    <i class="fas fa-calendar-alt me-2"></i>Last updated: June 2025
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- General Transfer Documentation -->
+                <div class="col-lg-4 col-md-6">
+                    <div class="doc-card" onclick="openDoc('docs/transfer-workflow-overview.html')">
+                        <div class="doc-card-header general">
+                            <div class="doc-card-icon">
+                                <i class="fas fa-sitemap"></i>
+                            </div>
+                            <h3 class="doc-card-title">Transfer Workflow</h3>
+                            <p class="doc-card-subtitle">System Overview & Workflows</p>
+                        </div>
+                        <div class="doc-card-body">
+                            <p class="doc-card-description">
+                                High-level overview of the transfer order creation mechanism, business workflows, 
+                                SoftOne integration patterns, and system architecture documentation.
+                            </p>
+                            <div class="doc-card-meta">
+                                <span class="badge bg-info doc-card-badge">Workflow</span>
+                                <span class="badge bg-primary doc-card-badge">Overview</span>
+                                <span class="badge bg-secondary doc-card-badge">Business</span>
+                                <div class="doc-card-date mt-2">
+                                    <i class="fas fa-calendar-alt me-2"></i>Last updated: June 2025
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        function openDoc(path) {
+            // Open the documentation in the same window
+            window.location.href = path;
+        }
+
+        // Add some interactive effects
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add hover effects to cards
+            const cards = document.querySelectorAll('.doc-card');
+            
+            cards.forEach(card => {
+                card.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateY(-10px) scale(1.02)';
+                });
+                
+                card.addEventListener('mouseleave', function() {
+                    this.style.transform = 'translateY(0) scale(1)';
+                });
+            });
+
+            // Add loading animation
+            cards.forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                
+                setTimeout(() => {
+                    card.style.transition = 'all 0.6s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 150);
+            });
+        });
+    </script>
+</body>
+</html>

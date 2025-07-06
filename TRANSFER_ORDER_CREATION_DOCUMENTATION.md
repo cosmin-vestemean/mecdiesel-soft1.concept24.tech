@@ -116,42 +116,57 @@ graph TD
 
 ## Structura Payload-ului SoftOne
 
-### Format Standard S1
+### Format Standard S1 (Production-Ready)
 
 ```javascript
 {
   "clientID": "token-s1-session",
-  "appid": "REPLEN",
-  "service": "setDataObj",
+  "appid": 2002,
+  "service": "setData",
   "data": {
-    "OBJECT": "STCMOV",
+    "OBJECT": "ITEDOC",
     "KEY": "",
-    "COLUMNS": {
-      "FINCODE": "",
-      "FINTRD": destinationCode,
-      "FINREM": `Transfer către ${destinationName} - TEST TEST TEST A NU SE PROCESA`,
-      "OBJECT": "STCMOV",
-      "FINDATE": currentDate
-    },
-    "LINES": [
-      {
-        "MTRL": "PART001",
-        "QTY1": 10.0,
-        "WHFROM": sourceCode,
-        "WHTO": destinationCode
-      }
-    ]
+    "DATA": {
+      "ITEDOC": [
+        {
+          "SERIES": 1,                 // Seria documentului
+          "BRANCH": 1,                 // ID numeric al filialei emitente (sursă)
+          "COMMENTS": `Transfer către ${destinationName} - Generată automat din sistem replenishment`
+        }
+      ],
+      "MTRDOC": [
+        {
+          "BRANCHSEC": 4               // ID numeric al filialei destinație
+        }
+      ],
+      "ITELINES": [
+        {
+          "MTRL": 12345,               // ID numeric al materialului
+          "QTY1": 10.0
+        },
+        {
+          "MTRL": 67890,               // ID numeric al materialului
+          "QTY1": 25.5
+        }
+      ]
+    }
   }
 }
 ```
 
 ### Componente Payload
 
-- **OBJECT**: "STCMOV" (Stock Movement)
-- **FINCODE**: Generat automat de SoftOne
-- **FINTRD**: Codul filialei destinație
-- **FINREM**: Comentariu cu identificator de test
-- **LINES**: Array cu produsele de transferat
+- **OBJECT**: "ITEDOC" (Inter-branch Transfer Document) - doar la nivel root
+- **DATA**: Containerul principal cu toate structurile
+  - **ITEDOC**: Array cu headerul documentului de transfer
+    - **SERIES**: Seria documentului (integer)
+    - **BRANCH**: ID-ul numeric al filialei emitente (sursă)
+    - **COMMENTS**: Comentariu descriptiv
+  - **MTRDOC**: Array cu documentul material
+    - **BRANCHSEC**: ID-ul numeric al filialei destinație
+  - **ITELINES**: Array cu liniile produselor de transferat
+    - **MTRL**: ID-ul numeric al materialului (ex: 12345)
+    - **QTY1**: Cantitatea de transferat
 
 ## Managementul Erorilor și Recovery
 
@@ -216,7 +231,19 @@ Sistemul îmbogățește erorile cu:
    - Fetch friendly IDs (fincode)
    - Butoane retry pentru erorile
 
-### Friendly IDs
+### Răspunsul SoftOne și Procesarea ID-urilor
+
+```javascript
+// Răspuns tipic de la SoftOne după setData
+{
+  "success": true,
+  "id": 4665292           // findoc - ID-ul intern SoftOne
+}
+```
+
+### Extragerea Friendly IDs (fincode)
+
+După crearea documentului, sistemul extrage ID-ul prietenos:
 
 ```javascript
 // Obține ID-urile prietenoase din SoftOne
@@ -227,15 +254,23 @@ const response = await client.service('s1').getSqlDataset({
 
 // Format răspuns
 {
-  "succes": true,
-  "totalcount": 2,
+  "success": true,
+  "totalcount": 1,
   "rows": [
     {
-      "findoc": 4665292,
-      "fincode": "3130-0001758"
+      "findoc": 4665292,        // ID intern
+      "fincode": "3130-0001758" // ID prietenos vizibil utilizatorului
     }
   ]
 }
+```
+
+### Maparea Emitent-Destinație
+
+**IMPORTANT**: În payload-ul SoftOne:
+- **BRANCH**: ID numeric al filialei emitente (sursă) - se specifică în ITEDOC
+- **BRANCHSEC**: ID numeric al filialei destinație - se specifică în MTRDOC
+- **ITELINES**: Conține doar informații despre produse (MTRL, QTY1) - nu conține informații despre filiale
 ```
 
 ## Integrarea cu Store-ul de Stare
@@ -264,20 +299,29 @@ modal.showConfirmation()
 
 ## Securitate și Producție
 
-### Identificatori de Test
+### Identificatori în Comentarii
 
-Toate comenzile conțin:
+Comenzile de transfer conțin comentarii descriptive:
 ```javascript
-FINREM: `Transfer către ${destinationName} - TEST TEST TEST A NU SE PROCESA`
+COMMENTS: `Transfer către ${destinationName} - Generată automat din sistem replenishment`
 ```
 
-**IMPORTANT**: Acești identificatori trebuie eliminați înainte de deployment în producție.
+**NOTĂ**: Pentru testare, se pot adăuga identificatori specifici:
+```javascript
+COMMENTS: `Transfer către ${destinationName} - TEST - A NU SE PROCESA`
+```
 
 ### Token Management
 
 - Token-urile S1 sunt dobândite pentru fiecare sesiune
-- Refresh automat în caz de expirare
+- Refresh automat în caz de expirare  
 - Gestiunea securizată a credențialelor
+
+### Validare Date
+
+- Verificarea existenței produselor în SoftOne
+- Validarea codurilor filialelor
+- Controlul cantităților transferate
 
 ## Monitoring și Logging
 
@@ -361,6 +405,6 @@ console.log('📥 S1 Response for', order.destinationName, ':', response);
 
 ---
 
-**Ultima actualizare**: 4 Iulie 2025  
+**Ultima actualizare**: Iunie 2025  
 **Versiune**: 1.0  
 **Autor**: Sistemul de Documentație Automatizată

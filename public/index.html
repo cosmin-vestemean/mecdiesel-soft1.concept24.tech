@@ -174,7 +174,7 @@
                 <i class="fas fa-info-circle ms-2 text-muted" 
                    id="branchReplenishInfoIcon"
                    style="font-size: 0.8rem; opacity: 0.7; cursor: pointer;" 
-                   title="View development documentation"
+                   title="View documentation hub"
                    onclick="openBranchReplenishmentDocs(event)"></i>
               </button>
             </li>
@@ -472,10 +472,10 @@
           // Update localStorage
           localStorage.setItem('branchReplenishmentDocsViewCount', newCount.toString());
           
-          // Open documentation in new tab
-          window.open('branch-replenishment-migration.html', '_blank');
+          // Open documentation hub in new tab
+          window.open('docs.html', '_blank');
           
-          console.log(`📖 Documentation opened in new tab (viewed ${newCount} times)`);
+          console.log(`📖 Documentation hub opened in new tab (viewed ${newCount} times)`);
       };
     </script>
     

@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transfer Workflow Overview - System Documentation</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Prism.js for syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-blue: #0d6efd;
+            --secondary-blue: #6c757d;
+            --success-green: #198754;
+            --warning-orange: #fd7e14;
+            --danger-red: #dc3545;
+            --info-cyan: #0dcaf0;
+            --light-gray: #f8f9fa;
+            --dark-gray: #343a40;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-attachment: fixed;
+            min-height: 100vh;
+        }
+
+        .documentation-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            margin: 2rem auto;
+            max-width: 1200px;
+            overflow: hidden;
+        }
+
+        .header-section {
+            background: linear-gradient(135deg, var(--info-cyan) 0%, #0dcaf0 100%);
+            color: white;
+            padding: 3rem 2rem;
+            text-align: center;
+        }
+
+        .header-section h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .content-section {
+            padding: 2rem;
+        }
+
+        .section-header {
+            background: linear-gradient(135deg, var(--light-gray) 0%, #e9ecef 100%);
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            border-left: 5px solid var(--info-cyan);
+        }
+
+        .section-header h2 {
+            color: var(--info-cyan);
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .workflow-phase {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid var(--primary-blue);
+            position: relative;
+        }
+
+        .workflow-phase h3 {
+            color: var(--primary-blue);
+            margin-bottom: 1.5rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+        }
+
+        .workflow-phase .phase-number {
+            background: var(--primary-blue);
+            color: white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+            font-weight: 700;
+        }
+
+        .workflow-steps {
+            background: var(--light-gray);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .workflow-step {
+            background: white;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-left: 3px solid var(--success-green);
+            display: flex;
+            align-items: center;
+        }
+
+        .workflow-step:last-child {
+            margin-bottom: 0;
+        }
+
+        .workflow-step-icon {
+            background: var(--success-green);
+            color: white;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+            flex-shrink: 0;
+        }
+
+        .component-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .component-card {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid var(--warning-orange);
+            transition: transform 0.3s ease;
+        }
+
+        .component-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .component-card h4 {
+            color: var(--warning-orange);
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .integration-diagram {
+            background: linear-gradient(135deg, var(--light-gray) 0%, #e9ecef 100%);
+            border-radius: 15px;
+            padding: 2rem;
+            margin: 2rem 0;
+            text-align: center;
+        }
+
+        .integration-flow {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .integration-step {
+            background: white;
+            border-radius: 10px;
+            padding: 1rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            flex: 1;
+            min-width: 150px;
+            text-align: center;
+        }
+
+        .integration-step i {
+            font-size: 2rem;
+            color: var(--primary-blue);
+            margin-bottom: 0.5rem;
+        }
+
+        .integration-arrow {
+            font-size: 1.5rem;
+            color: var(--secondary-blue);
+        }
+
+        .payload-example {
+            background: #2d3748;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            overflow-x: auto;
+        }
+
+        .payload-example pre {
+            margin: 0;
+            color: #e2e8f0;
+            font-family: 'Fira Code', 'Courier New', monospace;
+        }
+
+        .security-notice {
+            background: linear-gradient(135deg, var(--warning-orange) 0%, #fd7e14 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            text-align: center;
+        }
+
+        .security-notice h4 {
+            margin-bottom: 1rem;
+        }
+
+        .feature-highlight {
+            background: linear-gradient(135deg, var(--success-green) 0%, #20c997 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .feature-highlight h5 {
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .back-button {
+            position: fixed;
+            top: 2rem;
+            left: 2rem;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: none;
+            border-radius: 50px;
+            padding: 0.75rem 1.5rem;
+            color: var(--primary-blue);
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .back-button:hover {
+            background: white;
+            color: var(--primary-blue);
+            transform: translateX(-5px);
+        }
+
+        @media (max-width: 768px) {
+            .documentation-container {
+                margin: 1rem;
+                border-radius: 15px;
+            }
+            
+            .header-section {
+                padding: 2rem 1rem;
+            }
+            
+            .header-section h1 {
+                font-size: 2rem;
+            }
+            
+            .content-section {
+                padding: 1rem;
+            }
+            
+            .integration-flow {
+                flex-direction: column;
+            }
+            
+            .integration-arrow {
+                transform: rotate(90deg);
+            }
+            
+            .back-button {
+                top: 1rem;
+                left: 1rem;
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <a href="../docs.html" class="back-button">
+        <i class="fas fa-arrow-left me-2"></i>Back to Docs
+    </a>
+
+    <div class="documentation-container">
+        <!-- Header Section -->
+        <div class="header-section">
+            <h1><i class="fas fa-sitemap me-3"></i>Transfer Workflow Overview</h1>
+            <p class="lead">Complete System Overview & Business Workflows</p>
+            <div class="mt-3">
+                <span class="badge bg-light text-dark me-2">System Documentation</span>
+                <span class="badge bg-light text-dark me-2">Business Workflows</span>
+                <span class="badge bg-light text-dark">SoftOne Integration</span>
+            </div>
+        </div>
+
+        <!-- Content Section -->
+        <div class="content-section">
+            
+            <!-- System Overview -->
+            <div class="section-header">
+                <h2><i class="fas fa-info-circle me-2"></i>System Overview</h2>
+                <p class="mb-0">The transfer order creation mechanism enables automated product transfers between branches through seamless SoftOne ERP integration, providing a modern, business-professional interface for enterprise operations.</p>
+            </div>
+
+            <!-- Main Components -->
+            <div class="section-header">
+                <h2><i class="fas fa-puzzle-piece me-2"></i>Main Components</h2>
+            </div>
+
+            <div class="component-grid">
+                <div class="component-card">
+                    <h4><i class="fas fa-layer-group me-2"></i>Branch Replenishment Container</h4>
+                    <p><strong>Primary orchestrator</strong> coordinating the entire process:</p>
+                    <ul>
+                        <li>Application state management</li>
+                        <li>Business logic coordination</li>
+                        <li>Component integration</li>
+                        <li>Event handling and routing</li>
+                    </ul>
+                </div>
+
+                <div class="component-card">
+                    <h4><i class="fas fa-window-maximize me-2"></i>S1 Transfer Modal</h4>
+                    <p><strong>User interface</strong> for confirmation and monitoring:</p>
+                    <ul>
+                        <li>Real-time progress display</li>
+                        <li>Error management and recovery</li>
+                        <li>Professional modal states</li>
+                        <li>Interactive user feedback</li>
+                    </ul>
+                </div>
+
+                <div class="component-card">
+                    <h4><i class="fas fa-search me-2"></i>Query Panel</h4>
+                    <p><strong>Configuration interface</strong> for parameters:</p>
+                    <ul>
+                        <li>Source and destination selection</li>
+                        <li>Filter and condition setup</li>
+                        <li>Data loading initiation</li>
+                        <li>User preference management</li>
+                    </ul>
+                </div>
+
+                <div class="component-card">
+                    <h4><i class="fas fa-tools me-2"></i>Manipulation Panel</h4>
+                    <p><strong>Action center</strong> for transfer operations:</p>
+                    <ul>
+                        <li>Save to S1 button</li>
+                        <li>Export functionality</li>
+                        <li>Batch operations</li>
+                        <li>Workflow initiation</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Complete Workflow -->
+            <div class="section-header">
+                <h2><i class="fas fa-route me-2"></i>Complete Workflow</h2>
+            </div>
+
+            <!-- Phase 1: Configuration and Data Loading -->
+            <div class="workflow-phase">
+                <h3>
+                    <div class="phase-number">1</div>
+                    Configuration and Data Loading
+                </h3>
+                <p>Initial setup and data preparation phase where users configure parameters and load replenishment data.</p>
+                
+                <div class="workflow-steps">
+                    <div class="workflow-step">
+                        <div class="workflow-step-icon">
+                            <i class="fas fa-cog"></i>
+                        </div>
+                        <div>
+                            <strong>Parameter Configuration:</strong> User selects source branch and destination branches
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="workflow-step-icon">
+                            <i class="fas fa-filter"></i>
+                        </div>
+                        <div>
+                            <strong>Condition Setup:</strong> Configure filters for necessary quantities and limits
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="workflow-step-icon">
+                            <i class="fas fa-download"></i>
+                        </div>
+                        <div>
+                            <strong>Data Loading:</strong> Fetch replenishment data using analytics service
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="workflow-step-icon">
+                            <i class="fas fa-database"></i>
+                        </div>
+                        <div>
+                            <strong>Store Processing:</strong> Data processed and stored in ReplenishmentStore
+                        </div>
+                    </div>
+                </div>
+
+                <div class="feature-highlight">
+                    <h5><i class="fas fa-lightbulb me-2"></i>Technical Detail</h5>
+                    <p class="mb-0">Data is loaded through <code>client.service('s1').getAnalyticsForBranchReplenishment()</code> and processed through the modern store architecture for optimal performance.</p>
+                </div>
+            </div>
+
+            <!-- Phase 2: Strategy Application and Calculation -->
+            <div class="workflow-phase">
+                <h3>
+                    <div class="phase-number">2</div>
+                    Strategy Application and Calculation
+                </h3>
+                <p>Application of business rules and calculation of transfer quantities based on selected strategies.</p>
+                
+                <div class="workflow-steps">
+                    <div class="workflow-step">
+                        <div class="workflow-step-icon">
+                            <i class="fas fa-filter"></i>
+                        </div>
+                        <div>
+                            <strong>Filter Application:</strong> Apply ABC, Blacklist, and other business filters
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="workflow-step-icon">
+                            <i class="fas fa-brain"></i>
+                        </div>
+                        <div>
+                            <strong>Strategy Execution:</strong> Run selected replenishment strategies
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="workflow-step-icon">
+                            <i class="fas fa-calculator"></i>
+                        </div>
+                        <div>
+                            <strong>Quantity Calculation:</strong> Calculate optimal transfer quantities
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="workflow-step-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div>
+                            <strong>Validation:</strong> Ensure quantities are greater than zero
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="feature-highlight">
+                            <h5>Fill to Min Strategy</h5>
+                            <p class="mb-0">Completes stock to minimum quantity requirements</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="feature-highlight">
+                            <h5>Fill to Max Strategy</h5>
+                            <p class="mb-0">Completes stock to maximum quantity capacity</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="feature-highlight">
+                            <h5>Optimize Strategy</h5>
+                            <p class="mb-0">Uses advanced algorithms for optimal distribution</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Phase 3: Transfer Initiation -->
+            <div class="workflow-phase">
+                <h3>
+                    <div class="phase-number">3</div>
+                    Transfer Process Initiation
+                </h3>
+                <p>User-initiated transfer process with validation and modal presentation.</p>
+                
+                <div class="workflow-steps">
+                    <div class="workflow-step">
+                        <div class="workflow-step-icon">
+                            <i class="fas fa-mouse-pointer"></i>
+                        </div>
+                        <div>
+                            <strong>User Action:</strong> Click "Save to S1" button in Manipulation Panel
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="workflow-step-icon">
+                            <i class="fas fa-check"></i>
+                        </div>
+                        <div>
+                            <strong>Data Validation:</strong> Verify available data and transfer quantities
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="workflow-step-icon">
+                            <i class="fas fa-layer-group"></i>
+                        </div>
+                        <div>
+                            <strong>Order Preparation:</strong> Group products by destination branches
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="workflow-step-icon">
+                            <i class="fas fa-window-maximize"></i>
+                        </div>
+                        <div>
+                            <strong>Modal Display:</strong> Show confirmation modal with order details
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Phase 4: Confirmation and Processing -->
+            <div class="workflow-phase">
+                <h3>
+                    <div class="phase-number">4</div>
+                    Confirmation and Processing
+                </h3>
+                <p>Final confirmation and sequential processing of transfer orders with real-time feedback.</p>
+                
+                <div class="workflow-steps">
+                    <div class="workflow-step">
+                        <div class="workflow-step-icon">
+                            <i class="fas fa-eye"></i>
+                        </div>
+                        <div>
+                            <strong>Order Review:</strong> Display summary cards with order counts and details
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="workflow-step-icon">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <div>
+                            <strong>Warning Display:</strong> Show blacklisted items and production reminders
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="workflow-step-icon">
+                            <i class="fas fa-play"></i>
+                        </div>
+                        <div>
+                            <strong>Processing Start:</strong> Sequential processing of each transfer order
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="workflow-step-icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div>
+                            <strong>Progress Tracking:</strong> Real-time progress updates and status display
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SoftOne Integration -->
+            <div class="section-header">
+                <h2><i class="fas fa-link me-2"></i>SoftOne Integration</h2>
+            </div>
+
+            <div class="integration-diagram">
+                <h4 class="mb-3">Integration Flow</h4>
+                <div class="integration-flow">
+                    <div class="integration-step">
+                        <i class="fas fa-key"></i>
+                        <h6>Token Acquisition</h6>
+                        <p class="small mb-0">Secure authentication</p>
+                    </div>
+                    <div class="integration-arrow">
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
+                    <div class="integration-step">
+                        <i class="fas fa-code"></i>
+                        <h6>Payload Building</h6>
+                        <p class="small mb-0">ITEDOC format</p>
+                    </div>
+                    <div class="integration-arrow">
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
+                    <div class="integration-step">
+                        <i class="fas fa-paper-plane"></i>
+                        <h6>Data Transmission</h6>
+                        <p class="small mb-0">setData service</p>
+                    </div>
+                    <div class="integration-arrow">
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
+                    <div class="integration-step">
+                        <i class="fas fa-check-circle"></i>
+                        <h6>Response Handling</h6>
+                        <p class="small mb-0">Result processing</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SoftOne Payload Structure -->
+            <div class="component-card">
+                <h4><i class="fas fa-code me-2"></i>SoftOne Payload Structure</h4>
+                <p>Production-ready format for inter-branch transfer documents (ITEDOC):</p>
+                
+                <div class="payload-example">
+                    <pre><code>{
+  "clientID": "token-s1-session",
+  "appid": 2002,
+  "service": "setData",
+  "data": {
+    "OBJECT": "ITEDOC",
+    "KEY": "",
+    "DATA": {
+      "ITEDOC": [
+        {
+          "SERIES": 1,
+          "BRANCH": 1,
+          "COMMENTS": `Transfer to ${destinationName} - Generated automatically`
+        }
+      ],
+      "MTRDOC": [
+        {
+          "BRANCHSEC": 4
+        }
+      ],
+      "ITELINES": [
+        {
+          "MTRL": 123456,
+          "QTY1": 10.0
+        },
+        {
+          "MTRL": 789012,
+          "QTY1": 25.5
+        }
+      ]
+    }
+  }
+}</code></pre>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <h6>Document Structure:</h6>
+                        <ul>
+                            <li><strong>OBJECT:</strong> "ITEDOC" (Inter-branch Transfer Document)</li>
+                            <li><strong>ITEDOC:</strong> Transfer document header</li>
+                            <li><strong>MTRDOC:</strong> Material document header</li>
+                            <li><strong>ITELINES:</strong> Transfer line items</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Field Mapping:</h6>
+                        <ul>
+                            <li><strong>BRANCH:</strong> Source branch (emitent)</li>
+                            <li><strong>BRANCHSEC:</strong> Destination branch</li>
+                            <li><strong>COMMENTS:</strong> Transfer description</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="feature-highlight mt-3">
+                    <h5><i class="fas fa-arrow-left me-2"></i>Response Structure</h5>
+                    <p class="mb-2">SoftOne returns the created transfer document identifiers:</p>
+                    <div class="payload-example">
+                        <pre><code>{
+  "success": true,
+  "id": 4665292        // System findoc ID
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error Management and Recovery -->
+            <div class="section-header">
+                <h2><i class="fas fa-shield-alt me-2"></i>Error Management and Recovery</h2>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="component-card">
+                        <h4><i class="fas fa-user-times me-2"></i>Authentication Errors</h4>
+                        <ul>
+                            <li>Expired S1 tokens</li>
+                            <li>Invalid credentials</li>
+                            <li>Session timeouts</li>
+                            <li>Automatic token refresh</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="component-card">
+                        <h4><i class="fas fa-business-time me-2"></i>Business Logic Errors</h4>
+                        <ul>
+                            <li>Non-existent products</li>
+                            <li>Invalid quantities</li>
+                            <li>Inactive branches</li>
+                            <li>Business rule violations</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="component-card">
+                        <h4><i class="fas fa-wifi me-2"></i>Network Errors</h4>
+                        <ul>
+                            <li>Connection timeouts</li>
+                            <li>Network interruptions</li>
+                            <li>Service unavailability</li>
+                            <li>Retry mechanisms</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-highlight">
+                <h5><i class="fas fa-redo me-2"></i>Recovery Mechanisms</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <ul>
+                            <li><strong>Inline Retry:</strong> Individual order retry functionality</li>
+                            <li><strong>Bulk Retry:</strong> Retry all failed orders at once</li>
+                            <li><strong>Error Enhancement:</strong> SoftOne documentation lookup</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <ul>
+                            <li><strong>Context Preservation:</strong> Order details maintained during errors</li>
+                            <li><strong>Progress Tracking:</strong> Clear status for each operation</li>
+                            <li><strong>User Guidance:</strong> Actionable error messages and solutions</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Friendly Order IDs -->
+            <div class="section-header">
+                <h2><i class="fas fa-id-card me-2"></i>Friendly Order ID System</h2>
+            </div>
+
+            <div class="component-card">
+                <h4>Backend Integration</h4>
+                <p>Automatic fetching of user-friendly order identifiers from SoftOne:</p>
+                
+                <div class="payload-example">
+                    <pre><code>// SoftOne Transfer Response
+{
+  "success": true,
+  "id": 4665292        // findoc (system ID)
+}
+
+// Friendly ID Retrieval (if needed)
+const response = await client.service('s1').getSqlDataset({
+  token: this.currentToken,
+  SQL: `SELECT findoc, fincode FROM findoc WHERE findoc IN (${ids})`
+});
+
+// SQL Response Format
+{
+  "success": true,
+  "totalcount": 2,
+  "rows": [
+    {
+      "findoc": 4665292,
+      "fincode": "3130-0001758"
+    }
+  ]
+}</code></pre>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <h6>Response Fields:</h6>
+                        <ul>
+                            <li><strong>findoc:</strong> System internal ID</li>
+                            <li><strong>fincode:</strong> User-friendly order number</li>
+                            <li><strong>success:</strong> Operation status boolean</li>
+                            <li><strong>message:</strong> Operation result description</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Display Format:</h6>
+                        <ul>
+                            <li>Primary display: Friendly ID (e.g., "3130-0001758")</li>
+                            <li>Secondary display: System ID (when different)</li>
+                            <li>Badge format for easy recognition</li>
+                            <li>Consistent styling across interface</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Security and Production -->
+            <div class="security-notice">
+                <h4><i class="fas fa-exclamation-triangle me-2"></i>Security & Production Notice</h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Test Identifiers</h6>
+                        <p class="mb-0">All transfer orders include "TEST TEST TEST DO NOT PROCESS" identifiers for safety during development and testing phases.</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Production Deployment</h6>
+                        <p class="mb-0">Test identifiers must be removed before production deployment to enable actual order processing in SoftOne.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Future Enhancements -->
+            <div class="section-header">
+                <h2><i class="fas fa-rocket me-2"></i>Future Enhancements</h2>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="component-card">
+                        <h4><i class="fas fa-layer-group me-2"></i>Batch Processing</h4>
+                        <p>Parallel processing of multiple orders for improved performance and efficiency.</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="component-card">
+                        <h4><i class="fas fa-calendar-alt me-2"></i>Scheduling</h4>
+                        <p>Automated transfer scheduling for recurring replenishment operations.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="component-card">
+                        <h4><i class="fas fa-chart-bar me-2"></i>Analytics</h4>
+                        <p>Comprehensive dashboard for monitoring transfer performance and business metrics.</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="component-card">
+                        <h4><i class="fas fa-bell me-2"></i>Notifications</h4>
+                        <p>Email/SMS notifications for transfer status updates and completion alerts.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Document Info -->
+            <div class="text-center mt-4 p-3" style="background: var(--light-gray); border-radius: 10px;">
+                <p class="mb-1"><strong>System Status:</strong> Production Ready</p>
+                <p class="mb-1"><strong>Integration:</strong> Full SoftOne ERP Support</p>
+                <p class="mb-1"><strong>Security:</strong> Test Mode (Remove identifiers for production)</p>
+                <p class="mb-0"><strong>Future Ready:</strong> Extensible architecture for enhancements</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Prism.js for syntax highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add loading animation for workflow phases
+            const phases = document.querySelectorAll('.workflow-phase, .component-card');
+            
+            phases.forEach((phase, index) => {
+                phase.style.opacity = '0';
+                phase.style.transform = 'translateY(20px)';
+                
+                setTimeout(() => {
+                    phase.style.transition = 'all 0.6s ease';
+                    phase.style.opacity = '1';
+                    phase.style.transform = 'translateY(0)';
+                }, index * 150);
+            });
+
+            // Add hover effects to workflow steps
+            const steps = document.querySelectorAll('.workflow-step');
+            steps.forEach(step => {
+                step.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateX(10px)';
+                    this.style.transition = 'transform 0.3s ease';
+                });
+                
+                step.addEventListener('mouseleave', function() {
+                    this.style.transform = 'translateX(0)';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
