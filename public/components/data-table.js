@@ -232,7 +232,7 @@ export class ReplenishmentDataTable extends LitElement {
         const nextInput = this.querySelector(`input[data-keyfield="${nextKey}"][data-colkey="${nextColKey}"]`);
         if (nextInput) {
             nextInput.focus();
-            nextInput.select();
+            nextInput.select(); // Preselect the value for easy editing
         }
     }
   }
@@ -541,6 +541,7 @@ export class ReplenishmentDataTable extends LitElement {
           .value="${value || 0}"
           @change="${(e) => this._dispatchUpdate('itemTransfer', null, item.keyField, e.target.value)}"
           @keydown="${this.handleKeyNav}"
+          @focus="${(e) => e.target.select()}"
           ?disabled=${this.loading}
         />
       `;
