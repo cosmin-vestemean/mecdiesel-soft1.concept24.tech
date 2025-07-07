@@ -669,7 +669,7 @@ export class BranchReplenishmentContainer extends LitElement {
         ITEDOC: [{
           SERIES: "3130",
           BRANCH: parseInt(order.sourceBranch),
-          COMMENTS: "TEST TEST TEST A NU SE PROCESA"
+          COMMENTS: `Transfer către ${order.destinationName} - Generată automat din sistem replenishment`
         }],
         MTRDOC: [{
           BRANCHSEC: parseInt(order.destinationBranch)

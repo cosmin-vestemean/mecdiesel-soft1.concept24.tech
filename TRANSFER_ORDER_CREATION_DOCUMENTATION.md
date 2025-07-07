@@ -306,11 +306,6 @@ Comenzile de transfer conțin comentarii descriptive:
 COMMENTS: `Transfer către ${destinationName} - Generată automat din sistem replenishment`
 ```
 
-**NOTĂ**: Pentru testare, se pot adăuga identificatori specifici:
-```javascript
-COMMENTS: `Transfer către ${destinationName} - TEST - A NU SE PROCESA`
-```
-
 ### Token Management
 
 - Token-urile S1 sunt dobândite pentru fiecare sesiune

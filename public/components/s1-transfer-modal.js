@@ -177,11 +177,10 @@ export class S1TransferModal extends LitElement {
         <!-- Production reminder with professional design -->
         <div class="alert alert-warning border-0" style="background: #fff3cd; border-radius: 0.5rem; border-left: 4px solid #ffc107;">
           <div class="d-flex align-items-center">
-            <i class="fas fa-exclamation-triangle text-warning me-3"></i>
+            <i class="fas fa-check-circle text-success me-3"></i>
             <div>
-              <strong class="text-dark">Reminder pentru echipa de dezvoltare:</strong> 
-              <span class="text-dark">Verificați că comentariul de test a fost șters: </span>
-              <code class="bg-text-muted">"TEST TEST TEST A NU SE PROCESA"</code>
+              <strong class="text-dark">Sistem de producție:</strong> 
+              <span class="text-dark">Transferurile vor fi generate cu comentarii contextuale.</span>
             </div>
           </div>
         </div>
@@ -264,11 +263,10 @@ export class S1TransferModal extends LitElement {
         <!-- Production reminder with muted business design -->
         <div class="alert border-0 shadow-sm">
           <div class="d-flex align-items-center">
-            <i class="fas fa-lightbulb fa-lg me-3" style="opacity: 0.8;"></i>
+            <i class="fas fa-check-circle fa-lg me-3 text-success" style="opacity: 0.8;"></i>
             <div>
-              <strong style="opacity: 0.95;">Reminder:</strong> 
-              <span style="opacity: 0.8;">Verificați că comentariul de test a fost șters: </span>
-              <code style="background: rgba(255,255,255,0.2); padding: 2px 6px; border-radius: 4px;">"TEST TEST TEST A NU SE PROCESA"</code>
+              <strong style="opacity: 0.95;">Sistem activ:</strong> 
+              <span style="opacity: 0.8;">Transferurile sunt procesate în mod profesional către SoftOne ERP.</span>
             </div>
           </div>
         </div>
