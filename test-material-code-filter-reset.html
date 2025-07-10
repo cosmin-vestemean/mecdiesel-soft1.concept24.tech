@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Material Code Filter Reset Test</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; padding: 20px; }
+        .test-container { max-width: 800px; margin: 0 auto; }
+        .test-section { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .state-display { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 10px; font-family: monospace; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1 class="mb-4">🧪 Material Code Filter Reset Test</h1>
+
+        <!-- Current State Display -->
+        <div class="test-section">
+            <h3>📊 Current Store State</h3>
+            <div id="currentState" class="state-display"></div>
+        </div>
+
+        <!-- Test Controls -->
+        <div class="test-section">
+            <h3>🎛️ Test Controls</h3>
+            <div class="row g-2">
+                <div class="col-md-6">
+                    <button class="btn btn-primary w-100" onclick="setMaterialCodeFilter('TEST123')">
+                        Set Material Code Filter to "TEST123"
+                    </button>
+                </div>
+                <div class="col-md-6">
+                    <button class="btn btn-warning w-100" onclick="resetSearchFilters()">
+                        Reset Search Filters (Should NOT clear material code)
+                    </button>
+                </div>
+                <div class="col-md-6">
+                    <button class="btn btn-danger w-100" onclick="resetAllFilters()">
+                        Reset All Filters (Should clear material code)
+                    </button>
+                </div>
+                <div class="col-md-6">
+                    <button class="btn btn-dark w-100" onclick="resetData()">
+                        Reset Data (Should clear everything)
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Results -->
+        <div class="test-section">
+            <h3>✅ Test Results</h3>
+            <div id="testResults"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { replenishmentStore } from './public/stores/replenishment-store.js';
+
+        // Make store globally available for testing
+        window.replenishmentStore = replenishmentStore;
+
+        // Track state changes
+        let testResults = [];
+
+        // Subscribe to store changes
+        replenishmentStore.subscribe((newState, previousState, action) => {
+            console.log('Store updated:', action.type, {
+                materialCodeFilter: newState.materialCodeFilter,
+                searchTerm: newState.searchTerm,
+                transferFilter: newState.transferFilter
+            });
+            
+            updateStateDisplay();
+            logTestResult(action, previousState, newState);
+        });
+
+        // Update state display
+        function updateStateDisplay() {
+            const state = replenishmentStore.getState();
+            document.getElementById('currentState').textContent = JSON.stringify({
+                materialCodeFilter: state.materialCodeFilter,
+                searchTerm: state.searchTerm,
+                transferFilter: state.transferFilter,
+                branchesEmit: state.branchesEmit,
+                selectedDestBranches: state.selectedDestBranches,
+                loading: state.loading
+            }, null, 2);
+        }
+
+        // Log test results
+        function logTestResult(action, previousState, newState) {
+            const timestamp = new Date().toLocaleTimeString();
+            const materialCodeChanged = previousState.materialCodeFilter !== newState.materialCodeFilter;
+            
+            let status = 'info';
+            let message = `Action: ${action.type}`;
+            
+            if (action.type === 'RESET_SEARCH_FILTERS') {
+                if (materialCodeChanged) {
+                    status = 'danger';
+                    message += ' ❌ FAILED: Material code filter was incorrectly cleared!';
+                } else {
+                    status = 'success';
+                    message += ' ✅ PASSED: Material code filter was preserved';
+                }
+            } else if (action.type === 'RESET_ALL_FILTERS' || action.type === 'RESET_DATA') {
+                if (materialCodeChanged && newState.materialCodeFilter === '') {
+                    status = 'success';
+                    message += ' ✅ PASSED: Material code filter was correctly cleared';
+                } else if (!materialCodeChanged) {
+                    status = 'warning';
+                    message += ' ⚠️ UNEXPECTED: Material code filter was not cleared';
+                }
+            }
+            
+            const resultHtml = `
+                <div class="alert alert-${status} alert-dismissible">
+                    <span class="badge bg-${status} me-2">${timestamp}</span>
+                    <strong>${message}</strong>
+                    <br><small>Material Code Filter: "${previousState.materialCodeFilter}" → "${newState.materialCodeFilter}"</small>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            document.getElementById('testResults').insertAdjacentHTML('afterbegin', resultHtml);
+        }
+
+        // Test functions
+        window.setMaterialCodeFilter = function(value) {
+            replenishmentStore.setMaterialCodeFilter(value);
+        };
+
+        window.resetSearchFilters = function() {
+            replenishmentStore.resetSearchFilters();
+        };
+
+        window.resetAllFilters = function() {
+            replenishmentStore.resetAllFilters();
+        };
+
+        window.resetData = function() {
+            replenishmentStore.resetData();
+        };
+
+        // Initialize display
+        updateStateDisplay();
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

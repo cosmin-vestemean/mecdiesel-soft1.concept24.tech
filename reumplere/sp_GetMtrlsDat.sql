@@ -6,7 +6,9 @@ CREATE OR ALTER PROCEDURE sp_GetMtrlsData
     @company INT = 1000,
     @setConditionForNecesar BIT = 1,
     @setConditionForLimits BIT = 1,  -- New parameter
-    @fiscalYear INT = NULL
+    @fiscalYear INT = NULL,
+    @materialCodeFilter VARCHAR(100) = NULL,  -- New parameter for material code filtering
+    @materialCodeFilterExclude BIT = 0  -- New parameter for exclusion mode (0=include, 1=exclude)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -434,6 +436,10 @@ BEGIN
         @setConditionForNecesar = 0
         OR (bl_dest.MinNecessity > 0 OR bl_dest.MaxNecessity > 0)
     )
+    AND (@materialCodeFilter IS NULL OR (
+        (@materialCodeFilterExclude = 0 AND m.Code LIKE @materialCodeFilter + '%') OR
+        (@materialCodeFilterExclude = 1 AND m.Code NOT LIKE @materialCodeFilter + '%')
+    ))  -- Add material code filter with include/exclude support
     ORDER BY dm.mtrl, dm.branchE, br.branch
     OPTION (RECOMPILE);    -- Clean up temp tables
     DROP TABLE #PendingOrders;

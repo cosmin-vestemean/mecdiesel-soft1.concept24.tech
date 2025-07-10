@@ -103,6 +103,14 @@
             background: linear-gradient(135deg, var(--info-cyan) 0%, #0dcaf0 100%);
         }
 
+        .doc-card-header.filter-optimization {
+            background: linear-gradient(135deg, #9c27b0 0%, #673ab7 100%);
+        }
+
+        .doc-card-header.material-filter {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+        }
+
         .doc-card-icon {
             font-size: 3rem;
             margin-bottom: 1rem;
@@ -234,7 +242,7 @@
             <div class="row">
                 <div class="col-md-3 col-6 mb-3">
                     <div class="stat-item">
-                        <div class="stat-number">4</div>
+                        <div class="stat-number">6</div>
                         <div class="stat-label">Documents</div>
                     </div>
                 </div>
@@ -364,6 +372,60 @@
                                 <span class="badge bg-secondary doc-card-badge">Business</span>
                                 <div class="doc-card-date mt-2">
                                     <i class="fas fa-calendar-alt me-2"></i>Last updated: June 2025
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filter Separation Implementation -->
+                <div class="col-lg-4 col-md-6">
+                    <div class="doc-card" onclick="openDoc('docs/filter-separation-option3-implementation.html')">
+                        <div class="doc-card-header filter-optimization">
+                            <div class="doc-card-icon">
+                                <i class="fas fa-filter"></i>
+                            </div>
+                            <h3 class="doc-card-title">Filter Separation</h3>
+                            <p class="doc-card-subtitle">Option 3: Clear Filter Independence</p>
+                        </div>
+                        <div class="doc-card-body">
+                            <p class="doc-card-description">
+                                Complete implementation of Option 3 filter separation between UI search and operational 
+                                destination filters. Eliminates unexpected empty results and provides better user experience.
+                            </p>
+                            <div class="doc-card-meta">
+                                <span class="badge bg-primary doc-card-badge">Filter Logic</span>
+                                <span class="badge bg-success doc-card-badge">UX Enhancement</span>
+                                <span class="badge bg-warning doc-card-badge">Performance</span>
+                                <div class="doc-card-date mt-2">
+                                    <i class="fas fa-calendar-alt me-2"></i>Last updated: July 2025
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Material Code Filter Include/Exclude -->
+                <div class="col-lg-4 col-md-6">
+                    <div class="doc-card" onclick="openDoc('docs/material-code-filter-include-exclude.html')">
+                        <div class="doc-card-header material-filter">
+                            <div class="doc-card-icon">
+                                <i class="fas fa-toggle-on"></i>
+                            </div>
+                            <h3 class="doc-card-title">Material Code Filter</h3>
+                            <p class="doc-card-subtitle">Include/Exclude Enhancement</p>
+                        </div>
+                        <div class="doc-card-body">
+                            <p class="doc-card-description">
+                                Complete implementation of the material code filter enhancement with include/exclude toggle. 
+                                Covers database-level filtering, UI toggle switch, and full-stack implementation across all layers.
+                            </p>
+                            <div class="doc-card-meta">
+                                <span class="badge bg-danger doc-card-badge">Filter Enhancement</span>
+                                <span class="badge bg-primary doc-card-badge">Database Level</span>
+                                <span class="badge bg-success doc-card-badge">Toggle UI</span>
+                                <div class="doc-card-date mt-2">
+                                    <i class="fas fa-calendar-alt me-2"></i>Last updated: July 2025
                                 </div>
                             </div>
                         </div>

@@ -9,6 +9,8 @@ function getAnalytics(apiObj) {
   var setConditionForLimits = apiObj.hasOwnProperty('setConditionForLimits') ? apiObj.setConditionForLimits : true;
   var fiscalYear = apiObj.fiscalYear || new Date().getFullYear();
   var company = apiObj.company || X.SYS.COMPANY;
+  var materialCodeFilter = apiObj.materialCodeFilter || null;  // Add material code filter parameter
+  var materialCodeFilterExclude = apiObj.hasOwnProperty('materialCodeFilterExclude') ? apiObj.materialCodeFilterExclude : false;  // Add material code filter exclude parameter
 
   const startT = new Date().getTime();
 
@@ -31,7 +33,10 @@ function getAnalytics(apiObj) {
     (setConditionForLimits ? "1" : "0") +
     ", " +
     "@fiscalYear = " +
-    fiscalYear;
+    fiscalYear +
+    (materialCodeFilter ? ", @materialCodeFilter = '" + materialCodeFilter + "'" : "") +
+    ", @materialCodeFilterExclude = " +
+    (materialCodeFilterExclude ? "1" : "0");
 
   var ds = X.GETSQLDATASET(qry, null);
 

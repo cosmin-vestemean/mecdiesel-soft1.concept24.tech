@@ -49,6 +49,8 @@ export class ReplenishmentStore {
       
       // Filtering state
       searchTerm: '',
+      materialCodeFilter: '',  // Add material code filter
+      materialCodeFilterExclude: false,  // Add material code filter exclude flag
       transferFilter: 'all',
       destinationFilter: 'all',
       abcFilter: 'all',
@@ -213,6 +215,16 @@ export class ReplenishmentStore {
         cacheKeysToInvalidate = ['filteredData'];
         break;
 
+      case 'SET_MATERIAL_CODE_FILTER':
+        newState.materialCodeFilter = action.payload || '';
+        cacheKeysToInvalidate = ['filteredData'];
+        break;
+
+      case 'SET_MATERIAL_CODE_FILTER_EXCLUDE':
+        newState.materialCodeFilterExclude = Boolean(action.payload);
+        cacheKeysToInvalidate = ['filteredData'];
+        break;
+
       case 'SET_TRANSFER_FILTER':
         newState.transferFilter = action.payload || 'all';
         cacheKeysToInvalidate = ['filteredData'];
@@ -221,6 +233,8 @@ export class ReplenishmentStore {
       case 'SET_DESTINATION_FILTER':
         newState.destinationFilter = action.payload || 'all';
         cacheKeysToInvalidate = ['filteredData'];
+        // NOTE: Destination filter changes do NOT automatically reset searchTerm
+        // This maintains separation between UI search and operational destination filtering
         break;
 
       case 'SET_ABC_FILTER':
@@ -266,6 +280,8 @@ export class ReplenishmentStore {
 
       case 'RESET_ALL_FILTERS':
         newState.searchTerm = '';
+        newState.materialCodeFilter = '';
+        newState.materialCodeFilterExclude = false;
         newState.transferFilter = 'all';
         newState.destinationFilter = 'all';
         newState.abcFilter = 'all';
@@ -285,6 +301,8 @@ export class ReplenishmentStore {
         newState.branchesEmit = '';
         newState.selectedDestBranches = [];
         newState.searchTerm = '';
+        newState.materialCodeFilter = '';
+        newState.materialCodeFilterExclude = false;
         newState.transferFilter = 'all';
         newState.destinationFilter = 'all';
         newState.abcFilter = 'all';
@@ -340,6 +358,8 @@ export class ReplenishmentStore {
     // Create a more comprehensive cache key that includes all filter states
     const filterStates = {
       searchTerm: this._state.searchTerm,
+      materialCodeFilter: this._state.materialCodeFilter,
+      materialCodeFilterExclude: this._state.materialCodeFilterExclude,
       transferFilter: this._state.transferFilter,
       destinationFilter: this._state.destinationFilter,
       abcFilter: this._state.abcFilter,
@@ -750,6 +770,14 @@ export class ReplenishmentStore {
     this.dispatch({ type: 'SET_SEARCH_TERM', payload: term });
   }
 
+  setMaterialCodeFilter(filter) {
+    this.dispatch({ type: 'SET_MATERIAL_CODE_FILTER', payload: filter });
+  }
+
+  setMaterialCodeFilterExclude(exclude) {
+    this.dispatch({ type: 'SET_MATERIAL_CODE_FILTER_EXCLUDE', payload: exclude });
+  }
+
   setTransferFilter(filter) {
     this.dispatch({ type: 'SET_TRANSFER_FILTER', payload: filter });
   }
@@ -787,6 +815,8 @@ export class ReplenishmentStore {
   }
 
   resetSearchFilters() {
+    // Reset only UI search filters that operate on already loaded data
+    // Does NOT reset data loading parameters like materialCodeFilter, branchesEmit, etc.
     this.dispatch({ type: 'RESET_SEARCH_FILTERS' });
   }
 
@@ -808,6 +838,83 @@ export class ReplenishmentStore {
     this._cachedComputedValues.clear();
     console.log('🏪 ReplenishmentStore destroyed');
   }
+
+  // --- Filter Interaction Helper ---
+  getFilterInteractionInfo() {
+    const currentState = this._state;
+    
+    // Check if we have any active filters
+    const hasActiveSearchTerm = currentState.searchTerm && currentState.searchTerm.trim() !== '';
+    const hasActiveDestinationFilter = currentState.destinationFilter && currentState.destinationFilter !== 'all';
+    const hasOtherFilters = currentState.transferFilter !== 'all' || 
+                           currentState.abcFilter !== 'all' || 
+                           currentState.blacklistedFilter !== 'all' || 
+                           currentState.lichidareFilter !== 'all' ||
+                           Object.keys(currentState.numberFilters).some(key => currentState.numberFilters[key] !== 'all');
+
+    if (!hasActiveSearchTerm && !hasActiveDestinationFilter && !hasOtherFilters) {
+      return {
+        hasFilters: false,
+        message: null,
+        suggestedAction: null
+      };
+    }
+
+    // Get current filtered data count
+    const filteredData = this.getFilteredData();
+    const totalData = currentState.data.length;
+    
+    if (filteredData.length === 0 && totalData > 0) {
+      // No results with current filters
+      let message = 'No results found with current filters.';
+      let suggestedAction = 'reset_all';
+      
+      if (hasActiveSearchTerm && hasActiveDestinationFilter) {
+        message = `No items match "${currentState.searchTerm}" in destination "${currentState.destinationFilter}".`;
+        suggestedAction = 'reset_search_or_destination';
+      } else if (hasActiveSearchTerm) {
+        message = `No items match "${currentState.searchTerm}".`;
+        suggestedAction = 'reset_search';
+      } else if (hasActiveDestinationFilter) {
+        message = `No items found for destination "${currentState.destinationFilter}".`;
+        suggestedAction = 'reset_destination';
+      }
+      
+      return {
+        hasFilters: true,
+        hasResults: false,
+        message,
+        suggestedAction,
+        activeFilters: {
+          searchTerm: hasActiveSearchTerm ? currentState.searchTerm : null,
+          destinationFilter: hasActiveDestinationFilter ? currentState.destinationFilter : null,
+          hasOthers: hasOtherFilters
+        }
+      };
+    }
+    
+    return {
+      hasFilters: true,
+      hasResults: true,
+      resultCount: filteredData.length,
+      totalCount: totalData,
+      message: null,
+      activeFilters: {
+        searchTerm: hasActiveSearchTerm ? currentState.searchTerm : null,
+        destinationFilter: hasActiveDestinationFilter ? currentState.destinationFilter : null,
+        hasOthers: hasOtherFilters
+      }
+    };
+  }
+
+  // Helper methods for independent filter resets
+  resetSearchOnly() {
+    this.dispatch({ type: 'SET_SEARCH_TERM', payload: '' });
+  }
+
+  resetDestinationOnly() {
+    this.dispatch({ type: 'SET_DESTINATION_FILTER', payload: 'all' });
+  }
 }
 
 // Create and export a singleton instance
@@ -825,6 +932,7 @@ export const ActionTypes = {
   SET_CONDITION_FOR_LIMITS: 'SET_CONDITION_FOR_LIMITS',
   SET_QUERY_PANEL_VISIBLE: 'SET_QUERY_PANEL_VISIBLE',
   SET_SEARCH_TERM: 'SET_SEARCH_TERM',
+  SET_MATERIAL_CODE_FILTER: 'SET_MATERIAL_CODE_FILTER',
   SET_TRANSFER_FILTER: 'SET_TRANSFER_FILTER',
   SET_DESTINATION_FILTER: 'SET_DESTINATION_FILTER',
   SET_ABC_FILTER: 'SET_ABC_FILTER',

@@ -274,7 +274,9 @@ class s1Service {
         setConditionForNecesar: data.setConditionForNecesar !== undefined ? data.setConditionForNecesar : true,
         setConditionForLimits: data.setConditionForLimits !== undefined ? data.setConditionForLimits : true,
         fiscalYear: data.fiscalYear || new Date().getFullYear(),
-        company: data.company
+        company: data.company,
+        materialCodeFilter: data.materialCodeFilter || null,  // Add material code filter parameter
+        materialCodeFilterExclude: data.materialCodeFilterExclude !== undefined ? data.materialCodeFilterExclude : false  // Add material code filter exclude parameter
       },
       json: true,
       gzip: true,

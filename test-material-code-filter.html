@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Material Code Filter Test</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding: 20px;
+        }
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .code-block {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            white-space: pre-wrap;
+        }
+        .status-badge {
+            font-size: 0.8em;
+            padding: 4px 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1 class="mb-4">
+            <i class="bi bi-filter-circle"></i>
+            Material Code Filter Test
+        </h1>
+
+        <!-- Store State Display -->
+        <div class="test-section">
+            <h3><i class="bi bi-database"></i> Store State</h3>
+            <div id="storeState" class="code-block"></div>
+        </div>
+
+        <!-- Query Panel Test -->
+        <div class="test-section">
+            <h3><i class="bi bi-search"></i> Query Panel Filter Test</h3>
+            <div id="queryPanelContainer"></div>
+        </div>
+
+        <!-- Test Controls -->
+        <div class="test-section">
+            <h3><i class="bi bi-gear"></i> Test Controls</h3>
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <button class="btn btn-primary w-100" onclick="testMaterialCodeFilter('ABC')">
+                        Test Filter "ABC"
+                    </button>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-primary w-100" onclick="testMaterialCodeFilter('XYZ')">
+                        Test Filter "XYZ"
+                    </button>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-secondary w-100" onclick="testMaterialCodeFilter('')">
+                        Clear Filter
+                    </button>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-info w-100" onclick="simulateDataLoad()">
+                        Simulate Data Load
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Results -->
+        <div class="test-section">
+            <h3><i class="bi bi-check-circle"></i> Test Results</h3>
+            <div id="testResults"></div>
+        </div>
+    </div>
+
+    <!-- Import modules -->
+    <script type="module">
+        import { replenishmentStore } from './public/stores/replenishment-store.js';
+        import './public/components/query-panel.js';
+
+        // Make store globally available for testing
+        window.replenishmentStore = replenishmentStore;
+
+        // Initialize test data
+        const testBranches = {
+            '1200': 'CLUJ',
+            '1300': 'CONSTANTA', 
+            '1400': 'GALATI',
+            '1500': 'PLOIESTI'
+        };
+
+        // Set up initial store state
+        replenishmentStore.setBranchesEmit('1200');
+        replenishmentStore.setSelectedDestBranches(['1300', '1400']);
+
+        // Subscribe to store changes
+        replenishmentStore.subscribe((newState, previousState, action) => {
+            console.log('Store updated:', action.type, newState);
+            updateStoreDisplay();
+            updateTestResults(action);
+        });
+
+        // Create query panel component
+        function initializeQueryPanel() {
+            const container = document.getElementById('queryPanelContainer');
+            container.innerHTML = '<query-panel></query-panel>';
+            
+            const queryPanel = container.querySelector('query-panel');
+            queryPanel.branches = testBranches;
+        }
+
+        // Update store state display
+        function updateStoreDisplay() {
+            const state = replenishmentStore.getState();
+            document.getElementById('storeState').textContent = JSON.stringify({
+                branchesEmit: state.branchesEmit,
+                selectedDestBranches: state.selectedDestBranches,
+                materialCodeFilter: state.materialCodeFilter,
+                setConditionForNecesar: state.setConditionForNecesar,
+                setConditionForLimits: state.setConditionForLimits,
+                loading: state.loading
+            }, null, 2);
+        }
+
+        // Update test results
+        function updateTestResults(action) {
+            const resultsDiv = document.getElementById('testResults');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            let statusClass = 'success';
+            if (action.type.includes('ERROR')) statusClass = 'danger';
+            if (action.type.includes('LOADING')) statusClass = 'warning';
+            
+            const resultHtml = `
+                <div class="alert alert-${statusClass} alert-dismissible">
+                    <span class="badge bg-${statusClass} status-badge me-2">${timestamp}</span>
+                    <strong>${action.type}</strong>
+                    ${action.payload !== undefined ? `<br><small>Payload: ${JSON.stringify(action.payload)}</small>` : ''}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            resultsDiv.insertAdjacentHTML('afterbegin', resultHtml);
+        }
+
+        // Test functions - make them globally available
+        window.testMaterialCodeFilter = function(filterValue) {
+            console.log(`Testing material code filter with value: "${filterValue}"`);
+            replenishmentStore.setMaterialCodeFilter(filterValue);
+        };
+
+        window.simulateDataLoad = function() {
+            const state = replenishmentStore.getState();
+            console.log('Simulating data load with current state:', {
+                branchesEmit: state.branchesEmit,
+                selectedDestBranches: state.selectedDestBranches,
+                materialCodeFilter: state.materialCodeFilter,
+                setConditionForNecesar: state.setConditionForNecesar,
+                setConditionForLimits: state.setConditionForLimits
+            });
+            
+            // Show what would be sent to API
+            const apiPayload = {
+                clientID: 'test-token',
+                branchesEmit: state.branchesEmit,
+                branchesDest: state.selectedDestBranches.join(','),
+                fiscalYear: state.fiscalYear,
+                company: 1000,
+                setConditionForNecesar: state.setConditionForNecesar,
+                setConditionForLimits: state.setConditionForLimits,
+                materialCodeFilter: state.materialCodeFilter || null
+            };
+            
+            const resultsDiv = document.getElementById('testResults');
+            resultsDiv.insertAdjacentHTML('afterbegin', `
+                <div class="alert alert-info alert-dismissible">
+                    <span class="badge bg-info status-badge me-2">${new Date().toLocaleTimeString()}</span>
+                    <strong>API Payload</strong>
+                    <pre class="mb-0 mt-2"><code>${JSON.stringify(apiPayload, null, 2)}</code></pre>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `);
+        };
+
+        // Initialize the test
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeQueryPanel();
+            updateStoreDisplay();
+        });
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

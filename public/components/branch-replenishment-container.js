@@ -25,6 +25,7 @@ export class BranchReplenishmentContainer extends LitElement {
       loading: { type: Boolean },
       error: { type: String },
       searchTerm: { type: String },
+      materialCodeFilter: { type: String },
       setConditionForNecesar: { type: Boolean },
       setConditionForLimits: { type: Boolean },
       selectedReplenishmentStrategy: { type: String },
@@ -85,6 +86,7 @@ export class BranchReplenishmentContainer extends LitElement {
     this.loading = state.loading;
     this.error = state.error;
     this.searchTerm = state.searchTerm;
+    this.materialCodeFilter = state.materialCodeFilter;
     this.setConditionForNecesar = state.setConditionForNecesar;
     this.setConditionForLimits = state.setConditionForLimits;
     this.selectedReplenishmentStrategy = state.selectedReplenishmentStrategy;
@@ -124,7 +126,9 @@ export class BranchReplenishmentContainer extends LitElement {
         fiscalYear: currentState.fiscalYear,
         company: 1000, // Assuming company is fixed or add as property
         setConditionForNecesar: currentState.setConditionForNecesar,
-        setConditionForLimits: currentState.setConditionForLimits
+        setConditionForLimits: currentState.setConditionForLimits,
+        materialCodeFilter: currentState.materialCodeFilter || null,  // Add material code filter
+        materialCodeFilterExclude: currentState.materialCodeFilterExclude !== undefined ? currentState.materialCodeFilterExclude : false  // Add material code filter exclude
       });
 
       // Set data in store

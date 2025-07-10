@@ -12,6 +12,8 @@ export class QueryPanel extends LitElement {
       setConditionForNecesar: { type: Boolean },
       setConditionForLimits: { type: Boolean },
       loading: { type: Boolean },
+      materialCodeFilter: { type: String },  // Add material code filter property
+      materialCodeFilterExclude: { type: Boolean },  // Add material code filter exclude property
       
       // Internal UI state for dropdown
       showDestDropdown: { type: Boolean, state: true },
@@ -34,6 +36,8 @@ export class QueryPanel extends LitElement {
     this.setConditionForNecesar = true;
     this.setConditionForLimits = true;
     this.loading = false;
+    this.materialCodeFilter = '';  // Initialize material code filter
+    this.materialCodeFilterExclude = false;  // Initialize material code filter exclude
     
     // Set up store context consumer
     this._storeConsumer = new ContextConsumer(this, {
@@ -63,6 +67,8 @@ export class QueryPanel extends LitElement {
     this.setConditionForNecesar = state.setConditionForNecesar;
     this.setConditionForLimits = state.setConditionForLimits;
     this.loading = state.loading;
+    this.materialCodeFilter = state.materialCodeFilter;  // Sync material code filter
+    this.materialCodeFilterExclude = state.materialCodeFilterExclude;  // Sync material code filter exclude
   }
 
   disconnectedCallback() {
@@ -91,6 +97,10 @@ export class QueryPanel extends LitElement {
         this._store.setConditionForNecesar(value);
       } else if (property === 'setConditionForLimits') {
         this._store.setConditionForLimits(value);
+      } else if (property === 'materialCodeFilter') {
+        this._store.setMaterialCodeFilter(value);
+      } else if (property === 'materialCodeFilterExclude') {
+        this._store.setMaterialCodeFilterExclude(value);
       }
     } else {
       console.warn('Store not available yet for QueryPanel');
@@ -217,6 +227,39 @@ export class QueryPanel extends LitElement {
         <div class="card-body p-3">
           <div class="row g-2">
             <div class="col-lg-9">
+              <!-- Material Code Filter Row -->
+              <div class="row g-2 align-items-center mb-2">
+                <div class="col-md-4">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text">Material Code</span>
+                    <input type="text" class="form-control" 
+                           placeholder="Filter by material code..."
+                           .value=${this.materialCodeFilter}
+                           @input=${e => this._dispatchUpdate('materialCodeFilter', e.target.value)}
+                           ?disabled=${this.loading}
+                           title="Filter materials by code (starts with)">
+                  </div>
+                </div>
+                <div class="col-md-3">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="materialCodeFilterExclude"
+                           .checked=${this.materialCodeFilterExclude}
+                           @change=${e => this._dispatchUpdate('materialCodeFilterExclude', e.target.checked)}
+                           ?disabled=${this.loading || !this.materialCodeFilter}
+                           title="Toggle between include and exclude mode">
+                    <label class="form-check-label small" for="materialCodeFilterExclude">
+                      ${this.materialCodeFilterExclude ? 'Exclude' : 'Include'}
+                    </label>
+                  </div>
+                </div>
+                <div class="col-md-5">
+                  <small class="text-muted">
+                    <i class="bi bi-info-circle me-1"></i>
+                    ${this.materialCodeFilterExclude ? 'Exclude' : 'Include'} materials ${this.materialCodeFilter ? 'starting with "' + this.materialCodeFilter + '"' : 'matching the filter'}
+                  </small>
+                </div>
+              </div>
+              <!-- Source/Destination Row -->
               <div class="row g-2 align-items-center">
                 <div class="col-md-4">
                   <div class="input-group input-group-sm">
