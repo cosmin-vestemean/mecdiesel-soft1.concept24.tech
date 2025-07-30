@@ -39,7 +39,7 @@ BEGIN
     SELECT 
         A.mtrl, 
         C.BRANCH AS branchFrom,
-        C.BRANCH AS branchTo,
+        B.BRANCHSEC AS branchTo,  -- Changed: Now using BRANCHSEC as branchTo
         SUM((ISNULL(A.QTY1,0)) - (ISNULL(A.QTY1COV,0) + ISNULL(A.QTY1CANC,0)))
     FROM MTRLINES A 
     INNER JOIN findoc c ON (c.findoc=a.findoc AND c.company=a.company AND c.sosource=a.sosource)
@@ -52,12 +52,16 @@ BEGIN
         AND c.iscancel = 0
         AND c.sosource = 1151
         AND c.FPRMS = 3130
-        AND C.BRANCH IN (SELECT branch FROM #DestBranches) -- dest branches
-    GROUP BY A.mtrl, C.BRANCH;
+        AND B.BRANCHSEC IN (SELECT branch FROM #DestBranches) -- Changed: Now filtering by destination branches
+    GROUP BY A.mtrl, C.BRANCH, B.BRANCHSEC;  -- Changed: Added B.BRANCHSEC to GROUP BY
 
     -- Create index on the pending orders temp table
     CREATE NONCLUSTERED INDEX IX_PendingOrders_MTRL_BRANCHTO 
     ON #PendingOrders(mtrl, branchTo);
+    
+    -- Add additional index for branchFrom lookups
+    CREATE NONCLUSTERED INDEX IX_PendingOrders_MTRL_BRANCHFROM 
+    ON #PendingOrders(mtrl, branchFrom);
 
     -- Create temp table for pre-calculated unreceived transfers
     CREATE TABLE #UnreceivedTransfers (
