@@ -52,7 +52,7 @@ BEGIN
         AND c.iscancel = 0
         AND c.sosource = 1151
         AND c.FPRMS = 3130
-        AND C.BRANCH IN (SELECT branch FROM #EmitBranches) -- Use emit branches instead of dest branches
+        AND C.BRANCH IN (SELECT branch FROM #DestBranches) -- dest branches
     GROUP BY A.mtrl, C.BRANCH;
 
     -- Create index on the pending orders temp table
