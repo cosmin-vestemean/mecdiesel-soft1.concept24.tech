@@ -68,6 +68,10 @@ export class ReplenishmentStore {
       selectedReplenishmentStrategy: 'none',
       isSuccessiveStrategy: true,
       
+      // Debug state
+      debugMode: false,
+      diagnostics: [],
+      
       // Cached computed values
       uniqueDestinations: [],
       
@@ -270,6 +274,18 @@ export class ReplenishmentStore {
 
       case 'SET_SUCCESSIVE_STRATEGY':
         newState.isSuccessiveStrategy = Boolean(action.payload);
+        break;
+
+      case 'SET_DEBUG_MODE':
+        newState.debugMode = Boolean(action.payload);
+        break;
+
+      case 'SET_DIAGNOSTICS':
+        newState.diagnostics = Array.isArray(action.payload) ? action.payload : [];
+        break;
+
+      case 'CLEAR_DIAGNOSTICS':
+        newState.diagnostics = [];
         break;
 
       case 'RESET_SEARCH_FILTERS':
@@ -915,10 +931,37 @@ export class ReplenishmentStore {
   resetDestinationOnly() {
     this.dispatch({ type: 'SET_DESTINATION_FILTER', payload: 'all' });
   }
+
+  // --- Debug & Diagnostics Methods ---
+  setDebugMode(enabled) {
+    this.dispatch({ type: 'SET_DEBUG_MODE', payload: enabled });
+  }
+
+  setDiagnostics(diagnostics) {
+    this.dispatch({ type: 'SET_DIAGNOSTICS', payload: diagnostics });
+  }
+
+  clearDiagnostics() {
+    this.dispatch({ type: 'CLEAR_DIAGNOSTICS' });
+  }
+
+  getDiagnostics() {
+    return this._state.diagnostics;
+  }
+
+  isDebugMode() {
+    return this._state.debugMode;
+  }
 }
 
 // Create and export a singleton instance
 export const replenishmentStore = new ReplenishmentStore();
+
+// Expose store globally for debugging in browser console
+if (typeof window !== 'undefined') {
+  window.replenishmentStore = replenishmentStore;
+  console.log('🌍 replenishmentStore exposed globally for debugging');
+}
 
 // Export action types for external use
 export const ActionTypes = {
@@ -942,6 +985,9 @@ export const ActionTypes = {
   SET_SORTING: 'SET_SORTING',
   SET_REPLENISHMENT_STRATEGY: 'SET_REPLENISHMENT_STRATEGY',
   SET_SUCCESSIVE_STRATEGY: 'SET_SUCCESSIVE_STRATEGY',
+  SET_DEBUG_MODE: 'SET_DEBUG_MODE',
+  SET_DIAGNOSTICS: 'SET_DIAGNOSTICS',
+  CLEAR_DIAGNOSTICS: 'CLEAR_DIAGNOSTICS',
   RESET_SEARCH_FILTERS: 'RESET_SEARCH_FILTERS',
   RESET_ALL_FILTERS: 'RESET_ALL_FILTERS',
   RESET_DATA: 'RESET_DATA',

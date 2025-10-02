@@ -246,8 +246,8 @@ BEGIN
                     c.branch branchE,
                     a.mtrl,
                     ISNULL(SUM(ISNULL(a.qty1, 0)), 0) CantitateE,
-                    bl.MaxLimit MaxE,
-                    bl.MinLimit MinE
+                    ISNULL(bl.MaxLimit, 0) MaxE,
+                    ISNULL(bl.MinLimit, 0) MinE
                 FROM mtrfindata a
                 INNER JOIN whouse b ON (b.whouse = a.whouse)
                 INNER JOIN branch c ON (
@@ -257,7 +257,9 @@ BEGIN
                     AND c.isactive = 1
                 )
                 INNER JOIN mtrl d ON (d.mtrl = a.mtrl)
-                INNER JOIN #BranchLimits bl ON (a.mtrl = bl.mtrl AND c.branch = bl.branch)
+                -- LEFT JOIN: Emit branches can have materials without limits configured
+                -- Available quantity = Stock - ISNULL(MinMax, 0) - Reservations
+                LEFT JOIN #BranchLimits bl ON (a.mtrl = bl.mtrl AND c.branch = bl.branch)
                 WHERE 
                     a.company = @company
                     AND a.FISCPRD = @fiscalYear
@@ -330,10 +332,11 @@ BEGIN
              ELSE (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(dm.MaxE, 0)) 
         END disp_max_emit,
         brD.name Destinatie,
-        CASE WHEN ml.cccisblacklisted IS NULL THEN '-' ELSE CASE WHEN ml.cccisblacklisted = 0 THEN 'Nu' ELSE 'Da' END END Blacklisted,
-        CASE WHEN m.cccitemoutlet IS NULL THEN '-' ELSE CASE WHEN m.cccitemoutlet = 0 THEN 'Nu' ELSE 'Da' END END InLichidare,        CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END stoc_dest,
-        bl_dest.MinLimit min_dest,
-        bl_dest.MaxLimit max_dest,
+        CASE WHEN ISNULL(ml.cccisblacklisted, 0) = 0 THEN 'Nu' ELSE 'Da' END Blacklisted,
+        CASE WHEN ISNULL(m.cccitemoutlet, 0) = 0 THEN 'Nu' ELSE 'Da' END InLichidare,
+        CASE WHEN cte.CantitateD IS NULL THEN 0 ELSE cte.CantitateD END stoc_dest,
+        ISNULL(bl_dest.MinLimit, 0) min_dest,
+        ISNULL(bl_dest.MaxLimit, 0) max_dest,
         ISNULL(abc_data.salesperc, 0) AS salesperc,
         ISNULL(abc_data.abc, '') AS abc_class,
         ISNULL(po.qty, 0) comenzi,
@@ -408,13 +411,13 @@ BEGIN
         AND br.company = @company 
         AND br.isactive = 1
     )
-    INNER JOIN MTRBRNLIMITS ml ON (
+    LEFT JOIN MTRBRNLIMITS ml ON (
         ml.mtrl = dm.mtrl 
         AND ml.branch = br.branch 
         AND ml.company = br.company 
         AND ml.company = @company
     )
-    INNER JOIN #BranchLimits bl_dest ON (
+    LEFT JOIN #BranchLimits bl_dest ON (
         bl_dest.mtrl = dm.mtrl 
         AND bl_dest.branch = br.branch
     )    LEFT JOIN (
@@ -438,7 +441,7 @@ BEGIN
     WHERE (@setConditionForLimits = 0 OR (bl_dest.MaxLimit > 0 OR bl_dest.MinLimit > 0))
     AND (
         @setConditionForNecesar = 0
-        OR (bl_dest.MinNecessity > 0 OR bl_dest.MaxNecessity > 0)
+        OR (ISNULL(bl_dest.MinNecessity, 0) > 0 OR ISNULL(bl_dest.MaxNecessity, 0) > 0)
     )
     AND (@materialCodeFilter IS NULL OR (
         (@materialCodeFilterExclude = 0 AND m.Code LIKE @materialCodeFilter + '%') OR

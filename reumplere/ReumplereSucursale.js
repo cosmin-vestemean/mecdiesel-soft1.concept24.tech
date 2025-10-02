@@ -11,6 +11,7 @@ function getAnalytics(apiObj) {
   var company = apiObj.company || X.SYS.COMPANY;
   var materialCodeFilter = apiObj.materialCodeFilter || null;  // Add material code filter parameter
   var materialCodeFilterExclude = apiObj.hasOwnProperty('materialCodeFilterExclude') ? apiObj.materialCodeFilterExclude : false;  // Add material code filter exclude parameter
+  var debug = apiObj.hasOwnProperty('debug') ? apiObj.debug : false;  // Debug mode parameter
 
   const startT = new Date().getTime();
 
@@ -38,6 +39,7 @@ function getAnalytics(apiObj) {
     ", @materialCodeFilterExclude = " +
     (materialCodeFilterExclude ? "1" : "0");
 
+  // Execute main query to get data
   var ds = X.GETSQLDATASET(qry, null);
 
   const endT = new Date().getTime();
@@ -46,7 +48,38 @@ function getAnalytics(apiObj) {
   var j = ds.JSON;
   //replace null with empty string
   j = j.replace(/"null"/g, '""');
-  var obj = JSON.parse(j);
-  obj.duration = d;
+  var rows = JSON.parse(j);
+  
+  // Build response object
+  var obj = {
+    rows: rows,
+    diagnostics: [],
+    duration: d,
+    debug: debug
+  };
+
+  // If debug mode is enabled, fetch diagnostics separately
+  if (debug) {
+    try {
+      const qryDiag = 
+        "EXEC sp_GetMtrlsDiagnostics " +
+        "@branchesEmit = '" + branchesEmit + "', " +
+        "@branchesDest = '" + branchesDest + "', " +
+        "@company = " + company + ", " +
+        "@setConditionForNecesar = " + (setConditionForNecesar ? "1" : "0") + ", " +
+        "@setConditionForLimits = " + (setConditionForLimits ? "1" : "0") + ", " +
+        "@fiscalYear = " + fiscalYear +
+        (materialCodeFilter ? ", @materialCodeFilter = '" + materialCodeFilter + "'" : "") +
+        ", @materialCodeFilterExclude = " + (materialCodeFilterExclude ? "1" : "0");
+      
+      var dsDiag = X.GETSQLDATASET(qryDiag, null);
+      var jDiag = dsDiag.JSON.replace(/"null"/g, '""');
+      obj.diagnostics = JSON.parse(jDiag);
+    } catch (e) {
+      obj.diagnostics = [];
+      obj.diagnosticError = "Eroare la încărcarea diagnosticelor: " + e.message;
+    }
+  }
+  
   return obj;
 }

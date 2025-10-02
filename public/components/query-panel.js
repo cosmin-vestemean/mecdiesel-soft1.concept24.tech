@@ -14,6 +14,7 @@ export class QueryPanel extends LitElement {
       loading: { type: Boolean },
       materialCodeFilter: { type: String },  // Add material code filter property
       materialCodeFilterExclude: { type: Boolean },  // Add material code filter exclude property
+      debugMode: { type: Boolean },  // Add debug mode property
       
       // Internal UI state for dropdown
       showDestDropdown: { type: Boolean, state: true },
@@ -38,6 +39,7 @@ export class QueryPanel extends LitElement {
     this.loading = false;
     this.materialCodeFilter = '';  // Initialize material code filter
     this.materialCodeFilterExclude = false;  // Initialize material code filter exclude
+    this.debugMode = false;  // Initialize debug mode
     
     // Set up store context consumer
     this._storeConsumer = new ContextConsumer(this, {
@@ -69,6 +71,13 @@ export class QueryPanel extends LitElement {
     this.loading = state.loading;
     this.materialCodeFilter = state.materialCodeFilter;  // Sync material code filter
     this.materialCodeFilterExclude = state.materialCodeFilterExclude;  // Sync material code filter exclude
+    
+    const oldDebugMode = this.debugMode;
+    this.debugMode = state.debugMode;  // Sync debug mode
+    
+    if (oldDebugMode !== this.debugMode) {
+      console.log('🐛 QueryPanel: debugMode changed from', oldDebugMode, 'to', this.debugMode);
+    }
   }
 
   disconnectedCallback() {
@@ -101,6 +110,12 @@ export class QueryPanel extends LitElement {
         this._store.setMaterialCodeFilter(value);
       } else if (property === 'materialCodeFilterExclude') {
         this._store.setMaterialCodeFilterExclude(value);
+      } else if (property === 'debugMode') {
+        this._store.setDebugMode(value);
+        // Clear diagnostics when disabling debug mode
+        if (!value) {
+          this._store.clearDiagnostics();
+        }
       }
     } else {
       console.warn('Store not available yet for QueryPanel');
@@ -302,6 +317,16 @@ export class QueryPanel extends LitElement {
                            @change=${e => this._dispatchUpdate('setConditionForLimits', e.target.checked)}
                            ?disabled=${this.loading}>
                     <label class="form-check-label small" for="setConditionForLimits">Limits</label>
+                  </div>
+                  <div class="form-check form-switch me-3" data-bs-toggle="tooltip" data-bs-placement="top"
+                       title="Debug mode: Shows detailed diagnostics about excluded materials">
+                    <input class="form-check-input" type="checkbox" id="debugMode"
+                           .checked=${this.debugMode}
+                           @change=${e => this._dispatchUpdate('debugMode', e.target.checked)}
+                           ?disabled=${this.loading}>
+                    <label class="form-check-label small" for="debugMode">
+                      Debug
+                    </label>
                   </div>
                    <button class="btn btn-sm btn-primary" @click=${() => this._emitAction('load-data')} ?disabled=${this.loading}>
                       ${this.loading ?

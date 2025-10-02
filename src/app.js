@@ -263,6 +263,9 @@ class s1Service {
   }
 
   async getAnalyticsForBranchReplenishment(data, params) {
+    // Increase timeout when debug mode is enabled (diagnostic queries take longer)
+    const timeout = data.debug ? 300000 : 120000; // 5 minutes for debug, 2 minutes for normal
+    
     return request({
       method: "POST",
       uri: "/JS/ReumplereSucursale/getAnalytics",
@@ -276,10 +279,12 @@ class s1Service {
         fiscalYear: data.fiscalYear || new Date().getFullYear(),
         company: data.company,
         materialCodeFilter: data.materialCodeFilter || null,  // Add material code filter parameter
-        materialCodeFilterExclude: data.materialCodeFilterExclude !== undefined ? data.materialCodeFilterExclude : false  // Add material code filter exclude parameter
+        materialCodeFilterExclude: data.materialCodeFilterExclude !== undefined ? data.materialCodeFilterExclude : false,  // Add material code filter exclude parameter
+        debug: data.debug !== undefined ? data.debug : false  // Debug mode parameter
       },
       json: true,
       gzip: true,
+      timeout: timeout  // Dynamic timeout based on debug mode
     });
   }
 

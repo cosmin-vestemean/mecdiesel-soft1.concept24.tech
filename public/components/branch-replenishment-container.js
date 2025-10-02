@@ -13,6 +13,7 @@ import './manipulation-panel.js';
 import './strategy-panel.js'; // Will be used as quick-panel
 import './data-table.js';
 import './s1-transfer-modal.js';
+import './diagnostic-modal.js';
 
 export class BranchReplenishmentContainer extends LitElement {
   static get properties() {
@@ -36,6 +37,8 @@ export class BranchReplenishmentContainer extends LitElement {
       lichidareFilter: { type: String },
       isSuccessiveStrategy: { type: Boolean },
       queryPanelVisible: { type: Boolean },
+      debugMode: { type: Boolean },
+      diagnostics: { type: Array },
 
       // Local properties
       branches: { type: Object },
@@ -97,6 +100,8 @@ export class BranchReplenishmentContainer extends LitElement {
     this.lichidareFilter = state.lichidareFilter;
     this.isSuccessiveStrategy = state.isSuccessiveStrategy;
     this.queryPanelVisible = state.queryPanelVisible;
+    this.debugMode = state.debugMode;
+    this.diagnostics = state.diagnostics;
     
     console.log('📦 Container synced from store - branchesEmit:', this.branchesEmit, 'selectedDestBranches:', this.selectedDestBranches);
   }
@@ -108,6 +113,9 @@ export class BranchReplenishmentContainer extends LitElement {
     
     // Only reset search-related filters, not all filters
     replenishmentStore.resetSearchFilters();
+    
+    // Clear previous diagnostics
+    replenishmentStore.clearDiagnostics();
     
     try {
       const currentState = replenishmentStore.getState();
@@ -128,11 +136,41 @@ export class BranchReplenishmentContainer extends LitElement {
         setConditionForNecesar: currentState.setConditionForNecesar,
         setConditionForLimits: currentState.setConditionForLimits,
         materialCodeFilter: currentState.materialCodeFilter || null,  // Add material code filter
-        materialCodeFilterExclude: currentState.materialCodeFilterExclude !== undefined ? currentState.materialCodeFilterExclude : false  // Add material code filter exclude
+        materialCodeFilterExclude: currentState.materialCodeFilterExclude !== undefined ? currentState.materialCodeFilterExclude : false,  // Add material code filter exclude
+        debug: currentState.debugMode  // Add debug mode parameter
       });
 
+      // Handle response structure (backward compatibility)
+      let dataRows, diagnostics;
+      
+      if (Array.isArray(response)) {
+        // Old format (backward compatibility)
+        dataRows = response;
+        diagnostics = [];
+      } else if (response.rows && Array.isArray(response.rows)) {
+        // New format with diagnostics
+        dataRows = response.rows;
+        diagnostics = response.diagnostics || [];
+      } else {
+        // Unexpected format
+        throw new Error('Invalid response format from server');
+      }
+
       // Set data in store
-      replenishmentStore.setData(response);
+      replenishmentStore.setData(dataRows);
+      
+      // Set diagnostics if debug mode was enabled (always set, even if empty, to clear previous diagnostics)
+      if (currentState.debugMode) {
+        replenishmentStore.setDiagnostics(diagnostics);
+        console.log(`🐛 Debug: ${diagnostics.length} diagnostic entries received`);
+        
+        if (diagnostics.length > 0) {
+          console.log('🐛 Debug: First diagnostic entry:', diagnostics[0]);
+        }
+      } else {
+        // Clear diagnostics if debug mode is disabled
+        replenishmentStore.setDiagnostics([]);
+      }
 
       // Hide query panel after successfully loading data
       replenishmentStore.setQueryPanelVisible(false);
@@ -142,7 +180,8 @@ export class BranchReplenishmentContainer extends LitElement {
         bubbles: true,
         composed: true,
         detail: { 
-          dataCount: Array.isArray(response) ? response.length : 0,
+          dataCount: dataRows.length,
+          diagnosticsCount: diagnostics.length,
           filtersReset: true
         }
       }));
@@ -158,6 +197,7 @@ export class BranchReplenishmentContainer extends LitElement {
         composed: true,
         detail: { 
           dataCount: 0,
+          diagnosticsCount: 0,
           filtersReset: true,
           error: error.message
         }
@@ -1024,6 +1064,21 @@ export class BranchReplenishmentContainer extends LitElement {
     }
   }
 
+  // --- Diagnostic Modal Methods ---
+  
+  /**
+   * Show diagnostic modal with exclusion reasons
+   */
+  _showDiagnosticModal() {
+    const currentState = replenishmentStore.getState();
+    const modal = document.querySelector('diagnostic-modal');
+    if (modal) {
+      modal.show(currentState.diagnostics);
+    } else {
+      console.error('Diagnostic modal not found in DOM');
+    }
+  }
+
 
   // --- S1 Authentication Methods ---
   
@@ -1226,6 +1281,7 @@ export class BranchReplenishmentContainer extends LitElement {
     const totalCount = this.data.length;
     const filteredCount = currentFilteredData.length;
     console.log('Render - filtered count:', filteredCount, 'total:', totalCount);
+    console.log('🐛 Render - diagnostics:', this.diagnostics, 'debugMode:', this.debugMode);
 
     return html`
       <div class="container-fluid mt-2">
@@ -1233,6 +1289,19 @@ export class BranchReplenishmentContainer extends LitElement {
                             ${this.error}
                             <button type="button" class="btn-close" @click=${() => this.error = ''} aria-label="Close"></button>
                           </div>` : ''}
+
+        ${this.diagnostics && this.diagnostics.length > 0 ? html`
+          <div class="alert alert-warning alert-dismissible fade show d-flex align-items-center" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <div class="flex-grow-1">
+              <strong>Diagnostic:</strong> ${this.diagnostics.length} materiale au fost excluse din rezultate.
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-warning me-2" @click=${this._showDiagnosticModal}>
+              <i class="fas fa-search me-1"></i> Afișează Diagnostic
+            </button>
+            <button type="button" class="btn-close" @click=${() => replenishmentStore.clearDiagnostics()} aria-label="Close"></button>
+          </div>
+        ` : ''}
 
         <!-- Query panel with animation for showing/hiding -->
         <div class="query-panel-container ${this.queryPanelVisible ? 'visible' : 'hidden'}">
@@ -1288,6 +1357,9 @@ export class BranchReplenishmentContainer extends LitElement {
           }}
           .loading=${this.loading}>
         </replenishment-data-table>
+
+        <!-- Diagnostic Modal -->
+        <diagnostic-modal></diagnostic-modal>
       </div>
     `;
   }
