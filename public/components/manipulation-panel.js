@@ -232,7 +232,7 @@ export class ManipulationPanel extends LitElement {
     return html`
       <div class="manipulation-panel">
         <!-- Main Controls Row -->
-        <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-1">
           <div class="d-flex gap-2 flex-grow-1">
             <div class="input-group input-group-sm search-input-group">
               <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>

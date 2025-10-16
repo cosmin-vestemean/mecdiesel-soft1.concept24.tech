@@ -238,8 +238,8 @@ export class QueryPanel extends LitElement {
     const allSelected = destCount > 0 && destCount === totalBranches;
 
     return html`
-      <div class="card mb-3 border-light shadow-sm query-panel-card">
-        <div class="card-body p-3">
+      <div class="card mb-2 border-light shadow-sm query-panel-card">
+        <div class="card-body p-2">
           <div class="row g-2">
             <div class="col-lg-9">
               <!-- Material Code Filter Row -->

@@ -71,129 +71,126 @@
       </div>
     </div>
 
-    <!-- Header Toggle Button - Fixed Position - Hidden until after login -->
-    <div id="headerToggle" class="header-toggle-btn btn-primary d-none" title="Toggle Header">
-      <i class="fas fa-chevron-up"></i>
+    <!-- Header - Initially hidden until login -->
+    <div id="header" class="d-flex flex-column flex-md-row sticky-top bg-white w-100 mb-2 d-none">
+      <div class="col-12 col-md-2 d-flex align-items-center pe-5">
+        <a href="https://www.mecdiesel.ro" target="_blank" class="text-decoration-none">
+          <img
+            src="https://dubhegroup.ro/images/settings/wqGVMB1HaH8amjNIDfuih0A9sBRD0F2lcmKx4yzU.png"
+            alt="MEC Diesel Logo"
+            class="img-fluid"
+            height="50"
+            loading="lazy"
+          />
+        </a>
+      </div>
+      <div class="col-12 col-md-10">
+        <!-- App Level Navigation -->
+        <div class="app-selector mb-2">
+          <div class="btn-group btn-group-sm" role="group" aria-label="Application selector">
+            <button type="button" class="btn btn-sm btn-outline-primary app-btn active" data-app="italy-sync">
+              <i class="fas fa-exchange-alt me-1"></i>Italy Sync
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary app-btn" data-app="conversie-auto">
+              <i class="fas fa-cogs me-1"></i>Conversie Auto
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary app-btn" data-app="print-config">
+              <i class="fas fa-print me-1"></i>Print Config
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary app-btn" data-app="achizitii">
+              <i class="fas fa-truck me-1"></i>Achizitii
+            </button>
+          </div>
+        </div>
+
+        <!-- Sub-app Navigation for Italy Sync -->
+        <ul class="nav nav-tabs sub-nav" id="italySyncTabs" role="tablist" data-app="italy-sync">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="mappingsButton" data-bs-toggle="tab" type="button" role="tab">
+              Mappings <i id="mappingsReload" class="fas fa-sync reload-icon"></i>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="itemsButton" data-bs-toggle="tab" type="button" role="tab">
+              Tables <i id="itemsReload" class="fas fa-sync reload-icon"></i>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="errorsButton" data-bs-toggle="tab" type="button" role="tab">
+              Messages <i id="errorsReload" class="fas fa-sync reload-icon"></i>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="stockChangesButton" data-bs-toggle="tab" type="button" role="tab">
+              Stock changes <i id="stockChangesReload" class="fas fa-sync reload-icon"></i>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="batchButton" data-bs-toggle="tab" type="button" role="tab">
+              Batch
+            </button>
+          </li>
+        </ul>
+
+        <!-- Sub-app Navigation for Conversie Auto (no sub-tabs) -->
+        <ul class="nav nav-tabs sub-nav d-none" id="conversieAutoTabs" role="tablist" data-app="conversie-auto">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="convAutoButton" data-bs-toggle="tab" type="button" role="tab">
+              Conversie automata <i id="convAutoReload" class="fas fa-sync reload-icon"></i>
+            </button>
+          </li>
+        </ul>
+
+        <!-- Sub-app Navigation for Print Config (no sub-tabs) -->
+        <ul class="nav nav-tabs sub-nav d-none" id="printConfigTabs" role="tablist" data-app="print-config">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="printConfigButton" data-bs-toggle="tab" type="button" role="tab">
+              Print config
+            </button>
+          </li>
+        </ul>
+
+        <!-- Sub-app Navigation for Achizitii -->
+        <ul class="nav nav-tabs sub-nav d-none" id="achizitiiTabs" role="tablist" data-app="achizitii">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="necesarAchizitiiButton" data-bs-toggle="tab" type="button" role="tab">
+              Necesar achizitii
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="topAbcButton" data-bs-toggle="tab" type="button" role="tab">
+              Top ABC
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="branchReplenishButton" data-bs-toggle="tab" type="button" role="tab">
+              Branch Replenishment
+              <i class="fas fa-info-circle ms-2 text-muted" 
+                 id="branchReplenishInfoIcon"
+                 style="font-size: 0.8rem; opacity: 0.7; cursor: pointer;" 
+                 title="View documentation hub"
+                 onclick="openBranchReplenishmentDocs(event)"></i>
+            </button>
+          </li>
+        </ul>
+        
+        <div class="d-flex align-items-center mt-2 gap-2" id="contextualControls">
+          <select id="tables" class="form-select w-auto">
+            <option value="mec_item">mec_item</option>
+            <option value="mec_item_producer_relation">mec_item_producer_relation</option>
+            <option value="site_product_changes_history">site_product_changes_history</option>
+            <option value="site_product_frequent_changes">site_product_frequent_changes</option>
+            <option value="mec_item_altref">mec_item_altref</option>
+            <option value="mec_ro_item_rel_supplier">mec_ro_item_rel_supplier</option>
+          </select>
+          <input id="searchItems" type="text" class="form-control" placeholder="Search items by Item or mec_code"/>
+          <input id="batchSize" type="number" class="form-control" value="50" style="width: 100px"/>
+        </div>
+      </div>
     </div>
 
     <!-- App Content Here - Initially hidden -->
     <div id="app" class="container-fluid p-1 d-none">
-      <div id="header" class="d-flex flex-column flex-md-row sticky-top bg-white w-100 mb-2">
-        <div class="col-12 col-md-2 d-flex align-items-center pe-5">
-          <a href="https://www.mecdiesel.ro" target="_blank" class="text-decoration-none">
-            <img
-              src="https://dubhegroup.ro/images/settings/wqGVMB1HaH8amjNIDfuih0A9sBRD0F2lcmKx4yzU.png"
-              alt="MEC Diesel Logo"
-              class="img-fluid"
-              height="50"
-              loading="lazy"
-            />
-          </a>
-        </div>
-        <div class="col-12 col-md-10">
-          <!-- App Level Navigation -->
-          <div class="app-selector mb-2">
-            <div class="btn-group btn-group-sm" role="group" aria-label="Application selector">
-              <button type="button" class="btn btn-sm btn-outline-primary app-btn active" data-app="italy-sync">
-                <i class="fas fa-exchange-alt me-1"></i>Italy Sync
-              </button>
-              <button type="button" class="btn btn-sm btn-outline-primary app-btn" data-app="conversie-auto">
-                <i class="fas fa-cogs me-1"></i>Conversie Auto
-              </button>
-              <button type="button" class="btn btn-sm btn-outline-primary app-btn" data-app="print-config">
-                <i class="fas fa-print me-1"></i>Print Config
-              </button>
-              <button type="button" class="btn btn-sm btn-outline-primary app-btn" data-app="achizitii">
-                <i class="fas fa-truck me-1"></i>Achizitii
-              </button>
-            </div>
-          </div>
-
-          <!-- Sub-app Navigation for Italy Sync -->
-          <ul class="nav nav-tabs sub-nav" id="italySyncTabs" role="tablist" data-app="italy-sync">
-            <li class="nav-item" role="presentation">
-              <button class="nav-link active" id="mappingsButton" data-bs-toggle="tab" type="button" role="tab">
-                Mappings <i id="mappingsReload" class="fas fa-sync reload-icon"></i>
-              </button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" id="itemsButton" data-bs-toggle="tab" type="button" role="tab">
-                Tables <i id="itemsReload" class="fas fa-sync reload-icon"></i>
-              </button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" id="errorsButton" data-bs-toggle="tab" type="button" role="tab">
-                Messages <i id="errorsReload" class="fas fa-sync reload-icon"></i>
-              </button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" id="stockChangesButton" data-bs-toggle="tab" type="button" role="tab">
-                Stock changes <i id="stockChangesReload" class="fas fa-sync reload-icon"></i>
-              </button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" id="batchButton" data-bs-toggle="tab" type="button" role="tab">
-                Batch
-              </button>
-            </li>
-          </ul>
-
-          <!-- Sub-app Navigation for Conversie Auto (no sub-tabs) -->
-          <ul class="nav nav-tabs sub-nav d-none" id="conversieAutoTabs" role="tablist" data-app="conversie-auto">
-            <li class="nav-item" role="presentation">
-              <button class="nav-link active" id="convAutoButton" data-bs-toggle="tab" type="button" role="tab">
-                Conversie automata <i id="convAutoReload" class="fas fa-sync reload-icon"></i>
-              </button>
-            </li>
-          </ul>
-
-          <!-- Sub-app Navigation for Print Config (no sub-tabs) -->
-          <ul class="nav nav-tabs sub-nav d-none" id="printConfigTabs" role="tablist" data-app="print-config">
-            <li class="nav-item" role="presentation">
-              <button class="nav-link active" id="printConfigButton" data-bs-toggle="tab" type="button" role="tab">
-                Print config
-              </button>
-            </li>
-          </ul>
-
-          <!-- Sub-app Navigation for Achizitii -->
-          <ul class="nav nav-tabs sub-nav d-none" id="achizitiiTabs" role="tablist" data-app="achizitii">
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" id="necesarAchizitiiButton" data-bs-toggle="tab" type="button" role="tab">
-                Necesar achizitii
-              </button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" id="topAbcButton" data-bs-toggle="tab" type="button" role="tab">
-                Top ABC
-              </button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link active" id="branchReplenishButton" data-bs-toggle="tab" type="button" role="tab">
-                Branch Replenishment
-                <i class="fas fa-info-circle ms-2 text-muted" 
-                   id="branchReplenishInfoIcon"
-                   style="font-size: 0.8rem; opacity: 0.7; cursor: pointer;" 
-                   title="View documentation hub"
-                   onclick="openBranchReplenishmentDocs(event)"></i>
-              </button>
-            </li>
-          </ul>
-          
-          <div class="d-flex align-items-center mt-2 gap-2" id="contextualControls">
-            <select id="tables" class="form-select w-auto">
-              <option value="mec_item">mec_item</option>
-              <option value="mec_item_producer_relation">mec_item_producer_relation</option>
-              <option value="site_product_changes_history">site_product_changes_history</option>
-              <option value="site_product_frequent_changes">site_product_frequent_changes</option>
-              <option value="mec_item_altref">mec_item_altref</option>
-              <option value="mec_ro_item_rel_supplier">mec_ro_item_rel_supplier</option>
-            </select>
-            <input id="searchItems" type="text" class="form-control" placeholder="Search items by Item or mec_code"/>
-            <input id="batchSize" type="number" class="form-control" value="50" style="width: 100px"/>
-          </div>
-        </div>
-      </div>
       <div id="mainContent" class="container-fluid d-none">
         <div id="itemsContent" class="table-responsive">
           <data-table
@@ -325,94 +322,99 @@
           <top-abc-container></top-abc-container>
         </div>
       </div>
-      <!--footer-->
-      <div id="footer">
-        <div class="row fixed-bottom bg-white border-top shadow-sm py-2">
-          <div class="col d-flex align-items-center">
-            <span class="h5 mb-0 font-monospace px-2">Dubhe DB Hub</span>
-            <!-- Item limit controls -->
-            <div class="btn-group me-3" role="group">
-              <input
-                type="radio"
-                class="btn-check"
-                name="btnradio"
-                id="items50"
-                autocomplete="off"
-              />
-              <label
-                class="btn btn-outline-primary btn-sm btn-outline-secondary"
-                for="items50"
-                >50</label
-              >
+    </div>
+    
+    <!-- Footer - Initially hidden until login -->
+    <div id="footer" class="d-none">
+      <div class="row fixed-bottom bg-white border-top shadow-sm py-2">
+        <div class="col d-flex align-items-center">
+          <span class="h5 mb-0 font-monospace px-2">Dubhe Software Hub</span>
+          <!-- Item limit controls -->
+          <div class="btn-group me-3" role="group">
+            <input
+              type="radio"
+              class="btn-check"
+              name="btnradio"
+              id="items50"
+              autocomplete="off"
+            />
+            <label
+              class="btn btn-outline-primary btn-sm btn-outline-secondary"
+              for="items50"
+              >50</label
+            >
 
-              <input
-                type="radio"
-                class="btn-check"
-                name="btnradio"
-                id="items100"
-                autocomplete="off"
-                checked
-              />
-              <label
-                class="btn btn-outline-primary btn-sm btn-outline-secondary"
-                for="items100"
-                >100</label
-              >
+            <input
+              type="radio"
+              class="btn-check"
+              name="btnradio"
+              id="items100"
+              autocomplete="off"
+              checked
+            />
+            <label
+              class="btn btn-outline-primary btn-sm btn-outline-secondary"
+              for="items100"
+              >100</label
+            >
 
-              <input
-                type="radio"
-                class="btn-check"
-                name="btnradio"
-                id="items200"
-                autocomplete="off"
-              />
-              <label
-                class="btn btn-outline-primary btn-sm btn-outline-secondary"
-                for="items200"
-                >200</label
-              >
+            <input
+              type="radio"
+              class="btn-check"
+              name="btnradio"
+              id="items200"
+              autocomplete="off"
+            />
+            <label
+              class="btn btn-outline-primary btn-sm btn-outline-secondary"
+              for="items200"
+              >200</label
+            >
 
-              <input
-                type="radio"
-                class="btn-check"
-                name="btnradio"
-                id="items500"
-                autocomplete="off"
-              />
-              <label
-                class="btn btn-outline-primary btn-sm btn-outline-secondary"
-                for="items500"
-                >500</label
-              >
+            <input
+              type="radio"
+              class="btn-check"
+              name="btnradio"
+              id="items500"
+              autocomplete="off"
+            />
+            <label
+              class="btn btn-outline-primary btn-sm btn-outline-secondary"
+              for="items500"
+              >500</label
+            >
 
-              <input
-                type="radio"
-                class="btn-check"
-                name="btnradio"
-                id="items1000"
-                autocomplete="off"
-              />
-              <label
-                class="btn btn-outline-primary btn-sm btn-outline-secondary"
-                for="items1000"
-                >1000</label
-              >
-            </div>
-            <!-- Global pagination controls -->
-            <div class="btn-group me-3" role="group">
-              <button id="firstPage" class="btn btn-primary btn-sm">First</button>
-              <button id="prevPage" class="btn btn-primary btn-sm">Prev</button>
-              <button id="nextPage" class="btn btn-primary btn-sm">Next</button>
-            </div>
-            <!-- Pagination status indicator -->
-            <div id="paginationStatus" class="text-muted me-3 align-self-center"></div>
+            <input
+              type="radio"
+              class="btn-check"
+              name="btnradio"
+              id="items1000"
+              autocomplete="off"
+            />
+            <label
+              class="btn btn-outline-primary btn-sm btn-outline-secondary"
+              for="items1000"
+              >1000</label
+            >
           </div>
-          <div class="col-auto d-flex align-items-center">
-            <span id="messages" class="h5 mb-0 font-monospace text-primary"></span>
-            <a href="#top" class="btn btn-outline-primary btn-sm me-2">
-              <i class="fas fa-arrow-up"></i>
-            </a>
+          <!-- Global pagination controls -->
+          <div class="btn-group me-3" role="group">
+            <button id="firstPage" class="btn btn-primary btn-sm">First</button>
+            <button id="prevPage" class="btn btn-primary btn-sm">Prev</button>
+            <button id="nextPage" class="btn btn-primary btn-sm">Next</button>
           </div>
+          <!-- Pagination status indicator -->
+          <div id="paginationStatus" class="text-muted me-3 align-self-center"></div>
+        </div>
+        <div class="col-auto d-flex align-items-center">
+          <span id="messages" class="h5 mb-0 font-monospace text-primary"></span>
+          <!-- Header Toggle Button -->
+          <div id="headerToggle" class="btn btn-outline-primary btn-sm me-2 d-none" title="Toggle Header">
+            <i class="fas fa-chevron-up"></i>
+          </div>
+          <a href="#top" class="btn btn-outline-primary btn-sm me-2">
+            <i class="fas fa-arrow-up"></i>
+          </a>
         </div>
       </div>
     </div>

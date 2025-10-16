@@ -1314,7 +1314,7 @@ export class BranchReplenishmentContainer extends LitElement {
         </div>
 
         <!-- Layout with manipulation panel only - quick panel is floating -->
-        <div class="row g-2 mb-3">
+        <div class="row g-2 mb-2">
           <!-- Manipulation panel (search) taking full width -->
           <div class="col-12">
             <manipulation-panel

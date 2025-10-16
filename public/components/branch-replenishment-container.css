@@ -1,6 +1,6 @@
 .query-panel-container {
   position: relative; /* Establish stacking context */
-  z-index: 1050 !important; /* Ensure it's above the sticky table header (z-index: 1020) */
+  z-index: 1050 !important; /* Ensure it's above the sticky table header (z-index: 1020) but below quick panel */
   transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
   transform: translateY(0);
   opacity: 1;
@@ -20,7 +20,7 @@ quick-panel {
     position: fixed;
     bottom: 50px; /* Adjust as needed, above footer */
     right: 20px;
-    z-index: 1040; /* Below dropdown menu, but above most content */
+    z-index: 10000 !important; /* Highest priority - must be above all other elements */
     /* Add other styles like background, padding, shadow etc. */
     background-color: #fff;
     padding: 10px;

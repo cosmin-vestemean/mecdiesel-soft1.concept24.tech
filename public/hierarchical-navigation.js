@@ -62,9 +62,8 @@ class HierarchicalNavigation {
   bindHeaderToggle() {
     const headerToggleBtn = document.getElementById('headerToggle');
     const header = document.getElementById('header');
-    const app = document.getElementById('app');
     
-    if (headerToggleBtn && header && app) {
+    if (headerToggleBtn && header) {
       // Default state: header visible
       let isHeaderVisible = true;
       
@@ -74,13 +73,11 @@ class HierarchicalNavigation {
         if (isHeaderVisible) {
           // Show header
           header.classList.remove('header-collapsed');
-          app.classList.remove('header-collapsed');
           headerToggleBtn.querySelector('i').className = 'fas fa-chevron-up';
           headerToggleBtn.title = 'Hide Header';
         } else {
           // Hide header
           header.classList.add('header-collapsed');
-          app.classList.add('header-collapsed');
           headerToggleBtn.querySelector('i').className = 'fas fa-chevron-down';
           headerToggleBtn.title = 'Show Header';
         }

@@ -116,7 +116,11 @@ $(document).ready(() => {
             if (validationResult.success) {
                 // Login successful
                 $loginForm.addClass('d-none'); // Hide login form
-                $appContainer.removeClass('d-none'); // Show main app
+                
+                // Show main app components (now separated in DOM)
+                $('#header').removeClass('d-none'); // Show header
+                $appContainer.removeClass('d-none'); // Show main app content
+                $('#footer').removeClass('d-none'); // Show footer
                 $('#headerToggle').removeClass('d-none'); // Show header toggle button
                 
                 // Store the potentially refreshed token/clientID from the validation result

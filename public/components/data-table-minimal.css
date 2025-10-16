@@ -3,10 +3,12 @@
     border: 1px solid #dee2e6;
     border-radius: 4px;
     background: #fff;
+    overflow: hidden; /* Prevent double scrollbars */
 }
 
 .table-responsive {
     overflow-x: auto;
+    overflow-y: hidden; /* Only horizontal scroll for table */
 }
 
 .modern-table {
