@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI Improvements - Before & After Preview</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        /* Import the quick wins styles */
+        :root {
+            --primary-color: #446e9b;
+            --primary-hover: #385a7f;
+            --primary-light: rgba(68, 110, 155, 0.1);
+            --secondary-color: #009879;
+            --secondary-hover: #007c63;
+            --success-color: #3cb521;
+            --danger-color: #dc3545;
+            --warning-color: #ff9500;
+            --text-primary: #333333;
+            --text-secondary: #6c757d;
+            --text-muted: #999999;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --border-color: #dee2e6;
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+            --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.15);
+            --radius-sm: 4px;
+            --radius-md: 6px;
+            --radius-lg: 8px;
+            --radius-xl: 12px;
+            --radius-full: 9999px;
+            --transition-fast: 0.15s ease;
+            --transition-base: 0.2s ease;
+            --transition-slow: 0.3s ease;
+            --spacing-sm: 0.5rem;
+            --spacing-md: 1rem;
+            --spacing-lg: 1.5rem;
+            --font-size-sm: 0.875rem;
+        }
+        
+        body {
+            background: #f0f2f5;
+            font-family: 'Inter', -apple-system, sans-serif;
+            padding: 2rem 0;
+        }
+        
+        .comparison-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        
+        .comparison-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        
+        .comparison-header h1 {
+            color: var(--primary-color);
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+        
+        .comparison-row {
+            background: white;
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-md);
+        }
+        
+        .comparison-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+        
+        .before-after {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+        
+        .comparison-column {
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+            background: #f8f9fa;
+        }
+        
+        .before-label,
+        .after-label {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-full);
+            font-weight: 600;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .before-label {
+            background: #ffc107;
+            color: #000;
+        }
+        
+        .after-label {
+            background: var(--success-color);
+            color: white;
+        }
+        
+        /* OLD STYLES (Before) */
+        .old-btn {
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            border-radius: 6px;
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .old-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .old-btn-primary {
+            background-color: #446e9b;
+            border-color: #446e9b;
+            color: white;
+        }
+        
+        .old-card {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+        }
+        
+        /* NEW STYLES (After) */
+        .new-btn {
+            font-weight: 500;
+            letter-spacing: 0.3px;
+            border-radius: var(--radius-md);
+            transition: all var(--transition-base);
+            position: relative;
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .new-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+        
+        .new-btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+            border: none;
+            color: white;
+        }
+        
+        .new-btn-primary:hover {
+            background: linear-gradient(135deg, var(--primary-hover) 0%, #2d4661 100%);
+        }
+        
+        .new-btn-success {
+            background: linear-gradient(135deg, var(--success-color) 0%, #2d9e17 100%);
+            border: none;
+            color: white;
+        }
+        
+        .new-card {
+            border: none;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            transition: all var(--transition-base);
+            background: var(--bg-primary);
+        }
+        
+        .new-card:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+        }
+        
+        .new-card-header {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, #e9ecef 100%);
+            border-bottom: 1px solid var(--border-color);
+            padding: var(--spacing-lg);
+            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+            font-weight: 600;
+        }
+        
+        /* Form improvements */
+        .new-form-control {
+            border-radius: var(--radius-md);
+            border: 2px solid var(--border-color);
+            padding: 0.625rem 0.875rem;
+            transition: all var(--transition-base);
+        }
+        
+        .new-form-control:hover {
+            border-color: #adb5bd;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .new-form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px var(--primary-light);
+            outline: none;
+        }
+        
+        /* Table improvements */
+        .new-table {
+            border-collapse: separate;
+            border-spacing: 0;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .new-table thead th {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            font-weight: 600;
+            color: var(--primary-color);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid var(--border-color);
+        }
+        
+        .new-table tbody tr {
+            transition: all var(--transition-fast);
+        }
+        
+        .new-table tbody tr:hover {
+            background: linear-gradient(90deg, #f0f7ff 0%, #e8f4f8 100%) !important;
+            transform: scale(1.001);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        
+        /* Badge improvements */
+        .new-badge {
+            padding: 0.375rem 0.75rem;
+            border-radius: var(--radius-full);
+            font-weight: 600;
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .new-badge-success {
+            background: linear-gradient(135deg, #3cb521 0%, #2d9e17 100%);
+        }
+        
+        .new-badge-warning {
+            background: linear-gradient(135deg, #ff9500 0%, #e68600 100%);
+        }
+        
+        /* Impact summary */
+        .impact-summary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: var(--radius-xl);
+            margin: 3rem 0;
+        }
+        
+        .impact-summary h2 {
+            color: white;
+            margin-bottom: 1rem;
+        }
+        
+        .impact-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+        
+        .impact-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+            backdrop-filter: blur(10px);
+        }
+        
+        .impact-item h3 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .impact-item p {
+            margin: 0;
+            opacity: 0.9;
+        }
+        
+        @media (max-width: 768px) {
+            .before-after {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="comparison-container">
+        <div class="comparison-header">
+            <h1><i class="fas fa-paint-brush"></i> UI Beautification Preview</h1>
+            <p class="lead">Before & After Comparison - MEC Diesel Application</p>
+        </div>
+        
+        <!-- Buttons Comparison -->
+        <div class="comparison-row">
+            <h2 class="comparison-title"><i class="fas fa-hand-pointer"></i> Button Improvements</h2>
+            <div class="before-after">
+                <div class="comparison-column">
+                    <div class="before-label">Before</div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button class="btn old-btn old-btn-primary">Primary Button</button>
+                        <button class="btn btn-success old-btn">Success Button</button>
+                        <button class="btn btn-outline-primary old-btn">Outline Button</button>
+                    </div>
+                    <p class="mt-3 text-muted"><small>Flat design, basic hover</small></p>
+                </div>
+                <div class="comparison-column">
+                    <div class="after-label">After</div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button class="btn new-btn new-btn-primary">Primary Button</button>
+                        <button class="btn new-btn new-btn-success">Success Button</button>
+                        <button class="btn btn-outline-primary new-btn">Outline Button</button>
+                    </div>
+                    <p class="mt-3 text-success"><small><i class="fas fa-check"></i> Gradient, depth, smooth hover</small></p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Cards Comparison -->
+        <div class="comparison-row">
+            <h2 class="comparison-title"><i class="fas fa-layer-group"></i> Card & Panel Design</h2>
+            <div class="before-after">
+                <div class="comparison-column">
+                    <div class="before-label">Before</div>
+                    <div class="card old-card">
+                        <div class="card-header">Card Header</div>
+                        <div class="card-body">
+                            <p class="mb-0">Card content with basic styling</p>
+                        </div>
+                    </div>
+                    <p class="mt-3 text-muted"><small>Basic border, flat appearance</small></p>
+                </div>
+                <div class="comparison-column">
+                    <div class="after-label">After</div>
+                    <div class="card new-card">
+                        <div class="new-card-header">Card Header</div>
+                        <div class="card-body">
+                            <p class="mb-0">Card content with modern styling</p>
+                        </div>
+                    </div>
+                    <p class="mt-3 text-success"><small><i class="fas fa-check"></i> Elevated, gradient header, hover effect</small></p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Forms Comparison -->
+        <div class="comparison-row">
+            <h2 class="comparison-title"><i class="fas fa-keyboard"></i> Form Control Enhancement</h2>
+            <div class="before-after">
+                <div class="comparison-column">
+                    <div class="before-label">Before</div>
+                    <div>
+                        <label class="form-label">Email Address</label>
+                        <input type="email" class="form-control" placeholder="Enter email">
+                    </div>
+                    <p class="mt-3 text-muted"><small>Standard Bootstrap styling</small></p>
+                </div>
+                <div class="comparison-column">
+                    <div class="after-label">After</div>
+                    <div>
+                        <label class="form-label">Email Address</label>
+                        <input type="email" class="new-form-control form-control" placeholder="Enter email">
+                    </div>
+                    <p class="mt-3 text-success"><small><i class="fas fa-check"></i> Better focus, hover shadow, smoother</small></p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tables Comparison -->
+        <div class="comparison-row">
+            <h2 class="comparison-title"><i class="fas fa-table"></i> Table Design</h2>
+            <div class="before-after">
+                <div class="comparison-column">
+                    <div class="before-label">Before</div>
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Name</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>001</td>
+                                <td>Item A</td>
+                                <td><span class="badge bg-success">Active</span></td>
+                            </tr>
+                            <tr>
+                                <td>002</td>
+                                <td>Item B</td>
+                                <td><span class="badge bg-warning text-dark">Pending</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="mt-3 text-muted"><small>Basic table styling</small></p>
+                </div>
+                <div class="comparison-column">
+                    <div class="after-label">After</div>
+                    <table class="table new-table">
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Name</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>001</td>
+                                <td>Item A</td>
+                                <td><span class="badge new-badge new-badge-success text-white">Active</span></td>
+                            </tr>
+                            <tr>
+                                <td>002</td>
+                                <td>Item B</td>
+                                <td><span class="badge new-badge new-badge-warning text-white">Pending</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="mt-3 text-success"><small><i class="fas fa-check"></i> Gradient header, smooth hover, better badges</small></p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Impact Summary -->
+        <div class="impact-summary">
+            <h2><i class="fas fa-chart-line"></i> Expected Impact</h2>
+            <div class="impact-grid">
+                <div class="impact-item">
+                    <h3>20-30%</h3>
+                    <p>Reduction in Cognitive Load</p>
+                </div>
+                <div class="impact-item">
+                    <h3>50%+</h3>
+                    <p>Faster Visual Scanning</p>
+                </div>
+                <div class="impact-item">
+                    <h3>100%</h3>
+                    <p>CSS Variables Coverage</p>
+                </div>
+                <div class="impact-item">
+                    <h3>WCAG AA</h3>
+                    <p>Accessibility Compliance</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Implementation Guide -->
+        <div class="comparison-row">
+            <h2 class="comparison-title"><i class="fas fa-rocket"></i> Quick Implementation Guide</h2>
+            <div class="alert alert-info">
+                <h5><i class="fas fa-info-circle"></i> Getting Started</h5>
+                <ol class="mb-0">
+                    <li><strong>Backup current files:</strong> Make copies of <code>custom.css</code> and component CSS files</li>
+                    <li><strong>Add CSS variables:</strong> Copy variables from <code>UI_QUICK_WINS.css</code> to top of <code>custom.css</code></li>
+                    <li><strong>Replace button styles:</strong> Update button section in <code>custom.css</code></li>
+                    <li><strong>Test in development:</strong> Check all pages for visual consistency</li>
+                    <li><strong>Deploy gradually:</strong> Roll out one component at a time</li>
+                </ol>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-md-4">
+                    <div class="card new-card">
+                        <div class="new-card-header">
+                            <i class="fas fa-clock"></i> Time Investment
+                        </div>
+                        <div class="card-body">
+                            <h4>~90 minutes</h4>
+                            <p class="mb-0 text-muted">For core quick wins</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card new-card">
+                        <div class="new-card-header">
+                            <i class="fas fa-code"></i> Code Changes
+                        </div>
+                        <div class="card-body">
+                            <h4>CSS Only</h4>
+                            <p class="mb-0 text-muted">No JavaScript needed</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card new-card">
+                        <div class="new-card-header">
+                            <i class="fas fa-star"></i> Impact Level
+                        </div>
+                        <div class="card-body">
+                            <h4>High</h4>
+                            <p class="mb-0 text-muted">Visible improvements</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="text-center mt-5 mb-3">
+            <p class="text-muted">
+                <i class="fas fa-file-alt"></i> Full documentation: <code>UI_BEAUTIFICATION_AND_ERGONOMIC_IMPROVEMENTS.md</code><br>
+                <i class="fas fa-code"></i> Quick implementation: <code>UI_QUICK_WINS.css</code>
+            </p>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

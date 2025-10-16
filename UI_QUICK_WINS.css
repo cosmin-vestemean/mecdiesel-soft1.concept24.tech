@@ -1,0 +1,332 @@
+/* ========================================
+   QUICK WINS - CSS VARIABLES & ESSENTIALS
+   Add this to the TOP of public/custom.css
+   ======================================== */
+
+:root {
+  /* Brand Colors */
+  --primary-color: #446e9b;
+  --primary-hover: #385a7f;
+  --primary-light: rgba(68, 110, 155, 0.1);
+  --secondary-color: #009879;
+  --secondary-hover: #007c63;
+  --success-color: #3cb521;
+  --danger-color: #dc3545;
+  --warning-color: #ff9500;
+  
+  /* Neutrals */
+  --text-primary: #333333;
+  --text-secondary: #6c757d;
+  --text-muted: #999999;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --bg-tertiary: #e9ecef;
+  --border-color: #dee2e6;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.15);
+  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.2);
+  
+  /* Spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+  
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.2s ease;
+  --transition-slow: 0.3s ease;
+  
+  /* Typography */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  
+  /* Z-index layers */
+  --z-base: 1;
+  --z-dropdown: 1000;
+  --z-header: 1030;
+  --z-quick-panel: 1040;
+  --z-query-panel: 1050;
+  --z-modal: 1060;
+  --z-tooltip: 1070;
+}
+
+/* ========================================
+   QUICK WIN #1: ENHANCED BUTTONS
+   Replace existing .btn styles
+   ======================================== */
+
+.btn {
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+  border: none;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, var(--primary-hover) 0%, #2d4661 100%);
+  border: none;
+}
+
+.btn-success {
+  background: linear-gradient(135deg, var(--success-color) 0%, #2d9e17 100%);
+  border: none;
+  color: white;
+}
+
+.btn-success:hover {
+  background: linear-gradient(135deg, #2d9e17 0%, #247a12 100%);
+}
+
+.btn-outline-primary {
+  border: 2px solid var(--primary-color);
+  color: var(--primary-color);
+  background: transparent;
+}
+
+.btn-outline-primary:hover {
+  background: var(--primary-color);
+  color: white;
+  transform: translateY(-1px);
+}
+
+/* ========================================
+   QUICK WIN #2: MODERN CARDS
+   Replace existing card styles
+   ======================================== */
+
+.card {
+  border: none;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-base);
+  background: var(--bg-primary);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.card-header {
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, #e9ecef 100%);
+  border-bottom: 1px solid var(--border-color);
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.card-body {
+  padding: var(--spacing-lg);
+}
+
+/* ========================================
+   QUICK WIN #3: ENHANCED FORM CONTROLS
+   Replace existing form control styles
+   ======================================== */
+
+.form-control, 
+.form-select {
+  border-radius: var(--radius-md);
+  border: 2px solid var(--border-color);
+  padding: 0.625rem 0.875rem;
+  transition: all var(--transition-base);
+  background: var(--bg-primary);
+  font-size: var(--font-size-sm);
+}
+
+.form-control:hover,
+.form-select:hover {
+  border-color: #adb5bd;
+  box-shadow: var(--shadow-sm);
+}
+
+.form-control:focus, 
+.form-select:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px var(--primary-light), var(--shadow-sm);
+  outline: none;
+  background: white;
+}
+
+.form-control::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.form-label {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  letter-spacing: 0.3px;
+}
+
+/* ========================================
+   QUICK WIN #4: BETTER TABLE HOVER
+   Add to data-table-minimal.css
+   ======================================== */
+
+tbody tr {
+  transition: all var(--transition-fast);
+}
+
+tbody tr:hover {
+  background: linear-gradient(90deg, #f0f7ff 0%, #e8f4f8 100%) !important;
+  transform: scale(1.001);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.modern-table th {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  font-weight: 600;
+  text-align: center;
+  padding: 0.75rem;
+  border-bottom: 2px solid var(--border-color);
+  color: var(--primary-color);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+}
+
+/* ========================================
+   QUICK WIN #5: ENHANCED HEADER
+   Replace header styles
+   ======================================== */
+
+#header {
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header);
+  backdrop-filter: blur(8px);
+  transition: all var(--transition-slow);
+}
+
+/* ========================================
+   BONUS: LOADING SPINNER
+   Modern loading state
+   ======================================== */
+
+.spinner-modern {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--primary-light);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  transition: opacity var(--transition-base);
+}
+
+/* ========================================
+   BONUS: SMOOTH ANIMATIONS
+   Add subtle animations
+   ======================================== */
+
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ========================================
+   BONUS: BETTER FOCUS STATES
+   Accessibility improvement
+   ======================================== */
+
+*:focus-visible {
+  outline: 3px solid var(--primary-color);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  box-shadow: 0 0 0 3px var(--primary-light),
+              0 0 0 5px var(--primary-color);
+}

@@ -1,0 +1,315 @@
+/* ========================================
+   REDESIGNED QUICK PANEL - Clean & Modern
+   No gradients, flat design with depth
+   ======================================== */
+
+.floating-quick-panel {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  background-color: #ffffff;
+  border: 2px solid #e9ecef;
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1030;
+  display: flex;
+  overflow: hidden;
+}
+
+/* Tab that sticks out for toggling the panel */
+.floating-quick-panel .floating-tab {
+  width: 32px;
+  background-color: #446e9b;
+  border-radius: 8px 0 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 16px 0;
+  align-self: stretch;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.floating-quick-panel .floating-tab::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background-color: #009879;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.floating-quick-panel .floating-tab:hover {
+  background-color: #385a7f;
+}
+
+.floating-quick-panel .floating-tab:hover::before {
+  opacity: 1;
+}
+
+.floating-quick-panel .floating-tab i {
+  font-size: 1.25rem;
+  color: #ffffff;
+  transition: transform 0.2s ease;
+}
+
+.floating-quick-panel .floating-tab:hover i {
+  transform: scale(1.1);
+}
+
+/* Main panel content */
+.floating-quick-panel .panel-content {
+  padding: 20px;
+  width: 300px;
+  overflow: visible;
+  transition: max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+              opacity 0.3s ease,
+              padding 0.3s ease;
+  background-color: #ffffff;
+}
+
+/* State transitions */
+.floating-quick-panel.collapsed .panel-content {
+  max-width: 0;
+  padding: 20px 0;
+  opacity: 0;
+}
+
+.floating-quick-panel.expanded .panel-content {
+  max-width: 300px;
+  opacity: 1;
+}
+
+/* Disabled state */
+.floating-quick-panel.disabled-panel {
+  opacity: 0.5;
+  pointer-events: none;
+  filter: grayscale(50%);
+}
+
+/* Panel header styling */
+.floating-quick-panel .panel-header {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #f0f2f5;
+}
+
+.floating-quick-panel .panel-header h5,
+.floating-quick-panel .panel-header h6 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #333333;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Panel sections */
+.floating-quick-panel .panel-section {
+  margin-bottom: 16px;
+}
+
+.floating-quick-panel .panel-section:last-child {
+  margin-bottom: 0;
+}
+
+/* Panel buttons */
+.floating-quick-panel .btn {
+  width: 100%;
+  justify-content: center;
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  border-width: 2px;
+  font-weight: 500;
+}
+
+.floating-quick-panel .btn + .btn {
+  margin-top: 8px;
+}
+
+/* Panel form controls */
+.floating-quick-panel .form-control,
+.floating-quick-panel .form-select {
+  font-size: 0.875rem;
+  border-width: 2px;
+}
+
+.floating-quick-panel .form-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: #6c757d;
+  margin-bottom: 6px;
+}
+
+/* Panel badges */
+.floating-quick-panel .badge {
+  font-size: 0.75rem;
+  padding: 0.35rem 0.65rem;
+  font-weight: 600;
+}
+
+/* Panel lists */
+.floating-quick-panel ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.floating-quick-panel li {
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f2f5;
+  font-size: 0.875rem;
+}
+
+.floating-quick-panel li:last-child {
+  border-bottom: none;
+}
+
+/* Responsive behavior */
+@media (max-height: 600px) {
+  .floating-quick-panel {
+    top: auto;
+    bottom: 20px;
+    transform: none;
+  }
+  
+  .floating-quick-panel .panel-content {
+    padding: 16px;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .floating-quick-panel {
+    top: auto;
+    bottom: 60px;
+    transform: none;
+  }
+  
+  .floating-quick-panel .panel-content {
+    width: 260px;
+  }
+  
+  .floating-quick-panel.expanded .panel-content {
+    max-width: 260px;
+  }
+}
+
+/* ========================================
+   CUSTOM SCROLLBAR FOR PANEL
+   Clean, minimal scrollbar design
+   ======================================== */
+.floating-quick-panel .panel-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.floating-quick-panel .panel-content::-webkit-scrollbar-track {
+  background: #f8f9fa;
+  border-radius: 3px;
+}
+
+.floating-quick-panel .panel-content::-webkit-scrollbar-thumb {
+  background: #446e9b;
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+.floating-quick-panel .panel-content::-webkit-scrollbar-thumb:hover {
+  background: #385a7f;
+}
+
+/* ========================================
+   PANEL ANIMATIONS
+   Smooth entrance and interactions
+   ======================================== */
+@keyframes panelSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.floating-quick-panel.expanded .panel-content > * {
+  animation: panelSlideIn 0.3s ease-out backwards;
+}
+
+.floating-quick-panel.expanded .panel-content > *:nth-child(1) {
+  animation-delay: 0.05s;
+}
+
+.floating-quick-panel.expanded .panel-content > *:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.floating-quick-panel.expanded .panel-content > *:nth-child(3) {
+  animation-delay: 0.15s;
+}
+
+/* ========================================
+   PANEL UTILITIES
+   Helper classes for panel content
+   ======================================== */
+.floating-quick-panel .text-small {
+  font-size: 0.75rem;
+  color: #6c757d;
+}
+
+.floating-quick-panel .divider {
+  height: 1px;
+  background-color: #e9ecef;
+  margin: 16px 0;
+}
+
+.floating-quick-panel .info-box {
+  background-color: #f8f9fa;
+  border-left: 3px solid #446e9b;
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  margin: 12px 0;
+}
+
+.floating-quick-panel .info-box.success {
+  border-left-color: #009879;
+  background-color: #f0fdf7;
+}
+
+.floating-quick-panel .info-box.warning {
+  border-left-color: #ff9500;
+  background-color: #fffbf0;
+}
+
+.floating-quick-panel .info-box.danger {
+  border-left-color: #dc3545;
+  background-color: #fff5f5;
+}
+
+/* Query panel transition */
+.query-panel-container {
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.query-panel-container.hidden {
+  max-height: 0;
+  overflow: hidden;
+}
+
+.query-panel-container.visible {
+  max-height: 500px;
+  overflow: visible;
+}

@@ -1,4 +1,4 @@
-/* Minimalist data-table styles - Enhanced */
+/* Minimalist data-table styles inspired by replenishment-data-table.css */
 .data-table-container {
     border: 1px solid #dee2e6;
     border-radius: 4px;
@@ -15,54 +15,31 @@
     color: #212529;
     border-collapse: separate;
     border-spacing: 0;
-    border-radius: 6px;
-    overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .modern-table th {
+    background: #f8f9fa;
     font-weight: 600;
     text-align: center;
-    padding: 0.75rem 0.7rem;
-    border-bottom: 2px solid #dee2e6;
-    color: #446e9b;
-    text-transform: uppercase;
-    font-size: 0.75rem;
-    letter-spacing: 0.5px;
-    position: sticky;
-    top: 0;
-    z-index: 10;
+    padding: 0.5rem 0.7rem;
+    border-bottom: 1px solid #dee2e6;
+    color: #495057;
 }
 
 .modern-table td {
-    padding: 0.6rem 0.7rem;
+    padding: 0.35rem 0.7rem;
     border-bottom: 1px solid #f1f3f4;
     vertical-align: middle;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     background: #fff;
-    transition: background-color 0.15s ease;
 }
 
 .even-row {
-    background: rgba(248, 249, 250, 0.5) !important;
-}
-
-tbody tr {
-    transition: all 0.15s ease;
+    background: #f8f9fa;
 }
 
 tbody tr:hover {
-    transform: scale(1.001);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-tbody tr:nth-child(even):hover {
-    background: linear-gradient(90deg, #e8f4f8 0%, #f0f7ff 100%) !important;
-}
-
-.modern-table td:focus-within {
-    background: rgba(68, 110, 155, 0.08);
-    outline: 2px solid rgba(68, 110, 155, 0.1);
+    background: #e9ecef !important;
 }
 
 .sticky-top {
