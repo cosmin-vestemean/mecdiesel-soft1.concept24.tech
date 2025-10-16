@@ -72,37 +72,49 @@
     </div>
 
     <!-- Header - Initially hidden until login -->
-    <div id="header" class="d-flex flex-column flex-md-row sticky-top bg-white w-100 mb-2 d-none">
-      <div class="col-12 col-md-2 d-flex align-items-center pe-5">
-        <a href="https://www.mecdiesel.ro" target="_blank" class="text-decoration-none">
-          <img
-            src="https://dubhegroup.ro/images/settings/wqGVMB1HaH8amjNIDfuih0A9sBRD0F2lcmKx4yzU.png"
-            alt="MEC Diesel Logo"
-            class="img-fluid"
-            height="50"
-            loading="lazy"
-          />
-        </a>
-      </div>
-      <div class="col-12 col-md-10">
-        <!-- App Level Navigation -->
-        <div class="app-selector mb-2">
-          <div class="btn-group btn-group-sm" role="group" aria-label="Application selector">
-            <button type="button" class="btn btn-sm btn-outline-primary app-btn active" data-app="italy-sync">
-              <i class="fas fa-exchange-alt me-1"></i>Italy Sync
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-primary app-btn" data-app="conversie-auto">
-              <i class="fas fa-cogs me-1"></i>Conversie Auto
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-primary app-btn" data-app="print-config">
-              <i class="fas fa-print me-1"></i>Print Config
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-primary app-btn" data-app="achizitii">
-              <i class="fas fa-truck me-1"></i>Achizitii
-            </button>
-          </div>
+    <div id="header" class="d-none">
+      <!-- Sidebar for Module Navigation -->
+      <aside id="appSidebar" class="app-sidebar bg-dark">
+        <!-- Logo Area -->
+        <div class="sidebar-logo border-bottom border-secondary">
+          <a href="https://www.mecdiesel.ro" target="_blank" class="text-decoration-none">
+            <img
+              src="https://dubhegroup.ro/images/settings/wqGVMB1HaH8amjNIDfuih0A9sBRD0F2lcmKx4yzU.png"
+              alt="MEC Diesel Logo"
+              class="img-fluid"
+              loading="lazy"
+            />
+          </a>
         </div>
-
+        
+        <!-- Module Navigation -->
+        <nav class="sidebar-nav">
+          <button type="button" class="sidebar-module active text-light" data-app="italy-sync">
+            <i class="fas fa-exchange-alt text-light"></i>
+            <span class="sidebar-module-text text-light">Italy Sync</span>
+          </button>
+          <button type="button" class="sidebar-module text-light" data-app="conversie-auto">
+            <i class="fas fa-cogs text-light"></i>
+            <span class="sidebar-module-text text-light">Conversie Auto</span>
+          </button>
+          <button type="button" class="sidebar-module text-light" data-app="print-config">
+            <i class="fas fa-print text-light"></i>
+            <span class="sidebar-module-text text-light">Print Config</span>
+          </button>
+          <button type="button" class="sidebar-module text-light" data-app="achizitii">
+            <i class="fas fa-truck text-light"></i>
+            <span class="sidebar-module-text text-light">Achizitii</span>
+          </button>
+        </nav>
+      </aside>
+      
+      <!-- Top Bar for Sections Navigation -->
+      <div id="topBar" class="top-bar bg-white border-bottom">
+        <!-- Mobile Menu Toggle -->
+        <button id="mobileMenuToggle" class="mobile-menu-toggle bg-dark text-white d-md-none">
+          <i class="fas fa-bars"></i>
+        </button>
+        
         <!-- Sub-app Navigation for Italy Sync -->
         <ul class="nav nav-tabs sub-nav" id="italySyncTabs" role="tablist" data-app="italy-sync">
           <li class="nav-item" role="presentation">
@@ -132,7 +144,7 @@
           </li>
         </ul>
 
-        <!-- Sub-app Navigation for Conversie Auto (no sub-tabs) -->
+        <!-- Sub-app Navigation for Conversie Auto -->
         <ul class="nav nav-tabs sub-nav d-none" id="conversieAutoTabs" role="tablist" data-app="conversie-auto">
           <li class="nav-item" role="presentation">
             <button class="nav-link active" id="convAutoButton" data-bs-toggle="tab" type="button" role="tab">
@@ -141,7 +153,7 @@
           </li>
         </ul>
 
-        <!-- Sub-app Navigation for Print Config (no sub-tabs) -->
+        <!-- Sub-app Navigation for Print Config -->
         <ul class="nav nav-tabs sub-nav d-none" id="printConfigTabs" role="tablist" data-app="print-config">
           <li class="nav-item" role="presentation">
             <button class="nav-link active" id="printConfigButton" data-bs-toggle="tab" type="button" role="tab">
@@ -174,6 +186,7 @@
           </li>
         </ul>
         
+        <!-- Contextual Controls -->
         <div class="d-flex align-items-center mt-2 gap-2" id="contextualControls">
           <select id="tables" class="form-select w-auto">
             <option value="mec_item">mec_item</option>
@@ -328,6 +341,10 @@
     <div id="footer" class="d-none">
       <div class="row fixed-bottom bg-white border-top shadow-sm py-2">
         <div class="col d-flex align-items-center">
+          <!-- Header/Sidebar Toggle Button -->
+          <button id="headerToggle" class="btn btn-outline-primary btn-sm me-3 d-none" title="Toggle Sidebar">
+            <i class="fas fa-bars"></i>
+          </button>
           <span class="h5 mb-0 font-monospace px-2">Dubhe Software Hub</span>
           <!-- Item limit controls -->
           <div class="btn-group me-3" role="group">
@@ -408,10 +425,6 @@
         </div>
         <div class="col-auto d-flex align-items-center">
           <span id="messages" class="h5 mb-0 font-monospace text-primary"></span>
-          <!-- Header Toggle Button -->
-          <div id="headerToggle" class="btn btn-outline-primary btn-sm me-2 d-none" title="Toggle Header">
-            <i class="fas fa-chevron-up"></i>
-          </div>
           <a href="#top" class="btn btn-outline-primary btn-sm me-2">
             <i class="fas fa-arrow-up"></i>
           </a>

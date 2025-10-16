@@ -37,11 +37,14 @@ class HierarchicalNavigation {
     this.bindAppSelectorEvents();
     this.bindSubTabEvents();
     this.bindHeaderToggle();
+    this.bindSidebarToggle();
+    this.bindMobileMenu();
     this.setInitialState();
   }
 
   bindAppSelectorEvents() {
-    document.querySelectorAll('.app-btn').forEach(btn => {
+    // Use .sidebar-module buttons instead of .app-btn
+    document.querySelectorAll('.sidebar-module').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const appName = e.currentTarget.dataset.app;
         this.switchApp(appName);
@@ -105,6 +108,91 @@ class HierarchicalNavigation {
     }
   }
 
+  bindSidebarToggle() {
+    const headerToggle = document.getElementById('headerToggle');
+    const sidebar = document.getElementById('appSidebar');
+    
+    if (headerToggle && sidebar) {
+      // Restore sidebar state from localStorage
+      const sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+      const icon = headerToggle.querySelector('i');
+      
+      if (sidebarCollapsed) {
+        sidebar.classList.add('collapsed');
+        document.body.classList.add('sidebar-collapsed');
+        // Set initial icon and button style for collapsed state
+        if (icon) icon.className = 'fas fa-bars';
+        headerToggle.className = 'btn btn-success btn-sm me-3'; // Green when collapsed
+      } else {
+        // Set initial icon and button style for expanded state
+        if (icon) icon.className = 'fas fa-times';
+        headerToggle.className = 'btn btn-outline-primary btn-sm me-3'; // Blue outline when visible
+      }
+      
+      headerToggle.addEventListener('click', () => {
+        const isCollapsed = sidebar.classList.toggle('collapsed');
+        document.body.classList.toggle('sidebar-collapsed');
+        
+        // Update icon and button style
+        const icon = headerToggle.querySelector('i');
+        if (isCollapsed) {
+          icon.className = 'fas fa-bars'; // Show bars when collapsed (hidden)
+          headerToggle.className = 'btn btn-success btn-sm me-3'; // Green when collapsed
+        } else {
+          icon.className = 'fas fa-times'; // Show X when expanded (visible)
+          headerToggle.className = 'btn btn-outline-primary btn-sm me-3'; // Blue outline when visible
+        }
+        
+        // Save state to localStorage
+        localStorage.setItem('sidebarCollapsed', isCollapsed.toString());
+        
+        // Dispatch event for other components that might need to react
+        const event = new CustomEvent('sidebar-toggled', {
+          detail: { collapsed: isCollapsed }
+        });
+        document.dispatchEvent(event);
+        
+        // Recalculate dimensions after animation
+        setTimeout(() => {
+          this.recalculateContentDimensions();
+        }, 300);
+      });
+    }
+  }
+
+  bindMobileMenu() {
+    const mobileToggle = document.getElementById('mobileMenuToggle');
+    const sidebar = document.getElementById('appSidebar');
+    
+    if (mobileToggle && sidebar) {
+      // Create backdrop for mobile
+      const backdrop = document.createElement('div');
+      backdrop.className = 'sidebar-backdrop';
+      document.body.appendChild(backdrop);
+      
+      mobileToggle.addEventListener('click', () => {
+        sidebar.classList.toggle('mobile-open');
+        backdrop.classList.toggle('show');
+      });
+      
+      // Close sidebar when clicking backdrop
+      backdrop.addEventListener('click', () => {
+        sidebar.classList.remove('mobile-open');
+        backdrop.classList.remove('show');
+      });
+      
+      // Close sidebar when module is selected on mobile
+      document.querySelectorAll('.sidebar-module').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (window.innerWidth < 768) {
+            sidebar.classList.remove('mobile-open');
+            backdrop.classList.remove('show');
+          }
+        });
+      });
+    }
+  }
+
   recalculateContentDimensions() {
     // Force recalculation of any components that depend on viewport dimensions
     const event = new CustomEvent('viewport-resized', {
@@ -148,11 +236,16 @@ class HierarchicalNavigation {
   }
 
   updateAppSelector(appName) {
-    document.querySelectorAll('.app-btn').forEach(btn => {
+    // Update sidebar module buttons
+    document.querySelectorAll('.sidebar-module').forEach(btn => {
       btn.classList.remove('active');
     });
     
-    document.querySelector(`[data-app="${appName}"]`)?.classList.add('active');
+    // Set active on the selected module
+    const selectedModule = document.querySelector(`.sidebar-module[data-app="${appName}"]`);
+    if (selectedModule) {
+      selectedModule.classList.add('active');
+    }
   }
 
   updateSubNavigation(appName) {
