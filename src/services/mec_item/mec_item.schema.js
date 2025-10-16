@@ -40,7 +40,6 @@ export const mecItemDataSchema = Type.Pick(
     "Item_box",
     "Item_kind",
     "User_code",
-    "Delete_date",
     "Item_outlet",
   ],
   {

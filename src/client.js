@@ -11,8 +11,6 @@ import { siteProductChangesHistoryClient } from './services/site_product_changes
 
 import { mecItemProducerRelationClient } from './services/mec_item_producer_relation/mec_item_producer_relation.shared.js'
 
-import { mecItemProducerRelationClient } from './services/mec-item-producer-relation/mec-item-producer-relation.shared.js'
-
 import { mecItemClient } from './services/mec_item/mec_item.shared.js'
 
 /**
@@ -31,8 +29,6 @@ export const createClient = (connection, authenticationOptions = {}) => {
   client.set('connection', connection)
 
   client.configure(mecItemClient)
-
-  client.configure(mecItemProducerRelationClient)
 
   client.configure(mecItemProducerRelationClient)
 
