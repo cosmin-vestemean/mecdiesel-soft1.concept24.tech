@@ -52,7 +52,7 @@ BEGIN
         AND c.iscancel = 0
         AND c.sosource = 1151
         AND c.FPRMS = 3130
-        AND B.BRANCHSEC IN (SELECT branch FROM #DestBranches) -- Changed: Now filtering by destination branches
+        AND C.BRANCH IN (SELECT branch FROM #EmitBranches) -- FIX: Filter by source branch (emitBranches), not destination
     GROUP BY A.mtrl, C.BRANCH, B.BRANCHSEC;  -- Changed: Added B.BRANCHSEC to GROUP BY
 
     -- Create index on the pending orders temp table
@@ -90,7 +90,7 @@ BEGIN
         AND B.WHOUSESEC = 9999
         AND A.FISCPRD = @fiscalYear
         AND A.iscancel = 0
-        AND B.BRANCHSEC IN (SELECT branch FROM #DestBranches) -- Use temp table instead of STRING_SPLIT
+        AND (A.BRANCH IN (SELECT branch FROM #EmitBranches) OR B.BRANCHSEC IN (SELECT branch FROM #DestBranches)) -- Include transfers from emit branches OR to dest branches
     GROUP BY C.mtrl, A.BRANCH, B.BRANCHSEC;
 
     -- Create indexes on the unreceived transfers temp table
@@ -151,22 +151,26 @@ BEGIN
     ) stock ON (bl.mtrl = stock.mtrl AND bl.branch = stock.branch);
 
     -- Update pending orders in the branch limits table
+    -- FIX: Exclude internal reservations (branchFrom = branchTo) from necessity calculation
     UPDATE bl
     SET PendingQty = ISNULL(pending.qty, 0)
     FROM #BranchLimits bl
     LEFT JOIN (
         SELECT mtrl, branchTo AS branch, SUM(qty) AS qty
         FROM #PendingOrders
+        WHERE branchFrom <> branchTo  -- FIX: Exclude internal reservations (2200->2200)
         GROUP BY mtrl, branchTo
     ) pending ON (bl.mtrl = pending.mtrl AND bl.branch = pending.branch);
 
     -- Update transfers in the branch limits table
+    -- FIX: Exclude internal transfers (branchFrom = branchTo) from necessity calculation
     UPDATE bl
     SET TransferQty = ISNULL(transfer.qty, 0)
     FROM #BranchLimits bl
     LEFT JOIN (
         SELECT mtrl, branchTo AS branch, SUM(qty) AS qty
         FROM #UnreceivedTransfers
+        WHERE branchFrom <> branchTo  -- FIX: Exclude internal transfers (2200->2200)
         GROUP BY mtrl, branchTo
     ) transfer ON (bl.mtrl = transfer.mtrl AND bl.branch = transfer.branch);    -- Calculate necessity values
     UPDATE #BranchLimits
@@ -323,13 +327,13 @@ BEGIN
         ISNULL(dm.CantitateE, 0) stoc_emit,
         dm.MinE min_emit, 
         dm.MaxE max_emit,
-        CASE WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(dm.MinE, 0)) < 0 
+        CASE WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(ut_emit.qty, 0) - ISNULL(dm.MinE, 0)) < 0 
              THEN 0 
-             ELSE (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(dm.MinE, 0)) 
+             ELSE (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(ut_emit.qty, 0) - ISNULL(dm.MinE, 0)) 
         END disp_min_emit,
-        CASE WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(dm.MaxE, 0)) < 0 
+        CASE WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(ut_emit.qty, 0) - ISNULL(dm.MaxE, 0)) < 0 
              THEN 0 
-             ELSE (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(dm.MaxE, 0)) 
+             ELSE (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(ut_emit.qty, 0) - ISNULL(dm.MaxE, 0)) 
         END disp_max_emit,
         brD.name Destinatie,
         CASE WHEN ISNULL(ml.cccisblacklisted, 0) = 0 THEN 'Nu' ELSE 'Da' END Blacklisted,
@@ -351,15 +355,15 @@ BEGIN
         -- Calculate total company necessity based on max limit using the BranchNecessities CTE
         (SELECT ISNULL(SUM(bn.MaxNecessity), 0)
          FROM BranchNecessities bn WHERE bn.mtrl = dm.mtrl) AS nec_max_comp,
-        -- Calculate quantity that can be transferred (min)
+        -- Calculate quantity that can be transferred (min) - FIXED VERSION
         CASE 
-            WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0)) <= 0 
+            WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(ut_emit.qty, 0) - ISNULL(dm.MinE, 0)) <= 0 
             THEN 0 
-            WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0)) - ISNULL(bl_dest.MinNecessity, 0) < 0 
-            THEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0))  -- Return available if positive but not enough
+            WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(ut_emit.qty, 0) - ISNULL(dm.MinE, 0)) - ISNULL(bl_dest.MinNecessity, 0) < 0 
+            THEN (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(ut_emit.qty, 0) - ISNULL(dm.MinE, 0))
             ELSE 
                 CASE 
-                    WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0)) > 
+                    WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(ut_emit.qty, 0) - ISNULL(dm.MinE, 0)) > 
                         ISNULL(bl_dest.MinNecessity, 0)
                     THEN 
                         CASE 
@@ -367,18 +371,18 @@ BEGIN
                             THEN ISNULL(bl_dest.MinNecessity, 0)
                             ELSE 0 
                         END
-                    ELSE (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MinE, 0))
+                    ELSE (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(ut_emit.qty, 0) - ISNULL(dm.MinE, 0))
                 END
         END AS cant_min,
-        -- Calculate quantity that can be transferred (max)
+        -- Calculate quantity that can be transferred (max) - FIXED VERSION
         CASE 
-            WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0)) <= 0 
+            WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(ut_emit.qty, 0) - ISNULL(dm.MaxE, 0)) <= 0 
             THEN 0 
-            WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0)) - ISNULL(bl_dest.MaxNecessity, 0) < 0 
-            THEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0))  -- Return available if positive but not enough
+            WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(ut_emit.qty, 0) - ISNULL(dm.MaxE, 0)) - ISNULL(bl_dest.MaxNecessity, 0) < 0 
+            THEN (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(ut_emit.qty, 0) - ISNULL(dm.MaxE, 0))
             ELSE 
                 CASE 
-                    WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0)) > 
+                    WHEN (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(ut_emit.qty, 0) - ISNULL(dm.MaxE, 0)) > 
                         ISNULL(bl_dest.MaxNecessity, 0)
                     THEN 
                         CASE 
@@ -386,7 +390,7 @@ BEGIN
                             THEN ISNULL(bl_dest.MaxNecessity, 0)
                             ELSE 0 
                         END
-                    ELSE (ISNULL(dm.cantitateE, 0) - ISNULL(dm.MaxE, 0))
+                    ELSE (ISNULL(dm.cantitateE, 0) - ISNULL(po_emit.qty, 0) - ISNULL(ut_emit.qty, 0) - ISNULL(dm.MaxE, 0))
                 END
         END AS cant_max,
         0 AS transfer
@@ -423,15 +427,23 @@ BEGIN
     )    LEFT JOIN (
         SELECT mtrl, branchTo, SUM(qty) AS qty
         FROM #PendingOrders
+        WHERE branchFrom <> branchTo  -- FIX: Exclude internal reservations (2200->2200)
         GROUP BY mtrl, branchTo
     ) po ON (po.mtrl = dm.mtrl AND po.branchTo = br.branch)
     LEFT JOIN (
         SELECT mtrl, branchFrom, SUM(qty) AS qty
         FROM #PendingOrders
         GROUP BY mtrl, branchFrom
-    ) po_emit ON (po_emit.mtrl = dm.mtrl AND po_emit.branchFrom = dm.branchE)LEFT JOIN (
+    ) po_emit ON (po_emit.mtrl = dm.mtrl AND po_emit.branchFrom = dm.branchE)
+    LEFT JOIN (
+        SELECT mtrl, branchFrom, SUM(qty) AS qty
+        FROM #UnreceivedTransfers
+        GROUP BY mtrl, branchFrom
+    ) ut_emit ON (ut_emit.mtrl = dm.mtrl AND ut_emit.branchFrom = dm.branchE)
+    LEFT JOIN (
         SELECT mtrl, branchFrom, branchTo, SUM(qty) AS qty
         FROM #UnreceivedTransfers
+        WHERE branchFrom <> branchTo  -- FIX: Exclude internal transfers (2200->2200)
         GROUP BY mtrl, branchFrom, branchTo
     ) ut ON (ut.mtrl = dm.mtrl AND ut.branchFrom = dm.branchE AND ut.branchTo = br.branch)
     LEFT JOIN #LatestAbcData abc_data ON (
@@ -449,7 +461,7 @@ BEGIN
     ))  -- Add material code filter with include/exclude support
     ORDER BY dm.mtrl, dm.branchE, br.branch
     OPTION (RECOMPILE);    -- Clean up temp tables
-    DROP TABLE #PendingOrders;
+    DROP TABLE #PendingOrders;      
     DROP TABLE #UnreceivedTransfers;
     DROP TABLE #BranchLimits;
     DROP TABLE #LatestAbcData;

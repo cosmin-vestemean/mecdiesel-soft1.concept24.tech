@@ -112,13 +112,13 @@ export class DiagnosticModal extends LitElement {
    */
   _getReasonBadgeClass(reason) {
     const classMap = {
-      'LIPSA_STOC_EMIT': 'bg-danger',
-      'LIMITE_INEXISTENTE_DEST': 'bg-warning text-dark',
-      'BRANCH_INACTIV_DEST': 'bg-danger',
-      'LIMITE_ZERO_DEST': 'bg-info',
-      'NECESAR_ZERO_DEST': 'bg-info'
+      'LIPSA_STOC_EMIT': 'bg-danger text-white',
+      'LIMITE_INEXISTENTE_DEST': 'bg-warning text-white',
+      'BRANCH_INACTIV_DEST': 'bg-danger text-white',
+      'LIMITE_ZERO_DEST': 'bg-info text-white',
+      'NECESAR_ZERO_DEST': 'bg-info text-white'
     };
-    return classMap[reason] || 'bg-secondary';
+    return classMap[reason] || 'bg-secondary text-white';
   }
 
   /**
@@ -126,11 +126,11 @@ export class DiagnosticModal extends LitElement {
    */
   _getReasonLabel(reason) {
     const labelMap = {
-      'LIPSA_STOC_EMIT': 'Lipsă Stoc Emitere',
-      'LIMITE_INEXISTENTE_DEST': 'Fără Limite Destinație',
-      'BRANCH_INACTIV_DEST': 'Filială Inactivă',
-      'LIMITE_ZERO_DEST': 'Limite Zero',
-      'NECESAR_ZERO_DEST': 'Necesar Zero'
+      'LIPSA_STOC_EMIT': 'No Stock at Source',
+      'LIMITE_INEXISTENTE_DEST': 'No Limits at Destination',
+      'BRANCH_INACTIV_DEST': 'Inactive Branch',
+      'LIMITE_ZERO_DEST': 'Zero Limits',
+      'NECESAR_ZERO_DEST': 'Zero Necessity'
     };
     return labelMap[reason] || reason;
   }
@@ -207,7 +207,7 @@ export class DiagnosticModal extends LitElement {
               </h5>
               <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body p-2">
               ${this.diagnostics.length === 0 
                 ? html`
                   <div class="alert alert-success">
@@ -220,12 +220,12 @@ export class DiagnosticModal extends LitElement {
                 `
                 : html`
                   <!-- Summary Section -->
-                  <div class="alert alert-warning">
+                  <div class="alert alert-warning py-2 mb-2">
                     <strong><i class="fas fa-exclamation-triangle"></i> ${this.diagnostics.length} materiale excluse</strong>
-                    <p class="mb-2 mt-2">
+                    <p class="mb-1 mt-1 small">
                       Materialele de mai jos <strong>nu</strong> apar în rezultatul principal datorită următoarelor motive:
                     </p>
-                    <div class="d-flex flex-wrap gap-2">
+                    <div class="d-flex flex-wrap gap-1">
                       ${summary.map(item => html`
                         <span class="badge ${item.badgeClass}">
                           ${item.label}: ${item.count}
@@ -235,8 +235,8 @@ export class DiagnosticModal extends LitElement {
                   </div>
 
                   <!-- Diagnostics Table -->
-                  <div class="table-responsive" style="max-height: 500px;">
-                    <table class="table table-sm table-striped table-hover modern-table">
+                  <div class="table-responsive">
+                    <table class="table table-sm table-striped table-hover modern-table" style="font-size: 12px;">
                       <thead class="sticky-top bg-light">
                         <tr>
                           <th style="width: 100px;">Material</th>
@@ -253,7 +253,7 @@ export class DiagnosticModal extends LitElement {
                         ${this.diagnostics.map((diag, index) => html`
                           <tr class="${index % 2 === 0 ? 'even-row' : ''}">
                             <td class="text-monospace"><strong>${diag.Cod}</strong></td>
-                            <td class="text-truncate" title="${diag.Denumire}">${diag.Denumire}</td>
+                            <td class="text-truncate" title="${diag.Denumire}">${diag.Denumire && diag.Denumire.length > 20 ? diag.Denumire.substring(0, 20) + '...' : diag.Denumire}</td>
                             <td>
                               <span class="badge ${this._getReasonBadgeClass(diag.Motiv)}">
                                 ${this._getReasonLabel(diag.Motiv)}
@@ -271,11 +271,11 @@ export class DiagnosticModal extends LitElement {
                   </div>
 
                   <!-- Help Section -->
-                  <div class="mt-3">
-                    <h6 class="text-muted">
+                  <div class="mt-2">
+                    <h6 class="text-muted mb-1" style="font-size: 13px;">
                       <i class="fas fa-info-circle"></i> Cum rezolv excluderile?
                     </h6>
-                    <ul class="small text-muted mb-0">
+                    <ul class="small text-muted mb-0" style="font-size: 11px;">
                       <li><strong>Lipsă Stoc Emitere:</strong> Verificați stocul în filiala emițătoare sau schimbați filiala sursă</li>
                       <li><strong>Fără Limite Destinație:</strong> Configurați limitele în modulul MTRBRNLIMITS pentru filiala destinație (filialele emițătoare NU necesită limite obligatorii)</li>
                       <li><strong>Filială Inactivă:</strong> Activați filiala în sistemul branch/whouse</li>
@@ -285,7 +285,7 @@ export class DiagnosticModal extends LitElement {
                 `
               }
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer py-2">
               <button 
                 type="button" 
                 class="btn btn-secondary" 

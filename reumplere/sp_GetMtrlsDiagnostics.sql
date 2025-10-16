@@ -97,6 +97,61 @@ BEGIN
     WHERE company = @company
     AND (branch IN (SELECT branch FROM #EmitBranches) OR branch IN (SELECT branch FROM #DestBranches));  -- Only relevant branches
 
+    -- FIX: Create temp tables for pending orders and unreceived transfers (same logic as sp_GetMtrlsData)
+    CREATE TABLE #PendingOrders (
+        mtrl INT,
+        branchFrom INT,
+        branchTo INT,
+        qty DECIMAL(18,4)
+    );
+
+    INSERT INTO #PendingOrders
+    SELECT 
+        A.mtrl, 
+        C.BRANCH AS branchFrom,
+        B.BRANCHSEC AS branchTo,
+        SUM((ISNULL(A.QTY1,0)) - (ISNULL(A.QTY1COV,0) + ISNULL(A.QTY1CANC,0)))
+    FROM MTRLINES A 
+    INNER JOIN findoc c ON (c.findoc=a.findoc AND c.company=a.company AND c.sosource=a.sosource)
+    INNER JOIN MTRDOC B ON (A.FINDOC = B.FINDOC AND A.COMPANY = B.COMPANY)
+    WHERE 
+        A.COMPANY = @company
+        AND a.pending = 1
+        AND a.restmode = 2
+        AND c.FISCPRD = @fiscalYear
+        AND c.iscancel = 0
+        AND c.sosource = 1151
+        AND c.FPRMS = 3130
+        AND C.BRANCH IN (SELECT branch FROM #EmitBranches)
+    GROUP BY A.mtrl, C.BRANCH, B.BRANCHSEC;
+
+    CREATE TABLE #UnreceivedTransfers (
+        mtrl INT,
+        branchFrom INT,
+        branchTo INT,
+        qty DECIMAL(18,4)
+    );
+
+    INSERT INTO #UnreceivedTransfers
+    SELECT 
+        C.mtrl, 
+        A.BRANCH, 
+        B.BRANCHSEC, 
+        SUM(ISNULL(c.qty1, 0))
+    FROM FINDOC A
+    INNER JOIN MTRDOC B ON A.FINDOC = B.FINDOC
+    INNER JOIN MTRLINES C ON (A.SOSOURCE=C.SOSOURCE AND A.FINDOC=C.FINDOC AND A.COMPANY=C.COMPANY)
+    WHERE 
+        A.COMPANY = @company
+        AND A.SOSOURCE = 1151
+        AND A.FPRMS = 3153
+        AND A.FULLYTRANSF = 0
+        AND B.WHOUSESEC = 9999
+        AND A.FISCPRD = @fiscalYear
+        AND A.iscancel = 0
+        AND (A.BRANCH IN (SELECT branch FROM #EmitBranches) OR B.BRANCHSEC IN (SELECT branch FROM #DestBranches))
+    GROUP BY C.mtrl, A.BRANCH, B.BRANCHSEC;
+
     -- Update stock quantities in the branch limits table (for destination branches only - SCENARIO 5 & 6)
     UPDATE bl
     SET StockQty = ISNULL(stock.qty, 0)
@@ -121,14 +176,38 @@ BEGIN
         GROUP BY c.branch, a.mtrl
     ) stock ON (bl.mtrl = stock.mtrl AND bl.branch = stock.branch);
 
-    -- Calculate necessity values (simplified - only what we need for diagnostics)
+    -- FIX: Update pending orders in the branch limits table (same logic as sp_GetMtrlsData)
+    -- FIX: Exclude internal reservations (branchFrom = branchTo) from necessity calculation
+    UPDATE bl
+    SET PendingQty = ISNULL(pending.qty, 0)
+    FROM #BranchLimits bl
+    LEFT JOIN (
+        SELECT mtrl, branchTo AS branch, SUM(qty) AS qty
+        FROM #PendingOrders
+        WHERE branchFrom <> branchTo  -- FIX: Exclude internal reservations (2200->2200)
+        GROUP BY mtrl, branchTo
+    ) pending ON (bl.mtrl = pending.mtrl AND bl.branch = pending.branch);
+
+    -- FIX: Update transfers in the branch limits table (same logic as sp_GetMtrlsData)
+    -- FIX: Exclude internal transfers (branchFrom = branchTo) from necessity calculation
+    UPDATE bl
+    SET TransferQty = ISNULL(transfer.qty, 0)
+    FROM #BranchLimits bl
+    LEFT JOIN (
+        SELECT mtrl, branchTo AS branch, SUM(qty) AS qty
+        FROM #UnreceivedTransfers
+        WHERE branchFrom <> branchTo  -- FIX: Exclude internal transfers (2200->2200)
+        GROUP BY mtrl, branchTo
+    ) transfer ON (bl.mtrl = transfer.mtrl AND bl.branch = transfer.branch);
+
+    -- FIX: Calculate necessity values (CORRECT formula - includes pending and transfers)
     UPDATE #BranchLimits
     SET 
-        MinNecessity = CASE WHEN (MinLimit - ISNULL(StockQty, 0)) > 0 
-                       THEN (MinLimit - ISNULL(StockQty, 0))
+        MinNecessity = CASE WHEN (MinLimit - StockQty - PendingQty - TransferQty) > 0 
+                       THEN (MinLimit - StockQty - PendingQty - TransferQty)
                        ELSE 0 END,
-        MaxNecessity = CASE WHEN (MaxLimit - ISNULL(StockQty, 0)) > 0 
-                       THEN (MaxLimit - ISNULL(StockQty, 0))
+        MaxNecessity = CASE WHEN (MaxLimit - StockQty - PendingQty - TransferQty) > 0 
+                       THEN (MaxLimit - StockQty - PendingQty - TransferQty)
                        ELSE 0 END;
 
     -- Create diagnostics table
@@ -160,7 +239,7 @@ BEGIN
         'LIPSA_STOC_EMIT',
         eb.branch,
         b.name,
-        'Filiala emițătoare ' + CAST(eb.branch AS VARCHAR) + ' (' + b.name + ') nu are stoc pozitiv pentru acest material'
+        'Filiala emit. ' + CAST(eb.branch AS VARCHAR) + ' nu are stoc pozitiv pentru acest material'
     FROM #FilteredMaterials fm
     CROSS JOIN #EmitBranches eb
     INNER JOIN branch b ON b.branch = eb.branch AND b.company = @company
@@ -188,7 +267,7 @@ BEGIN
         'LIMITE_INEXISTENTE_DEST',
         db.branch,
         b.name,
-        'Filiala destinatară ' + CAST(db.branch AS VARCHAR) + ' (' + b.name + ') nu are limite configurate în MTRBRNLIMITS'
+        'Filiala dest. ' + CAST(db.branch AS VARCHAR) + ' nu are limite configurate în MTRBRNLIMITS'
     FROM #FilteredMaterials fm
     CROSS JOIN #DestBranches db
     INNER JOIN branch b ON b.branch = db.branch AND b.company = @company
@@ -215,7 +294,7 @@ BEGIN
         'BRANCH_INACTIV_DEST',
         db.branch,
         b.name,
-        'Filiala destinatară ' + CAST(db.branch AS VARCHAR) + ' (' + b.name + ') este inactivă în sistemul branch/whouse'
+        'Filiala dest. ' + CAST(db.branch AS VARCHAR) + ' este inactivă.'
     FROM #FilteredMaterials fm
     CROSS JOIN #DestBranches db
     INNER JOIN branch b ON b.branch = db.branch AND b.company = @company
@@ -245,7 +324,7 @@ BEGIN
             'LIMITE_ZERO_DEST',
             db.branch,
             b.name,
-            'Filiala destinatară ' + CAST(db.branch AS VARCHAR) + ' (' + b.name + ') are limite = 0 și setConditionForLimits = 1'
+            'Filiala dest. ' + CAST(db.branch AS VARCHAR) + ' are limite = 0 și setConditionForLimits = 1'
         FROM #FilteredMaterials fm
         CROSS JOIN #DestBranches db
         INNER JOIN branch b ON b.branch = db.branch AND b.company = @company
@@ -271,7 +350,7 @@ BEGIN
             'NECESAR_ZERO_DEST',
             db.branch,
             b.name,
-            'Filiala destinatară ' + CAST(db.branch AS VARCHAR) + ' (' + b.name + ') are necesar = 0 și setConditionForNecesar = 1'
+            'Filiala dest. ' + CAST(db.branch AS VARCHAR) + ' are necesar = 0 și setConditionForNecesar = 1'
         FROM #FilteredMaterials fm
         CROSS JOIN #DestBranches db
         INNER JOIN branch b ON b.branch = db.branch AND b.company = @company
@@ -304,6 +383,8 @@ BEGIN
     DROP TABLE #DestBranches;
     DROP TABLE #BranchLimits;
     DROP TABLE #Diagnostics;
-    DROP TABLE #FilteredMaterials;  -- NEW
-    DROP TABLE #MaterialStock;      -- NEW
+    DROP TABLE #FilteredMaterials;
+    DROP TABLE #MaterialStock;
+    DROP TABLE #PendingOrders;        -- FIX: Added
+    DROP TABLE #UnreceivedTransfers;  -- FIX: Added
 END
