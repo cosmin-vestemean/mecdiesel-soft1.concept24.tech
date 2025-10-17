@@ -41,7 +41,8 @@ export const mecItemProducerRelationDataSchema = Type.Pick(
     "Key",
     "Item_key",
     "Producer_Item_key",
-    "Item"
+    "Item",
+    "Delete_date"
   ],
   {
     $id: "MecItemProducerRelationData",

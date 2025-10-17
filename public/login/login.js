@@ -11,7 +11,8 @@ $(document).ready(() => {
 
     // Function to show login errors
     function showLoginError(message) {
-        $loginError.text(message).removeClass('d-none');
+        $loginError.find('.error-message').text(message);
+        $loginError.removeClass('d-none');
     }
 
     // Function to hide login errors

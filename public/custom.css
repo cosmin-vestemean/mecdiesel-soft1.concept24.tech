@@ -111,7 +111,85 @@ h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
   transition: all var(--transition-slow);
 }
 
-/* Header Toggle Button (Sidebar Toggle) - Structural styles only */
+/* ========================================
+   LOGIN FORM STYLING
+   ======================================== */
+
+/* Login Form Container */
+#loginForm {
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+
+#loginForm .card {
+  backdrop-filter: blur(10px);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+#loginForm .card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Login Form Inputs */
+#loginForm .form-control,
+#loginForm .form-select {
+  transition: all 0.3s ease;
+  border-color: #dee2e6;
+}
+
+#loginForm .form-control:focus,
+#loginForm .form-select:focus {
+  border-color: var(--bs-primary);
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15);
+  transform: translateY(-2px);
+}
+
+#loginForm .form-control:hover,
+#loginForm .form-select:hover {
+  border-color: var(--bs-primary);
+}
+
+/* Login Button */
+#loginButton {
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0.75rem 1.5rem;
+}
+
+#loginButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(13, 110, 253, 0.3) !important;
+}
+
+#loginButton:active {
+  transform: translateY(0);
+}
+
+/* Login Error Alert */
+#loginError {
+  animation: shake 0.5s ease;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-10px); }
+  75% { transform: translateX(10px); }
+}
+
+/* Login Logo Animation */
+#loginForm img {
+  transition: transform 0.3s ease;
+}
+
+#loginForm .card:hover img {
+  transform: scale(1.05);
+}
+
+/* ========================================
+   HEADER TOGGLE BUTTON
+   ======================================== */
+
 #headerToggle {
   cursor: pointer;
   user-select: none;
@@ -192,7 +270,8 @@ body.sidebar-collapsed #footer {
   height: 100vh;
   z-index: 1040;
   transition: transform 0.3s ease, width 0.3s ease;
-  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.25);
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1); /* Lighter shadow for light background */
+  border-right: 1px solid #dee2e6; /* Match footer border color */
 }
 
 .app-sidebar.collapsed {
@@ -266,16 +345,16 @@ body.sidebar-collapsed #footer {
 }
 
 .sidebar-module:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.05); /* Light gray hover for light background */
 }
 
 .sidebar-module.active {
-  background: rgba(13, 110, 253, 0.2); /* Bootstrap primary with transparency */
+  background: rgba(13, 110, 253, 0.15); /* Bootstrap primary with transparency */
   border-left-color: var(--bs-primary, #0d6efd);
 }
 
 .sidebar-module.active i {
-  color: var(--bs-info, #0dcaf0) !important; /* Bootstrap info color for active icon */
+  color: var(--bs-primary, #0d6efd) !important; /* Bootstrap primary color for active icon */
 }
 
 .sidebar-module:focus {

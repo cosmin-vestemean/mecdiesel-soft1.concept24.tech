@@ -35,36 +35,79 @@
     </style>
   </head>
 
-  <body>
-    <!-- Login Form -->
-    <div id="loginForm" class="container mt-5">
-      <div class="row justify-content-center">
-        <div class="col-md-6 col-lg-4">
-          <div class="card">
-            <div class="card-body">
-              <!-- Add Dubhe Logo -->
-              <img
-                src="https://dubhegroup.ro/images/settings/wqGVMB1HaH8amjNIDfuih0A9sBRD0F2lcmKx4yzU.png"
-                alt="Dubhe Group Logo" 
-                class="img-fluid mx-auto d-block mb-4" 
-                style="max-width: 200px;" 
-                loading="lazy"
-              />
-              <h3 class="card-title text-center mb-4">Software hub</h3>
-              <div id="loginError" class="alert alert-danger d-none" role="alert"></div>
-              <form id="loginActualForm">
-                <div class="mb-3">
-                  <label for="userSelect" class="form-label">User</label>
-                  <select id="userSelect" class="form-select" required>
-                    <option value="" disabled selected>Loading users...</option>
-                  </select>
+  <body class="bg-light">
+    <!-- Login Form - Professional Design -->
+    <div id="loginForm" class="min-vh-100 d-flex align-items-center justify-content-center py-5">
+      <div class="container">
+        <div class="row justify-content-center">
+          <div class="col-md-8 col-lg-5 col-xl-4">
+            <!-- Login Card -->
+            <div class="card shadow-lg border-0 rounded-4">
+              <div class="card-body p-5">
+                <!-- Dubhe Logo -->
+                <div class="text-center mb-4">
+                  <img
+                    src="https://dubhegroup.ro/images/settings/wqGVMB1HaH8amjNIDfuih0A9sBRD0F2lcmKx4yzU.png"
+                    alt="Dubhe Group Logo" 
+                    class="img-fluid mb-3" 
+                    style="max-width: 180px;" 
+                    loading="lazy"
+                  />
+                  <h2 class="fw-bold text-dark mb-2">Software Hub</h2>
+                  <p class="text-muted small mb-0">Mec Diesel SEE / Dubhe Romania</p>
                 </div>
-                <div class="mb-3">
-                  <label for="passwordInput" class="form-label">Password</label>
-                  <input type="password" class="form-control" id="passwordInput" required>
+
+                <!-- Error Alert -->
+                <div id="loginError" class="alert alert-danger d-none rounded-3 mb-4" role="alert">
+                  <i class="fas fa-exclamation-circle me-2"></i>
+                  <span class="error-message"></span>
                 </div>
-                <button type="submit" id="loginButton" class="btn btn-primary w-100">Login</button>
-              </form>
+
+                <!-- Login Form -->
+                <form id="loginActualForm">
+                  <div class="mb-4">
+                    <label for="userSelect" class="form-label fw-semibold text-dark">
+                      <i class="fas fa-user me-2 text-primary"></i>User
+                    </label>
+                    <select id="userSelect" class="form-select form-select-lg rounded-3 border-2" required>
+                      <option value="" disabled selected>Loading users...</option>
+                    </select>
+                  </div>
+                  
+                  <div class="mb-4">
+                    <label for="passwordInput" class="form-label fw-semibold text-dark">
+                      <i class="fas fa-lock me-2 text-primary"></i>Password
+                    </label>
+                    <input 
+                      type="password" 
+                      class="form-control form-control-lg rounded-3 border-2" 
+                      id="passwordInput" 
+                      placeholder="Enter your password"
+                      required
+                    >
+                  </div>
+
+                  <button type="submit" id="loginButton" class="btn btn-primary btn-lg w-100 rounded-3 fw-semibold shadow-sm">
+                    <i class="fas fa-sign-in-alt me-2"></i>Login
+                  </button>
+                </form>
+
+                <!-- Footer Info -->
+                <div class="text-center mt-4 pt-4 border-top">
+                  <p class="text-muted small mb-0">
+                    <i class="fas fa-shield-alt me-1"></i>
+                    Secure access to internal tools
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Additional Info -->
+            <div class="text-center mt-4">
+              <p class="text-muted small">
+                <i class="fas fa-info-circle me-1"></i>
+                Need help? Contact your system administrator
+              </p>
             </div>
           </div>
         </div>
@@ -74,9 +117,9 @@
     <!-- Header - Initially hidden until login -->
     <div id="header" class="d-none">
       <!-- Sidebar for Module Navigation -->
-      <aside id="appSidebar" class="app-sidebar bg-dark">
+      <aside id="appSidebar" class="app-sidebar bg-light">
         <!-- Logo Area -->
-        <div class="sidebar-logo border-bottom border-secondary">
+        <div class="sidebar-logo border-bottom">
           <a href="https://www.mecdiesel.ro" target="_blank" class="text-decoration-none">
             <img
               src="https://dubhegroup.ro/images/settings/wqGVMB1HaH8amjNIDfuih0A9sBRD0F2lcmKx4yzU.png"
@@ -89,21 +132,21 @@
         
         <!-- Module Navigation -->
         <nav class="sidebar-nav">
-          <button type="button" class="sidebar-module active text-light" data-app="italy-sync">
-            <i class="fas fa-exchange-alt text-light"></i>
-            <span class="sidebar-module-text text-light">Italy Sync</span>
+          <button type="button" class="sidebar-module active text-dark" data-app="italy-sync">
+            <i class="fas fa-exchange-alt text-dark"></i>
+            <span class="sidebar-module-text text-dark">Italy Sync</span>
           </button>
-          <button type="button" class="sidebar-module text-light" data-app="conversie-auto">
-            <i class="fas fa-cogs text-light"></i>
-            <span class="sidebar-module-text text-light">Conversie Auto</span>
+          <button type="button" class="sidebar-module text-dark" data-app="conversie-auto">
+            <i class="fas fa-cogs text-dark"></i>
+            <span class="sidebar-module-text text-dark">Conversie Auto</span>
           </button>
-          <button type="button" class="sidebar-module text-light" data-app="print-config">
-            <i class="fas fa-print text-light"></i>
-            <span class="sidebar-module-text text-light">Print Config</span>
+          <button type="button" class="sidebar-module text-dark" data-app="print-config">
+            <i class="fas fa-print text-dark"></i>
+            <span class="sidebar-module-text text-dark">Print Config</span>
           </button>
-          <button type="button" class="sidebar-module text-light" data-app="achizitii">
-            <i class="fas fa-truck text-light"></i>
-            <span class="sidebar-module-text text-light">Achizitii</span>
+          <button type="button" class="sidebar-module text-dark" data-app="achizitii">
+            <i class="fas fa-truck text-dark"></i>
+            <span class="sidebar-module-text text-dark">Achizitii</span>
           </button>
         </nav>
       </aside>
@@ -111,7 +154,7 @@
       <!-- Top Bar for Sections Navigation -->
       <div id="topBar" class="top-bar bg-white border-bottom">
         <!-- Mobile Menu Toggle -->
-        <button id="mobileMenuToggle" class="mobile-menu-toggle bg-dark text-white d-md-none">
+        <button id="mobileMenuToggle" class="mobile-menu-toggle bg-light text-dark d-md-none">
           <i class="fas fa-bars"></i>
         </button>
         
