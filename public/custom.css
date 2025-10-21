@@ -108,7 +108,16 @@ h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
   top: 0;
   z-index: var(--z-header);
   backdrop-filter: blur(8px);
-  transition: all var(--transition-slow);
+  transition: max-height var(--transition-slow), opacity var(--transition-slow), transform var(--transition-slow);
+}
+
+#header.header-collapsed {
+  max-height: 0;
+  height: 0;
+  opacity: 0;
+  transform: translateY(-100%);
+  overflow: hidden;
+  pointer-events: none;
 }
 
 /* ========================================
@@ -382,11 +391,56 @@ body.sidebar-collapsed .top-bar {
 /* Mobile Menu Toggle - Structural styles only */
 .mobile-menu-toggle {
   border: none;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem;
   cursor: pointer;
   margin-right: 1rem;
-  border-radius: 4px;
+  border-radius: 50%;
   transition: all 0.2s ease;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-menu-toggle .menu-bar {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background-color: currentColor;
+  position: relative;
+  transition: transform 0.2s ease;
+}
+
+.mobile-menu-toggle .menu-bar::before,
+.mobile-menu-toggle .menu-bar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: 22px;
+  height: 2px;
+  background-color: currentColor;
+  transition: transform 0.2s ease;
+}
+
+.mobile-menu-toggle .menu-bar::before {
+  top: -6px;
+}
+
+.mobile-menu-toggle .menu-bar::after {
+  top: 6px;
+}
+
+.mobile-menu-toggle.open .menu-bar {
+  background-color: transparent;
+}
+
+.mobile-menu-toggle.open .menu-bar::before {
+  transform: translateY(6px) rotate(45deg);
+}
+
+.mobile-menu-toggle.open .menu-bar::after {
+  transform: translateY(-6px) rotate(-45deg);
 }
 
 /* Mobile Responsiveness */
@@ -397,6 +451,7 @@ body.sidebar-collapsed .top-bar {
   
   .app-sidebar.mobile-open {
     transform: translateX(0);
+    width: 220px;
   }
   
   .top-bar {
@@ -413,11 +468,13 @@ body.sidebar-collapsed .top-bar {
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.5);
-    z-index: 1039;
+    z-index: 1020;
+    pointer-events: none;
   }
   
   .sidebar-backdrop.show {
     display: block;
+    pointer-events: auto;
   }
 }
 

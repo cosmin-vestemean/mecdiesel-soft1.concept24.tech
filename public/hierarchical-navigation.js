@@ -36,8 +36,7 @@ class HierarchicalNavigation {
   init() {
     this.bindAppSelectorEvents();
     this.bindSubTabEvents();
-    this.bindHeaderToggle();
-    this.bindSidebarToggle();
+    this.bindNavigationToggle();
     this.bindMobileMenu();
     this.setInitialState();
   }
@@ -62,102 +61,64 @@ class HierarchicalNavigation {
     });
   }
 
-  bindHeaderToggle() {
-    const headerToggleBtn = document.getElementById('headerToggle');
+  bindNavigationToggle() {
+    const toggleBtn = document.getElementById('headerToggle');
     const header = document.getElementById('header');
-    
-    if (headerToggleBtn && header) {
-      // Default state: header visible
-      let isHeaderVisible = true;
-      
-      headerToggleBtn.addEventListener('click', () => {
-        isHeaderVisible = !isHeaderVisible;
-        
-        if (isHeaderVisible) {
-          // Show header
-          header.classList.remove('header-collapsed');
-          headerToggleBtn.querySelector('i').className = 'fas fa-chevron-up';
-          headerToggleBtn.title = 'Hide Header';
-        } else {
-          // Hide header
-          header.classList.add('header-collapsed');
-          headerToggleBtn.querySelector('i').className = 'fas fa-chevron-down';
-          headerToggleBtn.title = 'Show Header';
-        }
-        
-        // Store preference in localStorage
-        localStorage.setItem('headerVisible', isHeaderVisible.toString());
-        
-        // Recalculate content dimensions after transition
-        setTimeout(() => {
-          this.recalculateContentDimensions();
-        }, 350); // Slightly after the CSS transition completes
-        
-        // Dispatch event for other components that might need to react
-        const event = new CustomEvent('header-toggled', {
-          detail: { isVisible: isHeaderVisible }
-        });
-        document.dispatchEvent(event);
-      });
-      
-      // Restore previous state from localStorage
-      const savedState = localStorage.getItem('headerVisible');
-      if (savedState === 'false') {
-        headerToggleBtn.click(); // Trigger the toggle to hide header
-      }
-    }
-  }
-
-  bindSidebarToggle() {
-    const headerToggle = document.getElementById('headerToggle');
     const sidebar = document.getElementById('appSidebar');
-    
-    if (headerToggle && sidebar) {
-      // Restore sidebar state from localStorage
-      const sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-      const icon = headerToggle.querySelector('i');
-      
-      if (sidebarCollapsed) {
-        sidebar.classList.add('collapsed');
-        document.body.classList.add('sidebar-collapsed');
-        // Set initial icon and button style for collapsed state
-        if (icon) icon.className = 'fas fa-bars';
-        headerToggle.className = 'btn btn-success btn-sm me-3'; // Green when collapsed
-      } else {
-        // Set initial icon and button style for expanded state
-        if (icon) icon.className = 'fas fa-times';
-        headerToggle.className = 'btn btn-outline-primary btn-sm me-3'; // Blue outline when visible
-      }
-      
-      headerToggle.addEventListener('click', () => {
-        const isCollapsed = sidebar.classList.toggle('collapsed');
-        document.body.classList.toggle('sidebar-collapsed');
-        
-        // Update icon and button style
-        const icon = headerToggle.querySelector('i');
-        if (isCollapsed) {
-          icon.className = 'fas fa-bars'; // Show bars when collapsed (hidden)
-          headerToggle.className = 'btn btn-success btn-sm me-3'; // Green when collapsed
-        } else {
-          icon.className = 'fas fa-times'; // Show X when expanded (visible)
-          headerToggle.className = 'btn btn-outline-primary btn-sm me-3'; // Blue outline when visible
-        }
-        
-        // Save state to localStorage
-        localStorage.setItem('sidebarCollapsed', isCollapsed.toString());
-        
-        // Dispatch event for other components that might need to react
-        const event = new CustomEvent('sidebar-toggled', {
-          detail: { collapsed: isCollapsed }
-        });
-        document.dispatchEvent(event);
-        
-        // Recalculate dimensions after animation
-        setTimeout(() => {
-          this.recalculateContentDimensions();
-        }, 300);
-      });
+    const app = document.getElementById('app');
+
+    if (!toggleBtn || !header || !sidebar || !app) {
+      return;
     }
+
+    const icon = toggleBtn.querySelector('i');
+
+    // Keep header and sidebar collapse in lockstep so the workspace expands cleanly
+    const applyState = (isCollapsed, emitEvents = true) => {
+      header.classList.toggle('header-collapsed', isCollapsed);
+      app.classList.toggle('header-collapsed', isCollapsed);
+      sidebar.classList.toggle('collapsed', isCollapsed);
+      document.body.classList.toggle('sidebar-collapsed', isCollapsed);
+
+      if (icon) {
+        icon.className = isCollapsed ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+      }
+      toggleBtn.classList.remove('btn-outline-primary', 'btn-success');
+      toggleBtn.classList.add('btn', 'btn-sm', 'me-3');
+      toggleBtn.classList.add(isCollapsed ? 'btn-success' : 'btn-outline-primary');
+      toggleBtn.title = isCollapsed ? 'Show navigation' : 'Hide navigation';
+
+      localStorage.setItem('layoutCollapsed', isCollapsed.toString());
+      localStorage.removeItem('headerVisible');
+      localStorage.removeItem('sidebarCollapsed');
+
+      if (emitEvents) {
+        document.dispatchEvent(new CustomEvent('header-toggled', {
+          detail: { isVisible: !isCollapsed }
+        }));
+
+        document.dispatchEvent(new CustomEvent('sidebar-toggled', {
+          detail: { collapsed: isCollapsed }
+        }));
+      }
+
+      setTimeout(() => {
+        this.recalculateContentDimensions();
+      }, 350);
+    };
+
+    const storedLayoutState = localStorage.getItem('layoutCollapsed');
+    const legacySidebarState = localStorage.getItem('sidebarCollapsed');
+    const defaultCollapsed = storedLayoutState !== null
+      ? storedLayoutState === 'true'
+      : legacySidebarState === 'true';
+
+    applyState(defaultCollapsed, false);
+
+    toggleBtn.addEventListener('click', () => {
+      const nextState = !header.classList.contains('header-collapsed');
+      applyState(nextState);
+    });
   }
 
   bindMobileMenu() {
@@ -171,14 +132,18 @@ class HierarchicalNavigation {
       document.body.appendChild(backdrop);
       
       mobileToggle.addEventListener('click', () => {
-        sidebar.classList.toggle('mobile-open');
-        backdrop.classList.toggle('show');
+        const isOpen = sidebar.classList.toggle('mobile-open');
+        backdrop.classList.toggle('show', isOpen);
+        mobileToggle.classList.toggle('open', isOpen);
+        mobileToggle.setAttribute('aria-expanded', isOpen.toString());
       });
       
       // Close sidebar when clicking backdrop
       backdrop.addEventListener('click', () => {
         sidebar.classList.remove('mobile-open');
         backdrop.classList.remove('show');
+        mobileToggle.classList.remove('open');
+        mobileToggle.setAttribute('aria-expanded', 'false');
       });
       
       // Close sidebar when module is selected on mobile
@@ -187,6 +152,8 @@ class HierarchicalNavigation {
           if (window.innerWidth < 768) {
             sidebar.classList.remove('mobile-open');
             backdrop.classList.remove('show');
+            mobileToggle.classList.remove('open');
+            mobileToggle.setAttribute('aria-expanded', 'false');
           }
         });
       });
