@@ -214,20 +214,20 @@ h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
 #footer {
   position: fixed;
   bottom: 0;
-  width: 100%;
+  left: 220px;
+  width: calc(100% - 220px);
   height: 60px;
   background-color: #f8f9fa;
   border-top: 1px solid #dee2e6;
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
   z-index: 1030 !important;
-  margin-left: 220px;
-  transition: margin-left 0.3s ease;
+  transition: left 0.3s ease, width 0.3s ease;
 }
 
 /* Footer adjusts when sidebar is collapsed */
-.app-sidebar.collapsed ~ #app ~ #footer,
 body.sidebar-collapsed #footer {
-  margin-left: 0;
+  left: 0;
+  width: 100%;
 }
 
 #footer .btn-group {
@@ -365,7 +365,8 @@ body.sidebar-collapsed #footer {
 /* Top Bar (Sections Navigation) - Structural styles only */
 .top-bar {
   margin-left: 220px;
-  transition: margin-left 0.3s ease;
+  width: calc(100% - 220px);
+  transition: margin-left 0.3s ease, width 0.3s ease;
   padding: 0.75rem 1.5rem;
   position: sticky;
   top: 0;
@@ -375,6 +376,7 @@ body.sidebar-collapsed #footer {
 .app-sidebar.collapsed ~ .top-bar,
 body.sidebar-collapsed .top-bar {
   margin-left: 0; /* Full width when collapsed */
+  width: 100%;
 }
 
 /* Mobile Menu Toggle - Structural styles only */
@@ -399,6 +401,7 @@ body.sidebar-collapsed .top-bar {
   
   .top-bar {
     margin-left: 0 !important;
+    width: 100% !important;
   }
   
   /* Backdrop for mobile */
@@ -421,17 +424,25 @@ body.sidebar-collapsed .top-bar {
 /* Adjust main content area */
 #app {
   margin-left: 220px;
-  transition: margin-left 0.3s ease;
+  width: calc(100% - 220px);
+  transition: margin-left 0.3s ease, width 0.3s ease;
 }
 
 .app-sidebar.collapsed ~ #app,
 body.sidebar-collapsed #app {
   margin-left: 0; /* Full width when collapsed */
+  width: 100%;
 }
 
 @media (max-width: 767px) {
   #app {
     margin-left: 0 !important;
+    width: 100% !important;
+  }
+
+  #footer {
+    left: 0 !important;
+    width: 100% !important;
   }
 }
 
