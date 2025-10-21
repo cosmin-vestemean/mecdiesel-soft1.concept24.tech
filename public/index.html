@@ -114,8 +114,8 @@
       </div>
     </div>
 
-    <!-- Header - Initially hidden until login -->
-    <div id="header" class="d-none">
+    <!-- Workspace Layout - Initially hidden until login -->
+    <div id="workspace" class="app-shell d-none">
       <!-- Sidebar for Module Navigation -->
       <aside id="appSidebar" class="app-sidebar bg-light">
         <!-- Logo Area -->
@@ -150,328 +150,333 @@
           </button>
         </nav>
       </aside>
-      
-      <!-- Top Bar for Sections Navigation -->
-      <div id="topBar" class="top-bar bg-white border-bottom">
-        <!-- Mobile Menu Toggle -->
-        <button id="mobileMenuToggle" class="mobile-menu-toggle bg-light text-dark d-md-none" aria-label="Toggle navigation" aria-expanded="false">
-          <span class="menu-bar"></span>
-        </button>
-        
-        <!-- Sub-app Navigation for Italy Sync -->
-        <ul class="nav nav-tabs sub-nav" id="italySyncTabs" role="tablist" data-app="italy-sync">
-          <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="mappingsButton" data-bs-toggle="tab" type="button" role="tab">
-              Mappings <i id="mappingsReload" class="fas fa-sync reload-icon"></i>
-            </button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="itemsButton" data-bs-toggle="tab" type="button" role="tab">
-              Tables <i id="itemsReload" class="fas fa-sync reload-icon"></i>
-            </button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="errorsButton" data-bs-toggle="tab" type="button" role="tab">
-              Messages <i id="errorsReload" class="fas fa-sync reload-icon"></i>
-            </button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="stockChangesButton" data-bs-toggle="tab" type="button" role="tab">
-              Stock changes <i id="stockChangesReload" class="fas fa-sync reload-icon"></i>
-            </button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="batchButton" data-bs-toggle="tab" type="button" role="tab">
-              Batch
-            </button>
-          </li>
-        </ul>
 
-        <!-- Sub-app Navigation for Conversie Auto -->
-        <ul class="nav nav-tabs sub-nav d-none" id="conversieAutoTabs" role="tablist" data-app="conversie-auto">
-          <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="convAutoButton" data-bs-toggle="tab" type="button" role="tab">
-              Conversie automata <i id="convAutoReload" class="fas fa-sync reload-icon"></i>
+      <div class="workspace-main">
+        <!-- Top Bar for Sections Navigation -->
+        <header id="header" class="workspace-header d-none">
+          <div id="topBar" class="top-bar bg-white border-bottom">
+            <!-- Mobile Menu Toggle -->
+            <button id="mobileMenuToggle" class="mobile-menu-toggle bg-light text-dark d-md-none" aria-label="Toggle navigation" aria-expanded="false">
+              <span class="menu-bar"></span>
             </button>
-          </li>
-        </ul>
+            
+            <!-- Sub-app Navigation for Italy Sync -->
+            <ul class="nav nav-tabs sub-nav" id="italySyncTabs" role="tablist" data-app="italy-sync">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="mappingsButton" data-bs-toggle="tab" type="button" role="tab">
+                  Mappings <i id="mappingsReload" class="fas fa-sync reload-icon"></i>
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="itemsButton" data-bs-toggle="tab" type="button" role="tab">
+                  Tables <i id="itemsReload" class="fas fa-sync reload-icon"></i>
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="errorsButton" data-bs-toggle="tab" type="button" role="tab">
+                  Messages <i id="errorsReload" class="fas fa-sync reload-icon"></i>
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="stockChangesButton" data-bs-toggle="tab" type="button" role="tab">
+                  Stock changes <i id="stockChangesReload" class="fas fa-sync reload-icon"></i>
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="batchButton" data-bs-toggle="tab" type="button" role="tab">
+                  Batch
+                </button>
+              </li>
+            </ul>
 
-        <!-- Sub-app Navigation for Print Config -->
-        <ul class="nav nav-tabs sub-nav d-none" id="printConfigTabs" role="tablist" data-app="print-config">
-          <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="printConfigButton" data-bs-toggle="tab" type="button" role="tab">
-              Print config
-            </button>
-          </li>
-        </ul>
+            <!-- Sub-app Navigation for Conversie Auto -->
+            <ul class="nav nav-tabs sub-nav d-none" id="conversieAutoTabs" role="tablist" data-app="conversie-auto">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="convAutoButton" data-bs-toggle="tab" type="button" role="tab">
+                  Conversie automata <i id="convAutoReload" class="fas fa-sync reload-icon"></i>
+                </button>
+              </li>
+            </ul>
 
-        <!-- Sub-app Navigation for Achizitii -->
-        <ul class="nav nav-tabs sub-nav d-none" id="achizitiiTabs" role="tablist" data-app="achizitii">
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="necesarAchizitiiButton" data-bs-toggle="tab" type="button" role="tab">
-              Necesar achizitii
-            </button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="topAbcButton" data-bs-toggle="tab" type="button" role="tab">
-              Top ABC
-            </button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="branchReplenishButton" data-bs-toggle="tab" type="button" role="tab">
-              Branch Replenishment
-              <i class="fas fa-info-circle ms-2 text-muted" 
-                 id="branchReplenishInfoIcon"
-                 style="font-size: 0.8rem; opacity: 0.7; cursor: pointer;" 
-                 title="View documentation hub"
-                 onclick="openBranchReplenishmentDocs(event)"></i>
-            </button>
-          </li>
-        </ul>
-        
-        <!-- Contextual Controls -->
-        <div class="d-flex align-items-center mt-2 gap-2" id="contextualControls">
-          <select id="tables" class="form-select w-auto">
-            <option value="mec_item">mec_item</option>
-            <option value="mec_item_producer_relation">mec_item_producer_relation</option>
-            <option value="site_product_changes_history">site_product_changes_history</option>
-            <option value="site_product_frequent_changes">site_product_frequent_changes</option>
-            <option value="mec_item_altref">mec_item_altref</option>
-            <option value="mec_ro_item_rel_supplier">mec_ro_item_rel_supplier</option>
-          </select>
-          <input id="searchItems" type="text" class="form-control" placeholder="Search items by Item or mec_code"/>
-          <input id="batchSize" type="number" class="form-control" value="50" style="width: 100px"/>
-        </div>
-      </div>
-    </div>
+            <!-- Sub-app Navigation for Print Config -->
+            <ul class="nav nav-tabs sub-nav d-none" id="printConfigTabs" role="tablist" data-app="print-config">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="printConfigButton" data-bs-toggle="tab" type="button" role="tab">
+                  Print config
+                </button>
+              </li>
+            </ul>
 
-    <!-- App Content Here - Initially hidden -->
-    <div id="app" class="container-fluid p-1 d-none">
-      <div id="mainContent" class="container-fluid d-none">
-        <div id="itemsContent" class="table-responsive">
-          <data-table
-            id="items"
-            class="table table-sm table-responsive modern-table"
-          ></data-table>
-        </div>
-        <div id="mappingsContent" class="table-responsive">
-          <data-table
-            id="mappings"
-            class="table table-sm table-responsive modern-table"
-          ></data-table>
-        </div>
-        <div id="errorsContent" class="table-responsive">
-          <data-table
-            id="errors"
-            class="table table-sm table-responsive modern-table"
-          ></data-table>
-        </div>
-        <div id="convAutoContent" class="table-responsive">
-          <data-table
-            id="convAuto"
-            class="table table-sm table-responsive modern-table"
-          ></data-table>
-        </div>
-        <div id="stockChangesContent" class="table-responsive">
-          <div class="d-flex align-items-center gap-3 mb-3">
-            <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" id="stockChangesCheckbox"/>
-              <label class="form-check-label text-success fw-bold" for="stockChangesCheckbox">Show only out of stock items</label>
+            <!-- Sub-app Navigation for Achizitii -->
+            <ul class="nav nav-tabs sub-nav d-none" id="achizitiiTabs" role="tablist" data-app="achizitii">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="necesarAchizitiiButton" data-bs-toggle="tab" type="button" role="tab">
+                  Necesar achizitii
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="topAbcButton" data-bs-toggle="tab" type="button" role="tab">
+                  Top ABC
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="branchReplenishButton" data-bs-toggle="tab" type="button" role="tab">
+                  Branch Replenishment
+                  <i class="fas fa-info-circle ms-2 text-muted" 
+                     id="branchReplenishInfoIcon"
+                     style="font-size: 0.8rem; opacity: 0.7; cursor: pointer;" 
+                     title="View documentation hub"
+                     onclick="openBranchReplenishmentDocs(event)"></i>
+                </button>
+              </li>
+            </ul>
+            
+            <!-- Contextual Controls -->
+            <div class="d-flex align-items-center mt-2 gap-2" id="contextualControls">
+              <select id="tables" class="form-select w-auto">
+                <option value="mec_item">mec_item</option>
+                <option value="mec_item_producer_relation">mec_item_producer_relation</option>
+                <option value="site_product_changes_history">site_product_changes_history</option>
+                <option value="site_product_frequent_changes">site_product_frequent_changes</option>
+                <option value="mec_item_altref">mec_item_altref</option>
+                <option value="mec_ro_item_rel_supplier">mec_ro_item_rel_supplier</option>
+              </select>
+              <input id="searchItems" type="text" class="form-control" placeholder="Search items by Item or mec_code"/>
+              <input id="batchSize" type="number" class="form-control" value="50" style="width: 100px"/>
             </div>
           </div>
-          <data-table
-            id="stockChanges"
-            class="table table-sm table-responsive modern-table"
-          ></data-table>
-        </div>
-        <!--
-          1.batchApp: set height and width and center
-        -->
-        <div id="batchApp">
-          <div id="batchControlPanel" class="mb-2 mt-2">
-            <div
-              class="btn-group"
-              role="group"
-              aria-label="Batch jobs radio toggle button group"
-              class="d-flex flex-row"
-              id="batchRadio"
-            >
-              <input
-                type="radio"
-                class="btn-check p-1"
-                name="btnradio"
-                id="moveItemsOnline"
-                autocomplete="off"
-              />
-              <label
-                class="btn btn-outline-primary btn-sm btn-outline-secondary me-1"
-                for="moveItemsOnline"
-                >Move items online</label
-              >
+        </header>
 
-              <input
-                type="radio"
-                class="btn-check p-1"
-                name="btnradio"
-                id="stockEvidence"
-                autocomplete="off"
-              />
-              <label
-                class="btn btn-outline-primary btn-sm btn-outline-secondary me-1"
-                for="stockEvidence"
-                >Stock evidence</label
-              >
-            </div>
-            <div class="d-flex flex-row">
-              <div class="p-1">
-                <form id="uploadForm">
-                  <input
-                    id="upload"
-                    type="file"
-                    class="form-control form-control-sm w-100 me-1"
-                    accept=".xlsx"
-                  />
-                </form>
+        <main class="workspace-content">
+          <!-- App Content Here - Initially hidden -->
+          <div id="app" class="container-fluid p-1 d-none">
+            <div id="mainContent" class="container-fluid d-none">
+              <div id="itemsContent" class="table-responsive">
+                <data-table
+                  id="items"
+                  class="table table-sm modern-table"
+                ></data-table>
               </div>
-              <div class="p-1">
-                <button id="process" class="btn btn-sm btn-outline-secondary">
-                  Process
-                </button>
+              <div id="mappingsContent" class="table-responsive">
+                <data-table
+                  id="mappings"
+                  class="table table-sm modern-table"
+                ></data-table>
               </div>
-              <div class="p-1">
-                <button id="stopBatch" class="btn btn-sm btn-outline-secondary">
-                  Stop
-                </button>
+              <div id="errorsContent" class="table-responsive">
+                <data-table
+                  id="errors"
+                  class="table table-sm modern-table"
+                ></data-table>
               </div>
-            </div>
-            <div class="d-flex flex-row">
-              <span
-                id="batchStatus"
-                class="h5 fw-bold font-monospace text-success"
-              ></span>
-            </div>
-          </div>
-          <div class="container-fluid p-0">
-            <div class="row">
-              <div class="col-12">
-                <div class="table-responsive">
-                  <data-table id="batchTable" class="table table-sm modern-table"></data-table>
+              <div id="convAutoContent" class="table-responsive">
+                <data-table
+                  id="convAuto"
+                  class="table table-sm modern-table"
+                ></data-table>
+              </div>
+              <div id="stockChangesContent" class="table-responsive">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="stockChangesCheckbox"/>
+                    <label class="form-check-label text-success fw-bold" for="stockChangesCheckbox">Show only out of stock items</label>
+                  </div>
+                </div>
+                <data-table
+                  id="stockChanges"
+                  class="table table-sm modern-table"
+                ></data-table>
+              </div>
+              <!--
+                1.batchApp: set height and width and center
+              -->
+              <div id="batchApp">
+                <div id="batchControlPanel" class="mb-2 mt-2">
+                  <div
+                    class="btn-group"
+                    role="group"
+                    aria-label="Batch jobs radio toggle button group"
+                    class="d-flex flex-row"
+                    id="batchRadio"
+                  >
+                    <input
+                      type="radio"
+                      class="btn-check p-1"
+                      name="btnradio"
+                      id="moveItemsOnline"
+                      autocomplete="off"
+                    />
+                    <label
+                      class="btn btn-outline-primary btn-sm btn-outline-secondary me-1"
+                      for="moveItemsOnline"
+                      >Move items online</label
+                    >
+
+                    <input
+                      type="radio"
+                      class="btn-check p-1"
+                      name="btnradio"
+                      id="stockEvidence"
+                      autocomplete="off"
+                    />
+                    <label
+                      class="btn btn-outline-primary btn-sm btn-outline-secondary me-1"
+                      for="stockEvidence"
+                      >Stock evidence</label
+                    >
+                  </div>
+                  <div class="d-flex flex-row">
+                    <div class="p-1">
+                      <form id="uploadForm">
+                        <input
+                          id="upload"
+                          type="file"
+                          class="form-control form-control-sm w-100 me-1"
+                          accept=".xlsx"
+                        />
+                      </form>
+                    </div>
+                    <div class="p-1">
+                      <button id="process" class="btn btn-sm btn-outline-secondary">
+                        Process
+                      </button>
+                    </div>
+                    <div class="p-1">
+                      <button id="stopBatch" class="btn btn-sm btn-outline-secondary">
+                        Stop
+                      </button>
+                    </div>
+                  </div>
+                  <div class="d-flex flex-row">
+                    <span
+                      id="batchStatus"
+                      class="h5 fw-bold font-monospace text-success"
+                    ></span>
+                  </div>
+                </div>
+                <div class="container-fluid p-0">
+                  <div class="row">
+                    <div class="col-12">
+                      <div class="table-responsive">
+                        <data-table id="batchTable" class="table table-sm modern-table"></data-table>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
+              <div id="print_config">
+                <script>
+                  $(function () {
+                    $('#print_config').load('print_config.html')
+                  })
+                </script>
+              </div>
+              <div id="branchReplenishContent">
+                <branch-replenishment-container></branch-replenishment-container>
+              </div>
+              <div id="necesarAchizitiiContent">
+                <necesar-achizitii></necesar-achizitii>
+              </div>
+              <div id="topAbcContent">
+                <top-abc-container></top-abc-container>
+              </div>
             </div>
           </div>
-        </div>
-        <div id="print_config">
-          <script>
-            $(function () {
-              $('#print_config').load('print_config.html')
-            })
-          </script>
-        </div>
-        <div id="branchReplenishContent">
-          <branch-replenishment-container></branch-replenishment-container>
-        </div>
-        <div id="necesarAchizitiiContent">
-          <necesar-achizitii></necesar-achizitii>
-        </div>
-        <div id="topAbcContent">
-          <top-abc-container></top-abc-container>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Footer - Initially hidden until login -->
-    <div id="footer" class="d-none">
-      <div class="row bg-white border-top shadow-sm py-2">
-        <div class="col d-flex align-items-center">
-          <!-- Header/Sidebar Toggle Button -->
-          <button id="headerToggle" class="btn btn-outline-primary btn-sm me-3 d-none" title="Toggle Sidebar">
-            <i class="fas fa-bars"></i>
-          </button>
-          <span class="h5 mb-0 font-monospace px-2">Dubhe Software Hub</span>
-          <!-- Item limit controls -->
-          <div class="btn-group me-3" role="group">
-            <input
-              type="radio"
-              class="btn-check"
-              name="btnradio"
-              id="items50"
-              autocomplete="off"
-            />
-            <label
-              class="btn btn-outline-primary btn-sm btn-outline-secondary"
-              for="items50"
-              >50</label
-            >
+        </main>
 
-            <input
-              type="radio"
-              class="btn-check"
-              name="btnradio"
-              id="items100"
-              autocomplete="off"
-              checked
-            />
-            <label
-              class="btn btn-outline-primary btn-sm btn-outline-secondary"
-              for="items100"
-              >100</label
-            >
+        <footer id="footer" class="workspace-footer d-none">
+          <div class="row bg-white border-top shadow-sm py-2">
+            <div class="col d-flex align-items-center">
+              <!-- Header/Sidebar Toggle Button -->
+              <button id="headerToggle" class="btn btn-outline-primary btn-sm me-3 d-none" title="Toggle Sidebar">
+                <i class="fas fa-bars"></i>
+              </button>
+              <span class="h5 mb-0 font-monospace px-2">Dubhe Software Hub</span>
+              <!-- Item limit controls -->
+              <div class="btn-group me-3" role="group">
+                <input
+                  type="radio"
+                  class="btn-check"
+                  name="btnradio"
+                  id="items50"
+                  autocomplete="off"
+                />
+                <label
+                  class="btn btn-outline-primary btn-sm btn-outline-secondary"
+                  for="items50"
+                  >50</label
+                >
 
-            <input
-              type="radio"
-              class="btn-check"
-              name="btnradio"
-              id="items200"
-              autocomplete="off"
-            />
-            <label
-              class="btn btn-outline-primary btn-sm btn-outline-secondary"
-              for="items200"
-              >200</label
-            >
+                <input
+                  type="radio"
+                  class="btn-check"
+                  name="btnradio"
+                  id="items100"
+                  autocomplete="off"
+                  checked
+                />
+                <label
+                  class="btn btn-outline-primary btn-sm btn-outline-secondary"
+                  for="items100"
+                  >100</label
+                >
 
-            <input
-              type="radio"
-              class="btn-check"
-              name="btnradio"
-              id="items500"
-              autocomplete="off"
-            />
-            <label
-              class="btn btn-outline-primary btn-sm btn-outline-secondary"
-              for="items500"
-              >500</label
-            >
+                <input
+                  type="radio"
+                  class="btn-check"
+                  name="btnradio"
+                  id="items200"
+                  autocomplete="off"
+                />
+                <label
+                  class="btn btn-outline-primary btn-sm btn-outline-secondary"
+                  for="items200"
+                  >200</label
+                >
 
-            <input
-              type="radio"
-              class="btn-check"
-              name="btnradio"
-              id="items1000"
-              autocomplete="off"
-            />
-            <label
-              class="btn btn-outline-primary btn-sm btn-outline-secondary"
-              for="items1000"
-              >1000</label
-            >
+                <input
+                  type="radio"
+                  class="btn-check"
+                  name="btnradio"
+                  id="items500"
+                  autocomplete="off"
+                />
+                <label
+                  class="btn btn-outline-primary btn-sm btn-outline-secondary"
+                  for="items500"
+                  >500</label
+                >
+
+                <input
+                  type="radio"
+                  class="btn-check"
+                  name="btnradio"
+                  id="items1000"
+                  autocomplete="off"
+                />
+                <label
+                  class="btn btn-outline-primary btn-sm btn-outline-secondary"
+                  for="items1000"
+                  >1000</label
+                >
+              </div>
+              <!-- Global pagination controls -->
+              <div class="btn-group me-3" role="group">
+                <button id="firstPage" class="btn btn-primary btn-sm">First</button>
+                <button id="prevPage" class="btn btn-primary btn-sm">Prev</button>
+                <button id="nextPage" class="btn btn-primary btn-sm">Next</button>
+              </div>
+              <!-- Pagination status indicator -->
+              <div id="paginationStatus" class="text-muted me-3 align-self-center"></div>
+            </div>
+            <div class="col-auto d-flex align-items-center">
+              <span id="messages" class="h5 mb-0 font-monospace text-primary"></span>
+              <a href="#top" class="btn btn-outline-primary btn-sm me-2">
+                <i class="fas fa-arrow-up"></i>
+              </a>
+            </div>
           </div>
-          <!-- Global pagination controls -->
-          <div class="btn-group me-3" role="group">
-            <button id="firstPage" class="btn btn-primary btn-sm">First</button>
-            <button id="prevPage" class="btn btn-primary btn-sm">Prev</button>
-            <button id="nextPage" class="btn btn-primary btn-sm">Next</button>
-          </div>
-          <!-- Pagination status indicator -->
-          <div id="paginationStatus" class="text-muted me-3 align-self-center"></div>
-        </div>
-        <div class="col-auto d-flex align-items-center">
-          <span id="messages" class="h5 mb-0 font-monospace text-primary"></span>
-          <a href="#top" class="btn btn-outline-primary btn-sm me-2">
-            <i class="fas fa-arrow-up"></i>
-          </a>
-        </div>
+        </footer>
       </div>
     </div>
     

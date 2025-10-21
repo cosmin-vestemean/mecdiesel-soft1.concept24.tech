@@ -119,6 +119,7 @@ $(document).ready(() => {
                 $loginForm.addClass('d-none'); // Hide login form
                 
                 // Show main app components (now separated in DOM)
+                $('#workspace').removeClass('d-none'); // Reveal workspace layout
                 $('#header').removeClass('d-none'); // Show header
                 $appContainer.removeClass('d-none'); // Show main app content
                 $('#footer').removeClass('d-none'); // Show footer
