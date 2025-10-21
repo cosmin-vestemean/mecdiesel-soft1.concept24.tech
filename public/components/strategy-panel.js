@@ -141,7 +141,6 @@ export class QuickPanel extends LitElement {
               <option value="min">Apply Min Quantities</option>
               <option value="max">Apply Max Quantities</option>
               <option value="skip_blacklisted">Skip Blacklisted (Sets Tx=0)</option>
-              <option value="clear">Clear All Transfers (Sets Tx=0)</option>
             </select>
             
             <button class="btn btn-sm btn-primary apply-button w-100 mb-3"
@@ -152,6 +151,13 @@ export class QuickPanel extends LitElement {
                     }}
                     ?disabled=${this.loading || this.disabled || !isStrategySelected}>
               Apply Strategy
+            </button>
+
+            <button class="btn btn-sm btn-outline-danger w-100 mb-3"
+                    title="Clear all transfer quantities"
+                    @click=${() => this._emitAction('clear-transfers')}
+                    ?disabled=${this.loading || this.disabled}>
+              Clear All Transfers
             </button>
           </div>
           

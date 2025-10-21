@@ -939,12 +939,6 @@ export class BranchReplenishmentContainer extends LitElement {
               }
             }
             break;
-          case 'clear':
-            updatedItem.transfer = 0;
-            dataUpdated = true;
-            skippedReasons.applied++;
-            console.log(`✅ Cleared transfer for item ${updatedItem.mtrl || 'unknown'}`);
-            break;
         }
       }
       return updatedItem;
@@ -969,6 +963,33 @@ export class BranchReplenishmentContainer extends LitElement {
     
     // Don't reset dropdown immediately, user might want to apply again with different successive setting
     // replenishmentStore.setReplenishmentStrategy('none');
+  }
+
+  _handleClearTransfers() {
+    const currentState = replenishmentStore.getState();
+
+    if (!currentState.data.length) {
+      console.warn('Clear transfers skipped: No data loaded');
+      return;
+    }
+
+    let dataUpdated = false;
+    const newData = currentState.data.map(item => {
+      const currentTransfer = parseFloat(item.transfer || 0);
+      if (currentTransfer === 0 && item.transfer === 0) {
+        return item;
+      }
+
+      dataUpdated = dataUpdated || isNaN(currentTransfer) || currentTransfer !== 0 || item.transfer !== 0;
+      return { ...item, transfer: 0 };
+    });
+
+    if (dataUpdated) {
+      replenishmentStore.setData(newData);
+      console.log('✅ Cleared transfer quantities for all items.');
+    } else {
+      console.log('ℹ️  Clear transfers skipped: All items already have zero transfer.');
+    }
   }
 
   _handleResetData() {
@@ -1339,6 +1360,7 @@ export class BranchReplenishmentContainer extends LitElement {
           ?disabled=${!this.data || this.data.length === 0}
           @toggle-query-panel=${this._handleToggleQueryPanel}
           @apply-strategy=${this._handleApplyStrategy}
+          @clear-transfers=${this._handleClearTransfers}
           @update-property=${this._handleStrategyUpdate}>
         </quick-panel>
 
