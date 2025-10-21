@@ -837,7 +837,7 @@ export class BranchReplenishmentContainer extends LitElement {
 
     console.log(`🎯 Applying strategy: ${currentState.selectedReplenishmentStrategy}, Successive: ${currentState.isSuccessiveStrategy}`);
     
-    const currentFilteredData = replenishmentStore.getFilteredData();
+  const currentFilteredData = replenishmentStore.getFilteredData(columnConfig);
     const currentFilteredDataKeys = new Set(currentFilteredData.map(item => item.keyField));
     let dataUpdated = false;
     let applicableCount = 0;
