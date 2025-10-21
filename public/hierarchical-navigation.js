@@ -46,6 +46,9 @@ class HierarchicalNavigation {
     document.querySelectorAll('.sidebar-module').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const appName = e.currentTarget.dataset.app;
+        if (!appName) {
+          return;
+        }
         this.switchApp(appName);
       });
     });

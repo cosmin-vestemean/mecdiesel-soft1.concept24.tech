@@ -19,6 +19,7 @@
 
 /* Table Layout & Structure */
 .modern-table {
+    table-layout: auto;
     font-size: 0.7rem !important; /* Set base font size for the entire table */
     margin-bottom: 0; /* Remove default margin */
 }
@@ -27,7 +28,7 @@
     white-space: nowrap;
     padding: 0.4rem 0.5rem; /* Adjust header padding */
     vertical-align: middle;
-    text-align: center;
+    text-align: left;
     font-weight: 600;
 }
 
@@ -36,6 +37,21 @@
     vertical-align: middle;
     position: relative; /* For indicators */
     font-size: 0.7rem !important;
+}
+
+.modern-table tbody td {
+    border-bottom: 1px solid var(--border-subtle, #d6dae0);
+}
+
+.modern-table th.numeric-heading,
+.modern-table td.numeric-cell {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.modern-table th.text-heading,
+.modern-table td.text-cell {
+    text-align: left;
 }
 
 /* Fix for truncated text in spans */
@@ -94,7 +110,7 @@ th.vertical-divider {
 }
 
 /* Alternating Row Colors */
-.even-row { background-color: rgba(248, 249, 250, 0.5); } /* Very light gray */
+.even-row { background-color: transparent; }
 
 /* Hover effect */
 tbody tr:hover {

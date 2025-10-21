@@ -495,43 +495,35 @@ export function initializeUserInteractions() {
   }
 
   document.getElementById("searchItems").oninput = () => {
-    if ($("#searchItems").val().length > 4) {
-      var query = {};
+    const searchTerm = $("#searchItems").val();
+
+    if (searchTerm.length > 4) {
+      let query = {};
       switch (shared.table) {
         case "mec_item":
-          query = {
-            Item: $("#searchItems").val(),
-          };
-          break;
         case "mec_item_producer_relation":
-          query = {
-            Item: $("#searchItems").val(),
-          };
+        case "mec_item_altref":
+          query = { Item: searchTerm };
           break;
         case "site_product_changes_history":
-          query = {
-            mec_code: $("#searchItems").val(),
-          };
-          break;
         case "site_product_frequent_changes":
-          query = {
-            mec_code: $("#searchItems").val(),
-          };
-          break;
-        case "mec_item_altref":
-          query = {
-            Item: $("#searchItems").val(),
-          };
-          break;
         case "mec_ro_item_rel_supplier":
-          query = {
-            mec_code: $("#searchItems").val(),
-          };
+          query = { mec_code: searchTerm };
           break;
+        default:
+          query = {};
       }
-      getItemsFromService(shared.table, "#items", query);
+
+      getItemsFromService(shared.table, "#items", query)
+        .then((items) => {
+          renderData(items, "#items");
+        })
+        .catch((error) => {
+          console.error("Item search failed", error);
+        });
     }
-    if ($("#searchItems").val().length == 0) {
+
+    if (searchTerm.length === 0) {
       renderTable(shared.table, "#items");
     }
   };
@@ -712,4 +704,59 @@ export function initializeUserInteractions() {
   document.getElementById('nextPage').addEventListener('click', () => {
     paginationManager.paginate(1);
   });
+
+  const logoutButton = document.getElementById('logoutButton');
+  if (logoutButton && !logoutButton.dataset.boundLogout) {
+    // Clear session data and return to the login screen cleanly
+    logoutButton.addEventListener('click', () => {
+      sessionStorage.removeItem('s1Token');
+      sessionStorage.removeItem('s1SessionToken');
+      localStorage.removeItem('layoutCollapsed');
+      localStorage.removeItem('sidebarCollapsed');
+      localStorage.removeItem('headerVisible');
+      window.location.href = window.location.origin + window.location.pathname;
+    });
+    logoutButton.dataset.boundLogout = 'true';
+  }
+
+  if (!window.__preventDefaultReloadHandlerAttached) {
+    // Prevent accidental browser refresh/reload and navigation that resets the app state
+    
+    // Prevent keyboard-triggered reload (F5, Ctrl+R, Cmd+R)
+    window.addEventListener('keydown', (event) => {
+      if (event.key === 'F5' || (event.key === 'r' && (event.ctrlKey || event.metaKey))) {
+        event.preventDefault();
+        console.log('Reload prevented - use logout button to exit');
+      }
+    });
+    
+    // Prevent mouse button reload (usually button 3 or 4)
+    window.addEventListener('mousedown', (event) => {
+      if (event.button === 3 || event.button === 4) {
+        event.preventDefault();
+        console.log('Navigation prevented - use logout button to exit');
+      }
+    });
+    
+    // Prevent back/forward navigation
+    window.addEventListener('popstate', (event) => {
+      event.preventDefault();
+      // Push state back to prevent navigation
+      history.pushState(null, '', window.location.href);
+      console.log('Back/forward navigation prevented - use logout button to exit');
+    });
+    
+    // Set initial history state
+    history.pushState(null, '', window.location.href);
+    
+    // Prevent beforeunload (browser close/refresh attempts)
+    window.addEventListener('beforeunload', (event) => {
+      // Show browser confirmation dialog
+      event.preventDefault();
+      event.returnValue = 'Are you sure you want to leave? App state will be lost.';
+      return event.returnValue;
+    });
+    
+    window.__preventDefaultReloadHandlerAttached = true;
+  }
 }

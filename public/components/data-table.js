@@ -333,17 +333,20 @@ export class ReplenishmentDataTable extends LitElement {
           const isCurrentSort = this.sortColumn === col.key;
           const sortClass = col.isSortable ? 'sortable-header' : '';
           const activeClass = isCurrentSort ? 'sorted' : '';
-          const combinedClass = `${col.group || ''} ${col.divider ? 'vertical-divider' : ''} ${sortClass} ${activeClass}`.trim();
+          const alignmentClass = (col.type === 'number' || col.type === 'index') ? 'numeric-heading' : 'text-heading';
+          const combinedClass = `${alignmentClass} ${col.group || ''} ${col.divider ? 'vertical-divider' : ''} ${sortClass} ${activeClass}`.trim();
           
           return html`
             <th class="${combinedClass}"
                 title="${col.tooltip || col.displayName}${col.isSortable ? ' (Click to sort)' : ''}"
                 @click=${col.isSortable ? () => this.handleSort(col) : null}
-                style="${col.isSortable ? 'cursor: pointer; user-select: none;' : ''}">
+                style="${col.isSortable ? 'cursor: pointer; user-select: none;' : ''}"
+                data-column="${col.key}"
+                data-column-type="${col.type}">
               ${col.isHeaderFilter 
                 ? this.renderHeaderFilter(col)
                 : html`
-                  <div class="d-flex align-items-center justify-content-center">
+                  <div class="d-flex align-items-center justify-content-start">
                     <span>${col.displayName}</span>
                     ${this.renderSortIcon(col)}
                   </div>
@@ -500,6 +503,8 @@ export class ReplenishmentDataTable extends LitElement {
     
     // Ensure group class is first in the list and has !important
     const cellClassList = [];
+    const alignmentClass = (column.type === 'number' || column.type === 'index') ? 'numeric-cell' : 'text-cell';
+    cellClassList.push(alignmentClass);
     if (column.group) {
       cellClassList.push(`group-${column.group}`);
     }
@@ -557,7 +562,7 @@ export class ReplenishmentDataTable extends LitElement {
     }
 
     return html`
-      <td class="${cellClassList.join(' ')}">
+      <td class="${cellClassList.join(' ')}" data-column-type="${column.type}">
         ${content}
       </td>
     `;

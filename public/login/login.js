@@ -125,6 +125,38 @@ $(document).ready(() => {
                 $('#footer').removeClass('d-none'); // Show footer
                 $('#headerToggle').removeClass('d-none'); // Show header toggle button
                 
+                // Trigger bounce animation to alert user of new functionality
+                setTimeout(() => {
+                  const headerToggle = document.getElementById('headerToggle');
+                  if (headerToggle) {
+                    console.log('Starting bounce animation for headerToggle');
+                    headerToggle.classList.add('bounce-alert');
+                    // Remove class after animation completes (3 bounces * 0.8s = 2.4s)
+                    setTimeout(() => {
+                      headerToggle.classList.remove('bounce-alert');
+                      console.log('Bounce animation completed for headerToggle');
+                    }, 2500);
+                  } else {
+                    console.warn('headerToggle button not found for bounce animation');
+                  }
+                }, 300); // Delay to ensure button is visible and rendered
+                
+                // Trigger bounce animation for logout button
+                setTimeout(() => {
+                  const logoutButton = document.getElementById('logoutButton');
+                  if (logoutButton) {
+                    console.log('Starting bounce animation for logoutButton');
+                    logoutButton.classList.add('bounce-alert');
+                    // Remove class after animation completes (3 bounces * 0.8s = 2.4s)
+                    setTimeout(() => {
+                      logoutButton.classList.remove('bounce-alert');
+                      console.log('Bounce animation completed for logoutButton');
+                    }, 2500);
+                  } else {
+                    console.warn('logoutButton not found for bounce animation');
+                  }
+                }, 400); // Slightly delayed after headerToggle
+                
                 // Store the potentially refreshed token/clientID from the validation result
                 // Use validationResult.clientID which should be returned from the backend
                 sessionStorage.setItem('s1Token', validationResult.clientID); 
