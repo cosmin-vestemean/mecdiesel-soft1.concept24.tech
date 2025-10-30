@@ -730,6 +730,12 @@ export function initializeUserInteractions() {
       }
     });
     
+    // Prevent right-click context menu
+    window.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      console.log('Context menu disabled');
+    });
+    
     // Prevent mouse button reload (usually button 3 or 4)
     window.addEventListener('mousedown', (event) => {
       if (event.button === 3 || event.button === 4) {

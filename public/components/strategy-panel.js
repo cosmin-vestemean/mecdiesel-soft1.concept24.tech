@@ -141,6 +141,7 @@ export class QuickPanel extends LitElement {
               <option value="min">Apply Min Quantities</option>
               <option value="max">Apply Max Quantities</option>
               <option value="skip_blacklisted">Skip Blacklisted (Sets Tx=0)</option>
+              <option value="apply_zero">Apply 0 Quantities</option>
             </select>
             
             <button class="btn btn-sm btn-primary apply-button w-100 mb-3"

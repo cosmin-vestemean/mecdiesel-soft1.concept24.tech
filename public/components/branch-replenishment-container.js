@@ -939,6 +939,13 @@ export class BranchReplenishmentContainer extends LitElement {
               }
             }
             break;
+          case 'apply_zero':
+            // Apply 0 to all filtered items (respects successive flag)
+            updatedItem.transfer = 0;
+            dataUpdated = true;
+            skippedReasons.applied++;
+            console.log(`✅ Applied 0 to item ${updatedItem.mtrl || 'unknown'}`);
+            break;
         }
       }
       return updatedItem;
