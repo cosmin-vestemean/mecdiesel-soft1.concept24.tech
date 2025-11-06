@@ -10,7 +10,7 @@ import { replenishmentStore, ReplenishmentStoreContext } from '../stores/repleni
 // Import child components
 import './query-panel.js';
 import './manipulation-panel.js';
-import './strategy-panel.js'; // Will be used as quick-panel
+import './strategy-bar.js'; // New horizontal strategy bar
 import './data-table.js';
 import './s1-transfer-modal.js';
 import './diagnostic-modal.js';
@@ -1283,17 +1283,11 @@ export class BranchReplenishmentContainer extends LitElement {
 
     // Get references to the child panels
     const manipulationPanel = this.querySelector('manipulation-panel');
-    const strategyPanel = this.querySelector('strategy-panel');
     // DataTable now connects directly to store, no need for event listener
 
     if (manipulationPanel) {
       console.log('Found manipulation panel, adding event listener');
       manipulationPanel.addEventListener('update-property', this._handleManipulationUpdate.bind(this));
-    }
-
-    if (strategyPanel) {
-      console.log('Found strategy panel, adding event listener');
-      strategyPanel.addEventListener('update-property', this._handleStrategyUpdate.bind(this));
     }
   }
 
@@ -1313,6 +1307,22 @@ export class BranchReplenishmentContainer extends LitElement {
 
     return html`
       <div class="container-fluid mt-2">
+        <!-- Top Bar: Hide Query Panel button (left) + Strategy Bar (right, visible when query panel hidden) -->
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <button class="btn btn-sm ${this.queryPanelVisible ? 'btn-outline-secondary' : 'btn-outline-primary'}" 
+                  @click=${this._handleToggleQueryPanel}>
+            <i class="bi ${this.queryPanelVisible ? 'bi-chevron-up' : 'bi-chevron-down'}"></i>
+            ${this.queryPanelVisible ? 'Hide Query Panel' : 'Show Query Panel'}
+          </button>
+          
+          ${!this.queryPanelVisible ? html`
+            <strategy-bar
+              @apply-strategy=${this._handleApplyStrategy}
+              @clear-transfers=${this._handleClearTransfers}>
+            </strategy-bar>
+          ` : ''}
+        </div>
+
         ${this.error ? html`<div class="alert alert-danger alert-dismissible fade show" role="alert">
                             ${this.error}
                             <button type="button" class="btn-close" @click=${() => this.error = ''} aria-label="Close"></button>
@@ -1341,7 +1351,7 @@ export class BranchReplenishmentContainer extends LitElement {
           </query-panel>
         </div>
 
-        <!-- Layout with manipulation panel only - quick panel is floating -->
+        <!-- Layout with manipulation panel only -->
         <div class="row g-2 mb-2">
           <!-- Manipulation panel (search) taking full width -->
           <div class="col-12">
@@ -1357,19 +1367,6 @@ export class BranchReplenishmentContainer extends LitElement {
             </manipulation-panel>
           </div>
         </div>
-
-        <!-- Floating quick panel - positioned with CSS -->
-        <quick-panel
-          .selectedReplenishmentStrategy=${this.selectedReplenishmentStrategy}
-          .isSuccessiveStrategy=${this.isSuccessiveStrategy}
-          .loading=${this.loading}
-          .queryPanelVisible=${this.queryPanelVisible}
-          ?disabled=${!this.data || this.data.length === 0}
-          @toggle-query-panel=${this._handleToggleQueryPanel}
-          @apply-strategy=${this._handleApplyStrategy}
-          @clear-transfers=${this._handleClearTransfers}
-          @update-property=${this._handleStrategyUpdate}>
-        </quick-panel>
 
         <!-- DataTable with store integration - pass data as fallback -->
         <replenishment-data-table
