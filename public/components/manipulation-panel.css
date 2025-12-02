@@ -1,45 +1,57 @@
+manipulation-panel {
+    display: block;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: var(--spacing-md);
+}
+
 .manipulation-panel .search-input-group {
     max-width: 400px;
 }
 
 .manipulation-panel .input-group-text {
-    border-right: 0; /* Remove border between icon and input */
+    border-right: 0;
+    background-color: var(--bg-primary);
+    border-color: var(--border-color);
 }
 
 .manipulation-panel .form-control {
-    border-left: 0; /* Remove border between icon and input */
-}
-.manipulation-panel .form-control:focus {
-    box-shadow: none; /* Optional: remove focus shadow */
-    border-color: #ced4da; /* Keep border color consistent on focus */
+    border-left: 0;
+    border-color: var(--border-color);
 }
 
+.manipulation-panel .form-control:focus {
+    box-shadow: 0 0 0 2px var(--accent-primary-light);
+    border-color: var(--accent-primary);
+}
 
 .manipulation-panel .btn-clear-search {
-    border-left: 0; /* Remove border before clear button */
-    z-index: 5; /* Ensure button is clickable */
+    border-left: 0;
+    z-index: 5;
 }
+
 .manipulation-panel .btn-clear-search i {
     vertical-align: middle;
 }
 
-
 .manipulation-panel .transfer-filter-group .btn {
-    font-size: 0.8rem;
+    font-size: var(--font-size-xs);
     padding: 0.25rem 0.5rem;
 }
 
 .manipulation-panel .item-count-display {
-    white-space: nowrap; /* Prevent wrapping */
-    font-size: 0.85rem;
+    white-space: nowrap;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
 }
 
 /* Active Filters Info Section */
 .manipulation-panel .active-filters-info {
-    background-color: #f8f9fa;
-    border-left: 4px solid #007bff;
-    padding: 0.5rem 0.75rem;
-    border-radius: 0.25rem;
+    background-color: var(--accent-primary-light);
+    border-left: 2px solid var(--accent-primary);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-sm);
 }
 
 .manipulation-panel .active-filters-info .badge {

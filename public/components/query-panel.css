@@ -1,0 +1,32 @@
+/* Query Panel - Clean, data-focused design */
+query-panel {
+  display: block;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
+}
+
+query-panel .card {
+  border: none;
+  box-shadow: none;
+  background-color: transparent;
+}
+
+query-panel .form-label {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+query-panel .form-control,
+query-panel .form-select {
+  font-size: var(--font-size-sm);
+  border-color: var(--border-color);
+}
+
+query-panel .btn {
+  font-size: var(--font-size-sm);
+}
