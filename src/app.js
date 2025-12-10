@@ -947,6 +947,541 @@ app.use("/top-abc", new TopAbcAnalysis(), {
   ],
 });
 
+// BatchQueue Service - Persistent batch processing queue management
+// FeathersJS service architecture with standard CRUD + custom methods
+class BatchQueueService {
+  constructor(options) {
+    this.options = options || {};
+    this.isInitialized = false;
+  }
+
+  /**
+   * Initialize the batch queue table (call on first use)
+   * POST /batch-queue/initialize
+   */
+  async initialize(data, params) {
+    if (this.isInitialized) {
+      return { success: true, message: 'Already initialized' };
+    }
+    
+    try {
+      const result = await request({
+        method: "POST",
+        uri: "/JS/BatchQueue/setup",
+        body: {
+          clientID: data.token,
+          appId: "2002"
+        },
+        json: true,
+        gzip: true
+      });
+      
+      if (result && result.success !== false) {
+        this.isInitialized = true;
+        console.log('✅ BatchQueue: Table setup completed');
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('❌ BatchQueue setup error:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Cleanup old records (call periodically)
+   * POST /batch-queue/cleanup
+   */
+  async cleanup(data, params) {
+    return await request({
+      method: "POST",
+      uri: "/JS/BatchQueue/cleanup",
+      body: {
+        clientID: data.token,
+        appId: "2002",
+        JSONDATA: JSON.stringify({ monthsOlderThan: data.monthsOlderThan || 6 })
+      },
+      json: true,
+      gzip: true
+    });
+  }
+
+  /**
+   * Find batch records with filtering
+   * GET /batch-queue?batchId=xxx or ?status=PENDING
+   */
+  async find(params) {
+    const query = params.query || {};
+    
+    // If batchId provided, get all codes for that batch
+    if (query.batchId) {
+      return await request({
+        method: "POST",
+        uri: "/JS/BatchQueue/getBatchByBatchId",
+        body: {
+          clientID: query.token,
+          appId: "2002",
+          JSONDATA: JSON.stringify({ batchId: query.batchId })
+        },
+        json: true,
+        gzip: true
+      });
+    }
+    
+    // If pending=true, get all pending batches
+    if (query.pending) {
+      return await request({
+        method: "POST",
+        uri: "/JS/BatchQueue/getPendingBatches",
+        body: {
+          clientID: query.token,
+          appId: "2002",
+          JSONDATA: JSON.stringify({ usr: query.usr || null })
+        },
+        json: true,
+        gzip: true
+      });
+    }
+    
+    // Default: get recent batches
+    return await request({
+      method: "POST",
+      uri: "/JS/BatchQueue/getRecentBatches",
+      body: {
+        clientID: query.token,
+        appId: "2002",
+        JSONDATA: JSON.stringify({ 
+          limit: query.limit || 20,
+          usr: query.usr || null 
+        })
+      },
+      json: true,
+      gzip: true
+    });
+  }
+
+  /**
+   * Get a single batch record by ID
+   * GET /batch-queue/:id
+   */
+  async get(id, params) {
+    const query = params.query || {};
+    
+    // Get batch summary by batchId
+    return await request({
+      method: "POST",
+      uri: "/JS/BatchQueue/getBatchSummary",
+      body: {
+        clientID: query.token,
+        appId: "2002",
+        JSONDATA: JSON.stringify({ batchId: id })
+      },
+      json: true,
+      gzip: true
+    });
+  }
+
+  /**
+   * Create new batch codes in queue
+   * POST /batch-queue
+   * data: { batchId, queueType, codes, filename, usr, token }
+   */
+  async create(data, params) {
+    return await request({
+      method: "POST",
+      uri: "/JS/BatchQueue/insertBatchCodes",
+      body: {
+        clientID: data.token,
+        appId: "2002",
+        JSONDATA: JSON.stringify({
+          batchId: data.batchId,
+          queueType: data.queueType,
+          codes: data.codes,
+          filename: data.filename,
+          usr: data.usr
+        })
+      },
+      json: true,
+      gzip: true
+    });
+  }
+
+  /**
+   * Update batch code status
+   * PATCH /batch-queue/:id
+   * data: { status, mtrl, message, errorDetails, erpResponse, durationMs, token }
+   */
+  async patch(id, data, params) {
+    return await request({
+      method: "POST",
+      uri: "/JS/BatchQueue/updateBatchStatus",
+      body: {
+        clientID: data.token,
+        appId: "2002",
+        JSONDATA: JSON.stringify({
+          id: id,
+          status: data.status,
+          mtrl: data.mtrl,
+          message: data.message,
+          errorDetails: data.errorDetails,
+          erpResponse: data.erpResponse,
+          durationMs: data.durationMs
+        })
+      },
+      json: true,
+      gzip: true
+    });
+  }
+
+  /**
+   * Cancel all PENDING codes in a batch
+   * Custom method: POST /batch-queue/cancel
+   * data: { batchId, token }
+   */
+  async cancel(data, params) {
+    return await request({
+      method: "POST",
+      uri: "/JS/BatchQueue/cancelBatch",
+      body: {
+        clientID: data.token,
+        appId: "2002",
+        JSONDATA: JSON.stringify({ batchId: data.batchId })
+      },
+      json: true,
+      gzip: true
+    });
+  }
+
+  /**
+   * Retry all ERROR codes in a batch (reset to PENDING)
+   * Custom method: POST /batch-queue/retry
+   * data: { batchId, token }
+   */
+  async retry(data, params) {
+    return await request({
+      method: "POST",
+      uri: "/JS/BatchQueue/retryErrorCodes",
+      body: {
+        clientID: data.token,
+        appId: "2002",
+        JSONDATA: JSON.stringify({ batchId: data.batchId })
+      },
+      json: true,
+      gzip: true
+    });
+  }
+
+  /**
+   * Get batch summary/statistics
+   * Custom method: POST /batch-queue/summary
+   * data: { batchId, token }
+   */
+  async summary(data, params) {
+    return await request({
+      method: "POST",
+      uri: "/JS/BatchQueue/getBatchSummary",
+      body: {
+        clientID: data.token,
+        appId: "2002",
+        JSONDATA: JSON.stringify({ batchId: data.batchId })
+      },
+      json: true,
+      gzip: true
+    });
+  }
+
+  /**
+   * Get next pending code for processing
+   * Custom method: POST /batch-queue/next
+   * data: { batchId, token }
+   */
+  async next(data, params) {
+    return await request({
+      method: "POST",
+      uri: "/JS/BatchQueue/getNextPendingCode",
+      body: {
+        clientID: data.token,
+        appId: "2002",
+        JSONDATA: JSON.stringify({ batchId: data.batchId })
+      },
+      json: true,
+      gzip: true
+    });
+  }
+
+  /**
+   * Process a single code from the batch
+   * Custom method: POST /batch-queue/process
+   * This method orchestrates: mark as PROCESSING -> call ERP -> mark as SUCCESS/ERROR
+   * data: { id, code, batchId, queueType, token }
+   */
+  async process(data, params) {
+    const startTime = Date.now();
+    
+    try {
+      // 1. Mark as PROCESSING
+      await this.patch(data.id, {
+        token: data.token,
+        status: 'PROCESSING'
+      }, params);
+      
+      // 2. Call appropriate ERP endpoint based on queueType
+      let erpResponse;
+      let erpEndpoint;
+      
+      if (data.queueType === 'MOVE_ONLINE') {
+        erpEndpoint = '/JS/SyncItaly/processListOfCodes';
+        erpResponse = await request({
+          method: "POST",
+          uri: erpEndpoint,
+          body: {
+            clientID: data.token,
+            appId: "2002",
+            codes: data.code
+          },
+          json: true,
+          gzip: true
+        });
+      } else if (data.queueType === 'STOCK_EVIDENCE') {
+        erpEndpoint = '/JS/StockAvailChange/processListOfStocks';
+        erpResponse = await request({
+          method: "POST",
+          uri: erpEndpoint,
+          body: {
+            clientID: data.token,
+            appId: "2002",
+            codes: data.code
+          },
+          json: true,
+          gzip: true
+        });
+      } else {
+        throw new Error('Unknown queueType: ' + data.queueType);
+      }
+      
+      const durationMs = Date.now() - startTime;
+      
+      // 3. Determine success/error from ERP response
+      const isSuccess = erpResponse && (erpResponse.success !== false);
+      const mtrl = erpResponse && erpResponse.mtrl ? erpResponse.mtrl : null;
+      const message = erpResponse && erpResponse.message ? erpResponse.message : (isSuccess ? 'Processed successfully' : 'Processing failed');
+      
+      // 4. Update status based on result
+      await this.patch(data.id, {
+        token: data.token,
+        status: isSuccess ? 'SUCCESS' : 'ERROR',
+        mtrl: mtrl,
+        message: message,
+        erpResponse: JSON.stringify(erpResponse),
+        durationMs: durationMs
+      }, params);
+      
+      return {
+        success: isSuccess,
+        id: data.id,
+        code: data.code,
+        status: isSuccess ? 'SUCCESS' : 'ERROR',
+        message: message,
+        durationMs: durationMs,
+        erpResponse: erpResponse
+      };
+      
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      
+      // Update as ERROR
+      await this.patch(data.id, {
+        token: data.token,
+        status: 'ERROR',
+        message: error.message || 'Unknown error',
+        errorDetails: error.stack || '',
+        durationMs: durationMs
+      }, params);
+      
+      return {
+        success: false,
+        id: data.id,
+        code: data.code,
+        status: 'ERROR',
+        message: error.message || 'Unknown error',
+        durationMs: durationMs
+      };
+    }
+  }
+
+  /**
+   * Get multiple pending codes for batch processing
+   * Custom method: POST /batch-queue/nextBatch
+   * data: { batchId, limit, token }
+   */
+  async nextBatch(data, params) {
+    return await request({
+      method: "POST",
+      uri: "/JS/BatchQueue/getNextPendingCodes",
+      body: {
+        clientID: data.token,
+        appId: "2002",
+        JSONDATA: JSON.stringify({
+          batchId: data.batchId,
+          limit: data.limit || 50
+        })
+      },
+      json: true,
+      gzip: true
+    });
+  }
+
+  /**
+   * Process multiple codes in a single ERP call (simplified like old version)
+   * Custom method: POST /batch-queue/processBatch
+   * data: { codes: [{ id, code }], batchId, queueType, token }
+   */
+  async processBatch(data, params) {
+    const startTime = Date.now();
+    const codes = data.codes;
+    
+    if (!codes || codes.length === 0) {
+      return {
+        success: true,
+        processedCount: 0,
+        durationMs: 0
+      };
+    }
+    
+    try {
+      // Extract just the code strings (like old version)
+      const codeStrings = codes.map(c => c.code);
+      let erpResponse;
+      
+      // Direct call to ERP (like old makeBatchRequest)
+      if (data.queueType === 'MOVE_ONLINE') {
+        erpResponse = await request({
+          method: "POST",
+          uri: "/JS/SyncItaly/processListOfCodes",
+          body: {
+            clientID: data.token,
+            appId: "2002",
+            codes: codeStrings
+          },
+          json: true,
+          gzip: true
+        });
+      } else if (data.queueType === 'STOCK_EVIDENCE') {
+        erpResponse = await request({
+          method: "POST",
+          uri: "/JS/StockAvailChange/processListOfStocks",
+          body: {
+            clientID: data.token,
+            appId: "2002",
+            codes: codeStrings
+          },
+          json: true,
+          gzip: true
+        });
+      } else {
+        throw new Error('Unknown queueType: ' + data.queueType);
+      }
+      
+      const durationMs = Date.now() - startTime;
+      const erpSuccess = erpResponse && erpResponse.success === true;
+      const erpData = erpResponse && erpResponse.data ? erpResponse.data : [];
+      
+      // Update DB with results (single call)
+      const updates = codes.map((c, index) => {
+        const erpItem = erpData[index];
+        const itemSuccess = erpSuccess && erpItem !== undefined;
+        
+        return {
+          id: c.id,
+          status: itemSuccess ? 'SUCCESS' : 'ERROR',
+          mtrl: erpItem && erpItem.mtrl ? erpItem.mtrl : null,
+          message: itemSuccess ? 'OK' : (erpResponse && erpResponse.message ? erpResponse.message : 'Failed'),
+          durationMs: Math.round(durationMs / codes.length)
+        };
+      });
+      
+      // Update database in one call
+      await request({
+        method: "POST",
+        uri: "/JS/BatchQueue/updateBatchResults",
+        body: {
+          clientID: data.token,
+          appId: "2002",
+          JSONDATA: JSON.stringify({
+            batchId: data.batchId,
+            results: updates
+          })
+        },
+        json: true,
+        gzip: true
+      });
+      
+      return {
+        success: erpSuccess,
+        processedCount: codes.length,
+        successCount: updates.filter(u => u.status === 'SUCCESS').length,
+        errorCount: updates.filter(u => u.status === 'ERROR').length,
+        durationMs: durationMs
+      };
+      
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      
+      // Update all as ERROR
+      try {
+        await request({
+          method: "POST",
+          uri: "/JS/BatchQueue/updateBatchResults",
+          body: {
+            clientID: data.token,
+            appId: "2002",
+            JSONDATA: JSON.stringify({
+              batchId: data.batchId,
+              results: codes.map(c => ({
+                id: c.id,
+                status: 'ERROR',
+                message: error.message || 'Request failed',
+                durationMs: Math.round(durationMs / codes.length)
+              }))
+            })
+          },
+          json: true,
+          gzip: true
+        });
+      } catch (e) {
+        console.error('Failed to update error results:', e.message);
+      }
+      
+      return {
+        success: false,
+        processedCount: codes.length,
+        errorCount: codes.length,
+        durationMs: durationMs,
+        error: error.message
+      };
+    }
+  }
+}
+
+// Register the BatchQueue service with FeathersJS architecture
+app.use("/batch-queue", new BatchQueueService(), {
+  methods: [
+    "find",         // GET /batch-queue
+    "get",          // GET /batch-queue/:id
+    "create",       // POST /batch-queue
+    "patch",        // PATCH /batch-queue/:id
+    "cancel",       // POST /batch-queue/cancel (custom)
+    "retry",        // POST /batch-queue/retry (custom)
+    "summary",      // POST /batch-queue/summary (custom)
+    "next",         // POST /batch-queue/next (custom) - single code
+    "nextBatch",    // POST /batch-queue/nextBatch (custom) - multiple codes
+    "process",      // POST /batch-queue/process (custom) - single code
+    "processBatch", // POST /batch-queue/processBatch (custom) - multiple codes
+    "initialize",   // POST /batch-queue/initialize (custom) - initialize table
+    "cleanup"       // POST /batch-queue/cleanup (custom) - remove old records
+  ],
+});
+
 // Configure services and transports
 app.configure(
   rest(

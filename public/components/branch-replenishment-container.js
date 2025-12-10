@@ -172,8 +172,8 @@ export class BranchReplenishmentContainer extends LitElement {
         replenishmentStore.setDiagnostics([]);
       }
 
-      // Hide query panel after successfully loading data
-      replenishmentStore.setQueryPanelVisible(false);
+      // Note: Query panel visibility is now controlled by the user only
+      // replenishmentStore.setQueryPanelVisible(false); // Removed - user decides when to hide
 
       // Dispatch custom event to indicate data has been loaded
       this.dispatchEvent(new CustomEvent('data-loaded', {

@@ -18,23 +18,7 @@ import { client } from './socketConfig.js';
 import { paginationManager } from './paginationManager.js';
 import { hierarchicalNav } from './hierarchical-navigation.js';
 
-let codes = [];
-let isStopped = false;
-
-// Define the batch request functions
-function makeBatchRequest(token, batch) {
-  return client.service("s1").makeBatchRequest({
-    token: token,
-    codes: batch
-  });
-}
-
-function processListOfStocks(token, batch) {
-  return client.service("s1").processListOfStocks({
-    token: token,
-    codes: batch
-  });
-}
+// Note: Batch processing is now handled by <batch-processing-container> component
 
 export function initializeUserInteractions() {
   //show #mainContent, hidden by default with d-none class
@@ -127,7 +111,7 @@ export function initializeUserInteractions() {
     "convAutoContent",
     "stockChangesContent",
     "batchApp",
-    "batchSize",
+    // "batchSize", // DEPRECATED - now in batch-processing-container
     "print_config",
     "branchReplenishContent", // Make sure this is included
     "searchErrors",
@@ -213,7 +197,7 @@ export function initializeUserInteractions() {
   });
 
   $("#batchButton").click(() => {
-    hideAllButArray(["batchApp", "batchSize", "batchTable", "batchStatus"]);
+    hideAllButArray(["batchApp"]);
     paginationManager.setActiveTab("batchButton");
   });
 
@@ -357,142 +341,6 @@ export function initializeUserInteractions() {
     // Update pagination status
     paginationManager.updatePaginationStatus();
   };
-
-  document.getElementById("stopBatch").onclick = () => {
-    $("#batchStatus").html("Stopped");
-    isStopped = true;
-    $("#process").prop("disabled", false);
-    $("upload").prop("disabled", false);
-  };
-
-  document.getElementById("upload").onchange = () => {
-    $("#batchStatus").html("Loading codes...");
-    const files = document.getElementById("upload").files;
-
-    if (!validateUploadFile(files)) return;
-
-    const fr = new FileReader();
-    fr.onload = function (e) {
-      const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, { type: "array" });
-
-      workbook.SheetNames.forEach(function (sheetName) {
-        const roa = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-        if (roa.length > 0) {
-          codes = roa;
-        }
-      });
-
-      const batchTable = document.querySelector('#batchTable');
-      if (batchTable) {
-        batchTable.items = codes;
-        // Force layout recalculation
-        setTimeout(() => {
-          batchTable.requestUpdate();
-          document.getElementById('batchApp').dispatchEvent(new Event('resize'));
-        }, 100);
-      }
-    };
-
-    fr.readAsArrayBuffer(files.item(0));
-    $("#batchStatus").html("");
-  };
-
-  // Helper function to validate upload file
-  function validateUploadFile(files) {
-    if (files.length <= 0) {
-      $("#batchStatus").html("No file selected");
-      return false;
-    }
-    if (files[0].type !== "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
-      $("#batchStatus").html("Only xlsx files allowed");
-      return false;
-    }
-    if (files[0].size > 1000000) {
-      $("#batchStatus").html("File size must be less than 1MB");
-      return false;
-    }
-
-    $("#batchFileName").html(files[0].name);
-    return true;
-  }
-
-  document.getElementById("process").onclick = () => {
-    var checked = false;
-
-    $("#process").prop("disabled", true);
-    $("#upload").prop("disabled", true);
-    $("#batchRadio").prop("disabled", true);
-    if (document.getElementById("moveItemsOnline").checked) {
-      checked = true;
-      $("#batchStatus").html("Processing list for sending to webshop...");
-      batchProcessList(makeBatchRequest);
-    } else if (document.getElementById("stockEvidence").checked) {
-      checked = true;
-      $("#batchStatus").html("Processing list for stock evidence...");
-      batchProcessList(processListOfStocks);
-    }
-    if (!checked) {
-      $("#batchStatus").html("Please select an option");
-      $("#process").prop("disabled", false);
-      $("#upload").prop("disabled", false);
-      $("#batchRadio").prop("disabled", false);
-      return;
-    }
-  };
-
-  function batchProcessList(next) {
-    var batchSize = $("#batchSize").val();
-    if (batchSize < 1 || batchSize > 100) {
-      $("#batchStatus").html("Batch size must be between 1 and 100");
-      return;
-    }
-
-    $("#batchStatus").html("Batch process started");
-
-    var batch = [];
-    for (var i = 0; i < codes.length; i++) {
-      batch.push(codes[i][Object.keys(codes[i])[0]]);
-      if (batch.length == batchSize) {
-        break;
-      }
-    }
-
-    try {
-      console.log("next", next.name);
-      connectToS1((token) => {
-        next(token, batch).then((res) => {
-          console.log("res", res);
-          if (codes.length > 0) {
-            codes.splice(0, batchSize);
-            renderData(codes, "#batchTable");
-            if (isStopped) {
-              return;
-            } else {
-              batchProcessList(next);
-            }
-          } else {
-            $("#batchStatus").html(
-              "Batch process finished, last file processed: " +
-              $("#upload").val().split("\\").pop()
-            );
-            $("#process").prop("disabled", false);
-            $("#upload").prop("disabled", false);
-            $("#upload").val("");
-          }
-        });
-      });
-    } catch (err) {
-      console.log(err);
-      $("#batchStatus").html(
-        "Batch process failed, last file processed: " +
-        $("#upload").val().split("\\").pop()
-      );
-      $("#process").prop("disabled", false);
-      $("#upload").prop("disabled", false);
-      $("#upload").val("");
-    }
-  }
 
   document.getElementById("searchItems").oninput = () => {
     const searchTerm = $("#searchItems").val();

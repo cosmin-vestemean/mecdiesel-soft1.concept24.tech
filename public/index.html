@@ -248,7 +248,7 @@
                 <option value="mec_ro_item_rel_supplier">mec_ro_item_rel_supplier</option>
               </select>
               <input id="searchItems" type="text" class="form-control" placeholder="Search items by Item or mec_code"/>
-              <input id="batchSize" type="number" class="form-control" value="50" style="width: 100px"/>
+              <input id="batchSize" type="number" class="form-control" value="10" min="1" max="100" style="width: 100px"/>
             </div>
           </div>
         </header>
@@ -293,82 +293,9 @@
                   class="table table-sm modern-table"
                 ></data-table>
               </div>
-              <!--
-                1.batchApp: set height and width and center
-              -->
+              <!-- Batch Processing - New LitElement Component -->
               <div id="batchApp">
-                <div id="batchControlPanel" class="mb-2 mt-2">
-                  <div
-                    class="btn-group"
-                    role="group"
-                    aria-label="Batch jobs radio toggle button group"
-                    class="d-flex flex-row"
-                    id="batchRadio"
-                  >
-                    <input
-                      type="radio"
-                      class="btn-check p-1"
-                      name="btnradio"
-                      id="moveItemsOnline"
-                      autocomplete="off"
-                    />
-                    <label
-                      class="btn btn-outline-primary btn-sm btn-outline-secondary me-1"
-                      for="moveItemsOnline"
-                      >Move items online</label
-                    >
-
-                    <input
-                      type="radio"
-                      class="btn-check p-1"
-                      name="btnradio"
-                      id="stockEvidence"
-                      autocomplete="off"
-                    />
-                    <label
-                      class="btn btn-outline-primary btn-sm btn-outline-secondary me-1"
-                      for="stockEvidence"
-                      >Stock evidence</label
-                    >
-                  </div>
-                  <div class="d-flex flex-row">
-                    <div class="p-1">
-                      <form id="uploadForm">
-                        <input
-                          id="upload"
-                          type="file"
-                          class="form-control form-control-sm w-100 me-1"
-                          accept=".xlsx"
-                        />
-                      </form>
-                    </div>
-                    <div class="p-1">
-                      <button id="process" class="btn btn-sm btn-outline-secondary">
-                        Process
-                      </button>
-                    </div>
-                    <div class="p-1">
-                      <button id="stopBatch" class="btn btn-sm btn-outline-secondary">
-                        Stop
-                      </button>
-                    </div>
-                  </div>
-                  <div class="d-flex flex-row">
-                    <span
-                      id="batchStatus"
-                      class="h5 fw-bold font-monospace text-success"
-                    ></span>
-                  </div>
-                </div>
-                <div class="container-fluid p-0">
-                  <div class="row">
-                    <div class="col-12">
-                      <div class="table-responsive">
-                        <data-table id="batchTable" class="table table-sm modern-table"></data-table>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <batch-processing-container></batch-processing-container>
               </div>
               <div id="print_config">
                 <script>
@@ -520,6 +447,8 @@
     <script type="module" src="components/necesar-achizitii.js"></script>
     <!-- Top ABC Analysis component -->
     <script type="module" src="components/top-abc/top-abc-container.js"></script>
+    <!-- Batch Processing component -->
+    <script type="module" src="components/batch-processing/batch-processing-container.js"></script>
     <!-- Load print_config content via JavaScript instead of inline script -->
     <script>
       $(function() {

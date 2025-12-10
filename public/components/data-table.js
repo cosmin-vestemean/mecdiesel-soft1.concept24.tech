@@ -360,6 +360,10 @@ export class ReplenishmentDataTable extends LitElement {
 
   renderHeaderFilter(column) {
     if (column.type === 'number') {
+      // Use special range filter for stoc_dest column
+      if (column.key === 'stoc_dest') {
+        return this.renderRangeNumberFilterHeader(column);
+      }
       return this.renderNumberFilterHeader(column);
     } else if (column.key === 'abc_class') {
       return this.renderAbcFilterHeader(column);
@@ -389,6 +393,7 @@ export class ReplenishmentDataTable extends LitElement {
                 @click=${e => e.stopPropagation()}>
             <option value="all">All</option>
             <option value="abc">ABC</option>
+            <option value="ab">AB</option>
             <option value="A">A</option>
             <option value="B">B</option>
             <option value="C">C</option>
@@ -458,9 +463,99 @@ export class ReplenishmentDataTable extends LitElement {
     `;
   }
 
+  renderRangeNumberFilterHeader(column) {
+    // Special filter header for stoc_dest with range support
+    const isCurrentSort = this.sortColumn === column.key;
+    const currentFilter = this._storeState.numberFilters?.[column.key] || 'all';
+    const isRangeActive = typeof currentFilter === 'object' && currentFilter.type === 'range';
+    const rangeMin = isRangeActive ? currentFilter.min : '';
+    const rangeMax = isRangeActive ? currentFilter.max : '';
+    
+    return html`
+      <div class="d-flex flex-column align-items-center ${isCurrentSort ? 'text-primary' : ''}"
+           @click=${column.isSortable ? (e) => { e.stopPropagation(); this.handleSort(column); } : null}
+           style="${column.isSortable ? 'cursor: pointer;' : ''}">
+        <div class="d-flex align-items-center small">
+          <span>${column.displayName}</span>
+          ${column.isSortable ? this.renderSortIcon(column) : ''}
+        </div>
+        <div class="btn-group btn-group-sm number-filter-group">
+          <button class="btn btn-outline-secondary btn-xs ${this.getNumberFilterStatus(column.key, 'all')}" 
+                  @click=${(e) => { e.stopPropagation(); this._dispatchUpdate(`numberFilter_${column.key}`, 'all'); }}
+                  title="Show all values">
+            <i class="bi bi-asterisk"></i>
+          </button>
+          <button class="btn btn-outline-success btn-xs ${this.getNumberFilterStatus(column.key, 'positive')}" 
+                  @click=${(e) => { e.stopPropagation(); this._dispatchUpdate(`numberFilter_${column.key}`, 'positive'); }}
+                  title="Show positive values only">
+            <i class="bi bi-plus"></i>
+          </button>
+          <button class="btn btn-outline-danger btn-xs ${this.getNumberFilterStatus(column.key, 'negative')}" 
+                  @click=${(e) => { e.stopPropagation(); this._dispatchUpdate(`numberFilter_${column.key}`, 'negative'); }}
+                  title="Show negative values only">
+            <i class="bi bi-dash"></i>
+          </button>
+          <button class="btn btn-outline-secondary btn-xs ${this.getNumberFilterStatus(column.key, 'zero')}" 
+                  @click=${(e) => { e.stopPropagation(); this._dispatchUpdate(`numberFilter_${column.key}`, 'zero'); }}
+                  title="Show zero values only">
+            <i class="bi bi-0-circle"></i>
+          </button>
+          <button class="btn btn-outline-info btn-xs ${isRangeActive ? 'active' : ''}" 
+                  @click=${(e) => { e.stopPropagation(); this._showRangePopover(e, column.key); }}
+                  title="Filter by range (min-max)">
+            <i class="bi bi-sliders"></i>
+          </button>
+        </div>
+        ${isRangeActive ? html`
+          <small class="text-info mt-1">${rangeMin || '∞'} - ${rangeMax || '∞'}</small>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  _showRangePopover(e, columnKey) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Get current range values if any
+    const currentFilter = this._storeState.numberFilters?.[columnKey] || 'all';
+    const isRangeActive = typeof currentFilter === 'object' && currentFilter.type === 'range';
+    const currentMin = isRangeActive ? currentFilter.min : '';
+    const currentMax = isRangeActive ? currentFilter.max : '';
+    
+    // Prompt for min and max values
+    const minStr = prompt('Enter minimum value (leave empty for no minimum):', currentMin);
+    if (minStr === null) return; // User cancelled
+    
+    const maxStr = prompt('Enter maximum value (leave empty for no maximum):', currentMax);
+    if (maxStr === null) return; // User cancelled
+    
+    const min = minStr === '' ? null : parseFloat(minStr);
+    const max = maxStr === '' ? null : parseFloat(maxStr);
+    
+    // Validate inputs
+    if ((minStr !== '' && isNaN(min)) || (maxStr !== '' && isNaN(max))) {
+      alert('Please enter valid numbers');
+      return;
+    }
+    
+    // If both are empty, reset to 'all'
+    if (min === null && max === null) {
+      this._dispatchUpdate(`numberFilter_${columnKey}`, 'all');
+      return;
+    }
+    
+    // Set range filter
+    this._dispatchUpdate(`numberFilter_${columnKey}`, { type: 'range', min, max });
+  }
+
   getNumberFilterStatus(columnKey, filterValue) {
     // Helper to highlight the active filter button
     const activeFilter = this._storeState.numberFilters?.[columnKey] || 'all';
+    // Handle range filter specially
+    if (typeof activeFilter === 'object' && activeFilter.type === 'range') {
+      return filterValue === 'range' ? 'active' : '';
+    }
     return activeFilter === filterValue ? 'active' : '';
   }
 

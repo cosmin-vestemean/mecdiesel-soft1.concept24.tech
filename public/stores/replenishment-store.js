@@ -481,6 +481,9 @@ export class ReplenishmentStore {
         } else if (this._state.abcFilter === 'abc') {
           // Show only items with ABC classifications (A, B, C) - exclude None/empty values
           return abcValue === 'A' || abcValue === 'B' || abcValue === 'C';
+        } else if (this._state.abcFilter === 'ab') {
+          // Show only items with A or B classifications
+          return abcValue === 'A' || abcValue === 'B';
         } else {
           return abcValue === this._state.abcFilter;
         }
@@ -641,21 +644,34 @@ export class ReplenishmentStore {
 
           // Apply the specific filter
           let shouldInclude = true;
-          switch (filterValue) {
-            case 'positive': 
-              shouldInclude = value > 0;
-              break;
-            case 'negative': 
-              shouldInclude = value < 0;
-              break;
-            case 'zero': 
-              shouldInclude = value === 0;
-              break;
-            default: 
-              shouldInclude = true;
+          
+          // Handle range filter (object with type: 'range')
+          if (typeof filterValue === 'object' && filterValue.type === 'range') {
+            const { min, max } = filterValue;
+            if (min !== null && min !== undefined && value < min) {
+              shouldInclude = false;
+            }
+            if (max !== null && max !== undefined && value > max) {
+              shouldInclude = false;
+            }
+            console.log(`🔍 Range filter for ${key}: value=${value}, min=${min}, max=${max}, shouldInclude=${shouldInclude}`);
+          } else {
+            switch (filterValue) {
+              case 'positive': 
+                shouldInclude = value > 0;
+                break;
+              case 'negative': 
+                shouldInclude = value < 0;
+                break;
+              case 'zero': 
+                shouldInclude = value === 0;
+                break;
+              default: 
+                shouldInclude = true;
+            }
+            console.log(`🔍 Filter check for ${key}: value=${value}, filterValue=${filterValue}, shouldInclude=${shouldInclude}`);
           }
           
-          console.log(`🔍 Filter check for ${key}: value=${value}, filterValue=${filterValue}, shouldInclude=${shouldInclude}`);
           return shouldInclude;
         });
         

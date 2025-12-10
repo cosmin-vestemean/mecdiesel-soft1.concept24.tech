@@ -53,4 +53,22 @@ client.use("top-abc", socketClient.service("top-abc"), {
   ],
 });
 
+client.use("batch-queue", socketClient.service("batch-queue"), {
+  methods: [
+    "find",
+    "get",
+    "create",
+    "patch",
+    "cancel",
+    "retry",
+    "summary",
+    "next",
+    "nextBatch",
+    "process",
+    "processBatch",
+    "initialize",
+    "cleanup"
+  ],
+});
+
 export { client };

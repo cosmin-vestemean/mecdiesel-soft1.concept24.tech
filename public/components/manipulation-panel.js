@@ -158,6 +158,7 @@ export class ManipulationPanel extends LitElement {
     // ABC filter
     if (this.abcFilter !== 'all') {
       const abcValue = this.abcFilter === 'abc' ? 'A/B/C Classes' : 
+                      this.abcFilter === 'ab' ? 'A/B Classes' :
                       this.abcFilter === 'none' ? 'No Classification' : 
                       `Class ${this.abcFilter}`;
       filters.push({
@@ -192,9 +193,17 @@ export class ManipulationPanel extends LitElement {
     if (this.numberFilters && Object.keys(this.numberFilters).length > 0) {
       Object.entries(this.numberFilters).forEach(([key, value]) => {
         if (value !== 'all') {
-          const displayValue = value === 'positive' ? '> 0' : 
-                             value === 'negative' ? '< 0' : 
-                             value === 'zero' ? '= 0' : value;
+          let displayValue;
+          // Handle range filter display
+          if (typeof value === 'object' && value.type === 'range') {
+            const minPart = value.min !== null && value.min !== undefined ? value.min : '∞';
+            const maxPart = value.max !== null && value.max !== undefined ? value.max : '∞';
+            displayValue = `${minPart} - ${maxPart}`;
+          } else {
+            displayValue = value === 'positive' ? '> 0' : 
+                           value === 'negative' ? '< 0' : 
+                           value === 'zero' ? '= 0' : value;
+          }
           // Make column name more readable
           const columnName = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
           filters.push({
