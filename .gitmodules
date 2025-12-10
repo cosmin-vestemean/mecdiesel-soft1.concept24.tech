@@ -1,0 +1,3 @@
+[submodule "external/MEC"]
+	path = external/MEC
+	url = https://github.com/cosmin-vestemean/MEC.git
