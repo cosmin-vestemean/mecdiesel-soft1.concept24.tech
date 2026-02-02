@@ -15,6 +15,7 @@
  */
 
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
+import { client } from '../../socketConfig.js';
 
 export class ZeroMinMaxPanel extends LitElement {
   static get properties() {
@@ -118,13 +119,9 @@ export class ZeroMinMaxPanel extends LitElement {
   
   async _initService() {
     try {
-      // Wait for socket to be ready
-      if (window.socketReady) {
-        await window.socketReady;
-      }
-      
-      if (window.client) {
-        this._service = window.client.service('zero-minmax');
+      // Use imported client directly
+      if (client) {
+        this._service = client.service('zero-minmax');
         this._setupRealtimeListeners();
         console.log('✅ ZeroMinMaxPanel: Service initialized');
       } else {
@@ -195,7 +192,7 @@ export class ZeroMinMaxPanel extends LitElement {
         throw new Error('Service not available');
       }
       
-      const result = await this._service.getActiveBranches({});
+      const result = await this._service.branches({ token: window.token });
       
       if (result.success && result.data) {
         // Build branches object
@@ -235,9 +232,10 @@ export class ZeroMinMaxPanel extends LitElement {
       }
       
       // First get the count
-      const countResult = await this._service.getPreviewCount({
-        codeFilter: this.materialCodeFilter,
-        branchCodes: this.selectedBranches
+      const countResult = await this._service.count({
+        token: window.token,
+        filter: this.materialCodeFilter,
+        branches: this.selectedBranches
       });
       
       if (!countResult.success) {
@@ -248,9 +246,10 @@ export class ZeroMinMaxPanel extends LitElement {
       this.totalPages = Math.ceil(this.previewCount / this.pageSize);
       
       // Then get the data for current page
-      const dataResult = await this._service.getPreviewData({
-        codeFilter: this.materialCodeFilter,
-        branchCodes: this.selectedBranches,
+      const dataResult = await this._service.preview({
+        token: window.token,
+        filter: this.materialCodeFilter,
+        branches: this.selectedBranches,
         page: this.currentPage,
         pageSize: this.pageSize
       });
@@ -281,7 +280,8 @@ export class ZeroMinMaxPanel extends LitElement {
         throw new Error('Service not available');
       }
       
-      const result = await this._service.getResetHistory({
+      const result = await this._service.history({
+        token: window.token,
         limit: 20
       });
       
@@ -334,10 +334,11 @@ export class ZeroMinMaxPanel extends LitElement {
         throw new Error('Service not available');
       }
       
-      const result = await this._service.processZeroMinMax({
-        codeFilter: this.materialCodeFilter,
-        branchCodes: this.selectedBranches,
-        userId: window.currentUserId || null // Will be set by login
+      const result = await this._service.process({
+        token: window.token,
+        filter: this.materialCodeFilter,
+        branches: this.selectedBranches,
+        username: window.appUserName || 'unknown'
       });
       
       if (!result.success) {

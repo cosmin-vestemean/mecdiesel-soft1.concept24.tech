@@ -1,26 +1,29 @@
 // For more information about this file see https://dove.feathersjs.com/guides/cli/service.class.html
 
-import request from 'request-promise'
+import rp from 'request-promise'
 
-// S1 API base URL
-const S1_BASE_URL = process.env.S1_API_URL || 'https://s1aboronline.soft1cloud.com/s1aboronline'
+// S1 API base URL - same as main app.js
+const S1_BASE_URL = 'https://mecdiesel.oncloud.gr/s1services'
+
+// Create request instance with base URL
+const request = rp.defaults({
+  baseUrl: S1_BASE_URL,
+  json: true,
+  gzip: true
+})
 
 /**
  * Helper function to make requests to S1 AJS endpoints
  */
 const makeS1Request = async (endpoint, data = {}) => {
-  const uri = `${S1_BASE_URL}${endpoint}`
-  
   return await request({
     method: 'POST',
-    uri,
+    uri: endpoint,
     body: {
       clientID: data.token,
       appId: '2002',
       JSONDATA: JSON.stringify(data.payload || {})
-    },
-    json: true,
-    gzip: true
+    }
   })
 }
 
