@@ -26,7 +26,7 @@ class HierarchicalNavigation {
       'achizitii': {
         name: 'Achizitii',
         defaultTab: 'branchReplenishButton',
-        tabs: ['branchReplenishButton', 'necesarAchizitiiButton', 'topAbcButton']
+        tabs: ['branchReplenishButton', 'necesarAchizitiiButton', 'topAbcButton', 'zeroMinMaxButton']
       }
     };
     

@@ -123,6 +123,7 @@ export function initializeUserInteractions() {
     "stockChangesLabelVerbose",
     "necesarAchizitiiContent",
     "topAbcContent",
+    "zeroMinMaxContent",
   ];
 
   function hideAllButArray(arr) {
@@ -284,6 +285,12 @@ export function initializeUserInteractions() {
   $("#topAbcButton").click(() => {
     hideAllButArray(["topAbcContent"]);
     paginationManager.setActiveTab("topAbcButton");
+  });
+
+  // Zero Min/Max Reset tab
+  $("#zeroMinMaxButton").click(() => {
+    hideAllButArray(["zeroMinMaxContent"]);
+    paginationManager.setActiveTab("zeroMinMaxButton");
   });
 
   // Update items button handler to work with hierarchical navigation

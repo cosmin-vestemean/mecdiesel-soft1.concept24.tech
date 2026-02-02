@@ -10,6 +10,8 @@ import { mecItemProducerRelation } from './mec_item_producer_relation/mec_item_p
 
 import { mecItem } from './mec_item/mec_item.js'
 
+import { zeroMinmax } from './zero-minmax/zero-minmax.js'
+
 export const services = (app) => {
   app.configure(mecRoItemRelSupplier)
 
@@ -22,6 +24,8 @@ export const services = (app) => {
   app.configure(mecItemProducerRelation)
 
   app.configure(mecItem)
+
+  app.configure(zeroMinmax)
 
   // All services will be registered here
 }

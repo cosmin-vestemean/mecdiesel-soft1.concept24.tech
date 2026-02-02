@@ -235,6 +235,11 @@
                      onclick="openBranchReplenishmentDocs(event)"></i>
                 </button>
               </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="zeroMinMaxButton" data-bs-toggle="tab" type="button" role="tab">
+                  <i class="fas fa-eraser me-1"></i>Min Max
+                </button>
+              </li>
             </ul>
             
             <!-- Contextual Controls -->
@@ -312,6 +317,9 @@
               </div>
               <div id="topAbcContent">
                 <top-abc-container></top-abc-container>
+              </div>
+              <div id="zeroMinMaxContent">
+                <zero-minmax-panel></zero-minmax-panel>
               </div>
             </div>
           </div>
@@ -447,6 +455,8 @@
     <script type="module" src="components/necesar-achizitii.js"></script>
     <!-- Top ABC Analysis component -->
     <script type="module" src="components/top-abc/top-abc-container.js"></script>
+    <!-- Zero Min/Max Reset component -->
+    <script type="module" src="components/zero-minmax/zero-minmax-panel.js"></script>
     <!-- Batch Processing component -->
     <script type="module" src="components/batch-processing/batch-processing-container.js"></script>
     <!-- Load print_config content via JavaScript instead of inline script -->
