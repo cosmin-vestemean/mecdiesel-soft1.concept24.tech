@@ -16,7 +16,17 @@ export const zeroMinmax = (app) => {
     // A list of all methods this service exposes externally
     methods: zeroMinmaxMethods,
     // Custom events for real-time notifications
-    events: ['started', 'completed', 'error', 'progress']
+    events: [
+      'started', 
+      'completed', 
+      'error', 
+      'progress',
+      'batch-started',
+      'batch-progress',
+      'batch-completed',
+      'batch-cancelled',
+      'batch-failed'
+    ]
   })
 
   // Get the registered service
@@ -30,10 +40,14 @@ export const zeroMinmax = (app) => {
     before: {
       all: [],
       initialize: [],
+      initializeQueue: [],
       branches: [],
       count: [],
       preview: [],
       process: [],
+      processBatch: [],
+      cancelBatch: [],
+      queueStatus: [],
       history: [],
       summary: [],
       cleanup: []
@@ -45,6 +59,15 @@ export const zeroMinmax = (app) => {
         async (context) => {
           if (context.result && context.result.success) {
             console.log(`✅ ZeroMinMax process completed: ${context.result.affectedCount} records reset`)
+          }
+          return context
+        }
+      ],
+      processBatch: [
+        // Log successful batch process operations
+        async (context) => {
+          if (context.result && context.result.success) {
+            console.log(`✅ ZeroMinMax batch process completed: ${context.result.processedCount} records reset`)
           }
           return context
         }
@@ -78,5 +101,26 @@ export const zeroMinmax = (app) => {
     return app.channel('authenticated')
   })
 
-  console.log('📦 ZeroMinMax service configured with real-time events')
+  // Batch processing events
+  service.publish('batch-started', (data, context) => {
+    return app.channel('authenticated')
+  })
+
+  service.publish('batch-progress', (data, context) => {
+    return app.channel('authenticated')
+  })
+
+  service.publish('batch-completed', (data, context) => {
+    return app.channel('authenticated')
+  })
+
+  service.publish('batch-cancelled', (data, context) => {
+    return app.channel('authenticated')
+  })
+
+  service.publish('batch-failed', (data, context) => {
+    return app.channel('authenticated')
+  })
+
+  console.log('📦 ZeroMinMax service configured with real-time events (including batch processing)')
 }

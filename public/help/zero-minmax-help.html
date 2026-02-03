@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentație Zero Min/Max</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #0d6efd;
+            border-bottom: 3px solid #0d6efd;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        h2 {
+            color: #0d6efd;
+            margin-top: 30px;
+            border-left: 4px solid #0d6efd;
+            padding-left: 10px;
+        }
+        h3 {
+            color: #495057;
+            margin-top: 20px;
+        }
+        .feature-box {
+            background: #f8f9fa;
+            border-left: 4px solid #0d6efd;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .warning-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .success-box {
+            background: #d1e7dd;
+            border-left: 4px solid #198754;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .info-box {
+            background: #cff4fc;
+            border-left: 4px solid #0dcaf0;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        code {
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #d63384;
+        }
+        .step-number {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            background: #0d6efd;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        th, td {
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background: #0d6efd;
+            color: white;
+            font-weight: 600;
+        }
+        tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        .icon {
+            font-size: 1.2em;
+            margin-right: 5px;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        li {
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1><span class="icon">📘</span>Documentație Zero Min/Max</h1>
+    
+    <div class="info-box">
+        <strong>Despre modul:</strong> Funcționalitatea Zero Min/Max permite resetarea valorilor <code>CCCMINAUTO</code> și <code>CCCMAXAUTO</code> la 0 pentru articole selectate pe branch-uri selectate, cu tracking complet în istoric și notificări real-time.
+    </div>
+
+    <h2><span class="icon">🎯</span>Scop și Utilizare</h2>
+    <p>Modulul este destinat pentru:</p>
+    <ul>
+        <li><strong>Resetarea valorilor calculate automat</strong> pentru anumite categorii de articole (ex: articole cu prefix "FS")</li>
+        <li><strong>Management flexibil</strong> al pragurilor min/max pe branch-uri multiple</li>
+        <li><strong>Audit complet</strong> al tuturor operațiunilor de resetare</li>
+    </ul>
+
+    <h2><span class="icon">🔧</span>Pași de Utilizare</h2>
+
+    <div class="feature-box">
+        <h3><span class="step-number">1</span>Introducere Filtru Cod Material</h3>
+        <p>În câmpul <strong>"Cod articol"</strong> introduceți prefixul dorit (implicit: <code>FS</code>)</p>
+        <ul>
+            <li>Filtrul este <strong>case-sensitive</strong> (FS ≠ fs)</li>
+            <li>Se aplică automat wildcards: <code>FS</code> → <code>FS%</code> (articole care încep cu "FS")</li>
+            <li>Exemplu: <code>FS</code> va găsi FS001234, FS002456, etc.</li>
+        </ul>
+    </div>
+
+    <div class="feature-box">
+        <h3><span class="step-number">2</span>Selectare Branch-uri</h3>
+        <p>Click pe dropdown-ul <strong>"Branch-uri"</strong> pentru a selecta/deselecta sucursale:</p>
+        <ul>
+            <li><strong>Implicit</strong>: toate branch-urile sunt pre-selectate (exceptând HQ - 1000)</li>
+            <li><strong>Multiselect</strong>: puteți selecta orice combinație de branch-uri</li>
+            <li><strong>Căutare</strong>: utilizați câmpul de search pentru a găsi rapid un branch</li>
+            <li><strong>HQ exclus</strong>: Branch-ul 1000 (HQ) este exclus automat din listă</li>
+        </ul>
+    </div>
+
+    <div class="feature-box">
+        <h3><span class="step-number">3</span>Previzualizare Articole</h3>
+        <p>Click pe butonul <strong>🔍 Preview</strong> pentru a vedea articolele care vor fi afectate:</p>
+        <ul>
+            <li>Se afișează numărul total de înregistrări</li>
+            <li>Tabel cu: <strong>Cod</strong>, <strong>Nume</strong>, <strong>Branch</strong>, <strong>Min Auto</strong>, <strong>Max Auto</strong></li>
+            <li><strong>Paginare</strong>: navigare prin pagini (50/100/200 înregistrări per pagină)</li>
+            <li>Verificați cu atenție datele înainte de resetare!</li>
+        </ul>
+    </div>
+
+    <div class="feature-box">
+        <h3><span class="step-number">4</span>Executare Resetare</h3>
+        <p>Click pe butonul <strong>🗑️ Resetează</strong> pentru a executa operațiunea:</p>
+        <ul>
+            <li><strong>Dialog confirmare</strong> cu rezumat complet</li>
+            <li>Procesare automată: 
+                <ul>
+                    <li><strong>&lt;500 articole</strong>: procesare rapidă (sincronă)</li>
+                    <li><strong>&gt;500 articole</strong>: procesare în batch-uri de câte 500 (cu progress bar)</li>
+                </ul>
+            </li>
+            <li><strong>Progress bar</strong> arată avansul în timp real</li>
+            <li><strong>Notificări</strong> la finalizare/eroare</li>
+        </ul>
+    </div>
+
+    <h2><span class="icon">📦</span>Batch Processing (Volume Mari)</h2>
+
+    <div class="success-box">
+        <h3>Procesare Optimizată pentru >500 Articole</h3>
+        <p>Când numărul de articole depășește 500, sistemul activează automat <strong>batch processing</strong>:</p>
+        
+        <table>
+            <tr>
+                <th>Caracteristică</th>
+                <th>Detalii</th>
+            </tr>
+            <tr>
+                <td><strong>Chunk Size</strong></td>
+                <td>500 articole per batch</td>
+            </tr>
+            <tr>
+                <td><strong>Progress</strong></td>
+                <td>"📦 Batch 3/5" + "1500/2341 articole (64%)"</td>
+            </tr>
+            <tr>
+                <td><strong>Timp estimat</strong></td>
+                <td>~2 secunde per batch de 500 articole</td>
+            </tr>
+            <tr>
+                <td><strong>Anulare</strong></td>
+                <td>Buton "✖ Anulează" disponibil în timpul procesării</td>
+            </tr>
+        </table>
+
+        <h4>Buton Anulează</h4>
+        <ul>
+            <li><strong>Oprire gracioasă</strong>: procesarea se oprește după batch-ul curent</li>
+            <li><strong>Articole procesate</strong>: rămân resetate (nu se face rollback automat)</li>
+            <li><strong>Articole neprocesate</strong>: rămân neschimbate</li>
+            <li><strong>Mesaj informativ</strong>: "⚠️ Procesare anulată. X din Y înregistrări au fost resetate."</li>
+        </ul>
+    </div>
+
+    <h2><span class="icon">📜</span>Istoric Resetări</h2>
+    
+    <p>Click pe <strong>"Arată istoric"</strong> pentru a vizualiza toate operațiunile anterioare:</p>
+    
+    <table>
+        <tr>
+            <th>Coloană</th>
+            <th>Descriere</th>
+        </tr>
+        <tr>
+            <td><strong>Batch ID</strong></td>
+            <td>Identificator unic al operațiunii (ex: zero_1733150400000_abc123)</td>
+        </tr>
+        <tr>
+            <td><strong>Data/Ora</strong></td>
+            <td>Timestamp resetare (format: DD.MM.YYYY HH:mm:ss)</td>
+        </tr>
+        <tr>
+            <td><strong>Utilizator</strong></td>
+            <td>Username-ul care a inițiat resetarea</td>
+        </tr>
+        <tr>
+            <td><strong>Filtru</strong></td>
+            <td>Filtrul de cod material folosit (ex: FS%)</td>
+        </tr>
+        <tr>
+            <td><strong>Count</strong></td>
+            <td>Număr total de înregistrări resetate</td>
+        </tr>
+    </table>
+
+    <div class="info-box">
+        <strong>💡 Tip:</strong> Istoricul este păstrat permanent în tabelul <code>CCCZEROMINMAX</code> pentru audit complet. Include valorile vechi (<code>OLD_CCCMINAUTO</code>, <code>OLD_CCCMAXAUTO</code>) pentru fiecare articol resetat.
+    </div>
+
+    <h2><span class="icon">⚙️</span>Criterii de Selecție Articole</h2>
+
+    <div class="feature-box">
+        <p>Sistemul selectează articolele care îndeplinesc <strong>toate</strong> condițiile:</p>
+        <ol>
+            <li><strong>Cod material</strong> începe cu filtrul specificat (ex: <code>FS</code>)</li>
+            <li><strong>Branch-ul</strong> este în lista selectată</li>
+            <li><strong>CCCMINAUTO ≠ 0</strong> SAU <strong>CCCMAXAUTO ≠ 0</strong> (cel puțin una din valori diferită de 0)</li>
+            <li>Articolul este <strong>activ</strong> în sistem</li>
+        </ol>
+    </div>
+
+    <h2><span class="icon">⚠️</span>Avertismente și Precauții</h2>
+
+    <div class="warning-box">
+        <h3>⚠️ Atenție!</h3>
+        <ul>
+            <li><strong>Acțiune ireversibilă</strong>: Resetarea valorilor NU poate fi anulată automat din interfață</li>
+            <li><strong>Verificare obligatorie</strong>: Utilizați întotdeauna <strong>Preview</strong> înainte de resetare</li>
+            <li><strong>HQ exclus</strong>: Branch-ul 1000 (HQ) nu apare niciodată în listă</li>
+            <li><strong>Valori rămân la 0</strong>: După resetare, valorile CCCMINAUTO și CCCMAXAUTO rămân la 0 până când sunt actualizate manual sau printr-un proces dedicat de recalculare</li>
+        </ul>
+    </div>
+
+    <h2><span class="icon">🔔</span>Notificări Real-Time</h2>
+
+    <p>Modulul utilizează <strong>FeathersJS Channels</strong> pentru notificări în timp real:</p>
+    
+    <div class="success-box">
+        <h3>Ce notificări primiți?</h3>
+        <ul>
+            <li><strong>Proces pornit</strong>: "🚀 Utilizatorul X a pornit o resetare..."</li>
+            <li><strong>Progres</strong>: Actualizare progress bar în timp real</li>
+            <li><strong>Finalizare</strong>: "✅ Reset complet! X înregistrări actualizate"</li>
+            <li><strong>Eroare</strong>: "❌ Eroare la procesare: [detalii]"</li>
+            <li><strong>Anulare</strong>: "⚠️ Procesare anulată. X din Y înregistrări resetate"</li>
+        </ul>
+        
+        <p><strong>Multi-user sync:</strong> Dacă doi utilizatori au modulul deschis simultan, ambii văd progresul în timp real!</p>
+    </div>
+
+    <h2><span class="icon">🐛</span>Debug Mode</h2>
+
+    <div class="info-box">
+        <p>Pentru dezvoltatori și testare:</p>
+        <ul>
+            <li>Deschideți <strong>Developer Console</strong> (F12)</li>
+            <li>Setați <code>document.querySelector('zero-minmax-panel').debugMode = true</code></li>
+            <li>Click pe <strong>Resetează</strong> → veți vedea query-ul SQL fără a-l executa</li>
+            <li>Util pentru verificare query-uri înainte de rulare în producție</li>
+        </ul>
+    </div>
+
+    <h2><span class="icon">📊</span>Exemple de Utilizare</h2>
+
+    <h3>Exemplul 1: Resetare prefix "FS"</h3>
+    <ol>
+        <li>Filtru cod: <code>FS</code></li>
+        <li>Selectare: toate branch-urile</li>
+        <li>Preview: 1,234 articole găsite</li>
+        <li>Resetare: 1,234 înregistrări (FS001234, FS002456, etc.)</li>
+        <li>Rezultat: <code>CCCMINAUTO = 0</code>, <code>CCCMAXAUTO = 0</code> pentru toate</li>
+    </ol>
+
+    <h3>Exemplul 2: Resetare Selectivă pe 3 Branch-uri</h3>
+    <ol>
+        <li>Filtru cod: <code>OE</code></li>
+        <li>Selectare: CLUJ (1200), CONSTANTA (1300), GALATI (1400)</li>
+        <li>Preview: 450 articole găsite</li>
+        <li>Resetare: procesare rapidă (sincronă)</li>
+        <li>Rezultat: 450 înregistrări resetate doar pe cele 3 branch-uri</li>
+    </ol>
+
+    <h3>Exemplul 3: Volume Mari cu Batch Processing</h3>
+    <ol>
+        <li>Filtru cod: <code>BR</code></li>
+        <li>Selectare: toate branch-urile (14 branch-uri)</li>
+        <li>Preview: 2,341 articole găsite</li>
+        <li>Resetare: procesare în 5 batch-uri (500+500+500+500+341)</li>
+        <li>Progress: "📦 Batch 3/5 - 1500/2341 articole (64%)"</li>
+        <li>Timp total: ~10 secunde</li>
+        <li>Rezultat: 2,341 înregistrări resetate cu succes</li>
+    </ol>
+
+    <h2><span class="icon">❓</span>Întrebări Frecvente</h2>
+
+    <h3>Ce se întâmplă dacă anulezi procesarea?</h3>
+    <p>Articolele procesate până în momentul anulării <strong>rămân resetate</strong>. Nu se face rollback automat. Puteți rula din nou procesarea pentru articolele rămase neprocesate.</p>
+
+    <h3>Pot anula o resetare după finalizare?</h3>
+    <p>Nu direct din interfață. Valorile vechi sunt salvate în tabelul <code>CCCZEROMINMAX</code> (coloanele <code>OLD_CCCMINAUTO</code>, <code>OLD_CCCMAXAUTO</code>). Pentru rollback, contactați administratorul.</p>
+
+    <h3>De ce HQ (1000) nu apare în listă?</h3>
+    <p>Branch-ul 1000 (Headquarter) este exclus automat din procesare pentru a preveni resetări accidentale la nivel central.</p>
+
+    <h3>Cum știu dacă o resetare a fost executată cu succes?</h3>
+    <p>Verificați:</p>
+    <ul>
+        <li>Mesaj de succes: "✅ Reset complet! X înregistrări actualizate"</li>
+        <li>Istoric: click pe "Arată istoric" → vedeți batch-ul nou creat</li>
+        <li>Preview: rulați din nou preview → ar trebui să returneze 0 articole (dacă toate au fost resetate)</li>
+    </ul>
+
+    <h3>Ce înseamnă "Procesare în batch-uri"?</h3>
+    <p>Pentru volume mari (&gt;500 articole), sistemul împarte procesarea în grupuri de câte 500 pentru a evita timeout-uri și a oferi progress granular. Este automat și transparent pentru utilizator.</p>
+
+    <h2><span class="icon">📞</span>Suport</h2>
+
+    <div class="info-box">
+        <p><strong>Pentru probleme sau întrebări:</strong></p>
+        <ul>
+            <li>Verificați consolă (F12) pentru erori detaliate</li>
+            <li>Consultați istoricul pentru a verifica operațiuni anterioare</li>
+            <li>Contactați echipa de development pentru asistență tehnică</li>
+        </ul>
+    </div>
+
+    <hr style="margin: 40px 0; border: none; border-top: 2px solid #dee2e6;">
+    
+    <p style="text-align: center; color: #6c757d; font-size: 0.9em;">
+        <strong>Zero Min/Max Module</strong> | Versiunea 1.0 | © 2026 Dubhe
+    </p>
+
+</body>
+</html>

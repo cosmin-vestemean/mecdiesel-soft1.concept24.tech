@@ -3,12 +3,16 @@
 export const zeroMinmaxPath = 'zero-minmax'
 
 export const zeroMinmaxMethods = [
-  'initialize',   // Setup table CCCZEROMINMAX
-  'branches',     // Get active branches (excluding HQ)
-  'count',        // Get count of affected articles
-  'preview',      // Get preview data with pagination
-  'process',      // Execute the reset operation
-  'history',      // Get reset history
-  'summary',      // Get reset batch summaries
-  'cleanup'       // Remove old history records
+  'initialize',      // Setup table CCCZEROMINMAX
+  'initializeQueue', // Setup table CCCZEROMINMAX_QUEUE for batch processing
+  'branches',        // Get active branches (excluding HQ)
+  'count',           // Get count of affected articles
+  'preview',         // Get preview data with pagination
+  'process',         // Execute the reset operation (synchronous)
+  'processBatch',    // Execute the reset operation in batches (for large datasets)
+  'cancelBatch',     // Cancel a batch processing job
+  'queueStatus',     // Get status of a batch processing job
+  'history',         // Get reset history
+  'summary',         // Get reset batch summaries
+  'cleanup'          // Remove old history records
 ]

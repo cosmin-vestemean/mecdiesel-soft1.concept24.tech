@@ -49,9 +49,15 @@ export class ZeroMinMaxPanel extends LitElement {
       // Progress tracking for reset
       resetProgress: { type: Object },
       
+      // Batch processing
+      currentBatchId: { type: String },
+      
       // Messages
       error: { type: String },
       success: { type: String },
+      
+      // Debug mode
+      debugMode: { type: Boolean },
       
       // Service reference
       _service: { type: Object, state: true },
@@ -90,13 +96,20 @@ export class ZeroMinMaxPanel extends LitElement {
     // Progress
     this.resetProgress = null;
     
+    // Batch processing
+    this.currentBatchId = null;
+    
     // Messages
     this.error = '';
     this.success = '';
     
+    // Debug mode
+    this.debugMode = false;
+    
     // Bind methods
     this.closeBranchDropdown = this.closeBranchDropdown.bind(this);
     this._handleRealtimeEvent = this._handleRealtimeEvent.bind(this);
+    this._handleBatchEvent = this._handleBatchEvent.bind(this);
   }
 
   // Use Light DOM for Bootstrap compatibility
@@ -122,6 +135,21 @@ export class ZeroMinMaxPanel extends LitElement {
       // Use imported client directly
       if (client) {
         this._service = client.service('zero-minmax');
+        
+        // Call initialize to ensure table exists
+        try {
+          console.log('🔧 ZeroMinMaxPanel: Calling initialize to ensure CCCZEROMINMAX table exists...');
+          const setupResult = await this._service.initialize({ token: window.token });
+          if (setupResult.success) {
+            console.log('✅ ZeroMinMaxPanel: Table initialized successfully');
+          } else {
+            console.warn('⚠️ ZeroMinMaxPanel: Initialize warning', setupResult.message || setupResult.error);
+          }
+        } catch (setupErr) {
+          console.error('❌ ZeroMinMaxPanel: Failed to initialize table', setupErr);
+          this.error = 'Failed to initialize database table. Please contact administrator.';
+        }
+        
         this._setupRealtimeListeners();
         console.log('✅ ZeroMinMaxPanel: Service initialized');
       } else {
@@ -135,12 +163,19 @@ export class ZeroMinMaxPanel extends LitElement {
   _setupRealtimeListeners() {
     if (!this._service) return;
     
-    // Listen for real-time events
+    // Listen for real-time events (regular processing)
     this._service.on('progress', this._handleRealtimeEvent);
     this._service.on('completed', this._handleRealtimeEvent);
     this._service.on('error', this._handleRealtimeEvent);
     
-    console.log('✅ ZeroMinMaxPanel: Real-time listeners set up');
+    // Listen for batch processing events
+    this._service.on('batch-started', this._handleBatchEvent);
+    this._service.on('batch-progress', this._handleBatchEvent);
+    this._service.on('batch-completed', this._handleBatchEvent);
+    this._service.on('batch-cancelled', this._handleBatchEvent);
+    this._service.on('batch-failed', this._handleBatchEvent);
+    
+    console.log('✅ ZeroMinMaxPanel: Real-time listeners set up (including batch events)');
   }
 
   _cleanupRealtimeListeners() {
@@ -149,6 +184,12 @@ export class ZeroMinMaxPanel extends LitElement {
     this._service.off('progress', this._handleRealtimeEvent);
     this._service.off('completed', this._handleRealtimeEvent);
     this._service.off('error', this._handleRealtimeEvent);
+    
+    this._service.off('batch-started', this._handleBatchEvent);
+    this._service.off('batch-progress', this._handleBatchEvent);
+    this._service.off('batch-completed', this._handleBatchEvent);
+    this._service.off('batch-cancelled', this._handleBatchEvent);
+    this._service.off('batch-failed', this._handleBatchEvent);
   }
 
   _handleRealtimeEvent(data) {
@@ -159,12 +200,14 @@ export class ZeroMinMaxPanel extends LitElement {
         current: data.current,
         total: data.total,
         percent: data.percent,
-        currentBranch: data.currentBranch
+        currentBranch: data.currentBranch,
+        mode: 'regular'
       };
       this.requestUpdate();
     } else if (data.type === 'completed') {
       this.resetProgress = null;
       this.loadingReset = false;
+      this.currentBatchId = null;
       this.success = `Reset complet! ${data.totalReset} înregistrări actualizate în ${data.branchCount} sucursale.`;
       this._loadPreview(); // Refresh preview
       this._loadHistory(); // Refresh history
@@ -172,12 +215,117 @@ export class ZeroMinMaxPanel extends LitElement {
     } else if (data.type === 'error') {
       this.resetProgress = null;
       this.loadingReset = false;
+      this.currentBatchId = null;
       this.error = data.message || 'A apărut o eroare la procesare';
       this.requestUpdate();
     }
   }
 
+  _handleBatchEvent(data) {
+    console.log('📦 ZeroMinMaxPanel: Batch event received', data);
+    
+    // Store batchId if this is our job
+    if (data.batchId && !this.currentBatchId) {
+      this.currentBatchId = data.batchId;
+    }
+    
+    // Only handle events for our current batch
+    if (data.batchId && data.batchId !== this.currentBatchId) {
+      console.log('ℹ️ Ignoring event for different batch:', data.batchId);
+      return;
+    }
+    
+    if (data.batchId) {
+      // batch-started
+      this.resetProgress = {
+        current: 0,
+        total: data.totalCount || 0,
+        percent: 0,
+        currentChunk: 0,
+        totalChunks: Math.ceil((data.totalCount || 0) / 500),
+        mode: 'batch'
+      };
+      this.requestUpdate();
+    } else if (data.processed !== undefined) {
+      // batch-progress
+      this.resetProgress = {
+        current: data.processed,
+        total: data.total,
+        percent: data.percent,
+        currentChunk: data.currentChunk || 0,
+        totalChunks: data.totalChunks || 0,
+        mode: 'batch'
+      };
+      this.requestUpdate();
+    } else if (data.totalReset !== undefined) {
+      // batch-completed
+      this.resetProgress = null;
+      this.loadingReset = false;
+      this.currentBatchId = null;
+      this.success = `✅ Procesare batch completă! ${data.totalReset} înregistrări resetate.`;
+      this._loadPreview(); // Refresh preview
+      this._loadHistory(); // Refresh history
+      this.requestUpdate();
+    } else if (data.processedCount !== undefined && data.cancelledAt) {
+      // batch-cancelled
+      this.resetProgress = null;
+      this.loadingReset = false;
+      this.currentBatchId = null;
+      this.success = `⚠️ Procesare anulată. ${data.processedCount} din ${data.totalCount || 0} înregistrări au fost resetate.`;
+      this._loadPreview(); // Refresh preview
+      this._loadHistory(); // Refresh history
+      this.requestUpdate();
+    } else if (data.error) {
+      // batch-failed
+      this.resetProgress = null;
+      this.loadingReset = false;
+      this.currentBatchId = null;
+      this.error = `❌ Eroare în procesarea batch: ${data.error}`;
+      this.requestUpdate();
+    }
+  }
+
+  async _handleCancelBatch() {
+    if (!this.currentBatchId) {
+      console.warn('No batch to cancel');
+      return;
+    }
+    
+    const confirmed = confirm(
+      'Sigur doriți să anulați procesarea?\n\n' +
+      'Articolele procesate până acum vor rămâne resetate.\n' +
+      'Procesarea va fi oprită după batch-ul curent.'
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      const result = await this._service.cancelBatch({
+        token: window.token,
+        batchId: this.currentBatchId
+      });
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to cancel batch');
+      }
+      
+      console.log('✅ Batch cancellation requested');
+    } catch (err) {
+      console.error('❌ Failed to cancel batch:', err);
+      this.error = `Eroare la anularea procesării: ${err.message}`;
+    }
+  }
+
   // === Data Loading ===
+  
+  // Fallback branches data (same as branch-replenishment-container.js)
+  static FALLBACK_BRANCHES = {
+    '1200': 'CLUJ', '1300': 'CONSTANTA', '1400': 'GALATI',
+    '1500': 'PLOIESTI', '1600': 'IASI', '1700': 'SIBIU', '1800': 'CRAIOVA',
+    '1900': 'ORADEA', '2000': 'PITESTI', '2100': 'BRASOV', '2200': 'BUCURESTI',
+    '2300': 'ARAD', '2400': 'VOLUNTARI', '2600': 'MIHAILESTI', '2700': 'TG. MURES',
+    '2800': 'TIMISOARA', '2900': 'RAMNICU VALCEA'
+  };
   
   async _loadBranches() {
     this.loading = true;
@@ -198,22 +346,30 @@ export class ZeroMinMaxPanel extends LitElement {
         // Build branches object
         this.branches = {};
         result.data.forEach(branch => {
-          this.branches[branch.code] = branch.name;
+          this.branches[String(branch.code)] = branch.name;
         });
         
         // Pre-select all branches (HQ already excluded by backend)
-        this.selectedBranches = result.data.map(b => b.code).sort();
+        this.selectedBranches = result.data.map(b => String(b.code)).sort();
         
-        console.log(`✅ ZeroMinMaxPanel: Loaded ${result.data.length} branches`);
+        console.log(`✅ ZeroMinMaxPanel: Loaded ${result.data.length} branches from API`);
       } else {
-        throw new Error(result.error || 'Failed to load branches');
+        // Use fallback branches if API fails
+        console.warn('⚠️ ZeroMinMaxPanel: API failed, using fallback branches');
+        this._useFallbackBranches();
       }
     } catch (err) {
-      console.error('❌ ZeroMinMaxPanel: Error loading branches', err);
-      this.error = `Eroare la încărcarea sucursalelor: ${err.message}`;
+      console.warn('⚠️ ZeroMinMaxPanel: Error loading branches from API, using fallback:', err.message);
+      this._useFallbackBranches();
     } finally {
       this.loading = false;
     }
+  }
+  
+  _useFallbackBranches() {
+    this.branches = { ...ZeroMinMaxPanel.FALLBACK_BRANCHES };
+    this.selectedBranches = Object.keys(this.branches).sort();
+    console.log(`✅ ZeroMinMaxPanel: Using ${this.selectedBranches.length} fallback branches`);
   }
 
   async _loadPreview() {
@@ -280,16 +436,21 @@ export class ZeroMinMaxPanel extends LitElement {
         throw new Error('Service not available');
       }
       
-      const result = await this._service.history({
+      const result = await this._service.summary({
         token: window.token,
         limit: 20
       });
       
-      if (result.success && result.data) {
-        this.historyData = result.data;
+      if (result.success && result.batches) {
+        this.historyData = result.batches;
+        console.log('✅ ZeroMinMaxPanel: Loaded history', result.batches.length, 'batches');
+      } else {
+        console.warn('⚠️ ZeroMinMaxPanel: No batches in history response', result);
+        this.historyData = [];
       }
     } catch (err) {
       console.error('❌ ZeroMinMaxPanel: Error loading history', err);
+      this.historyData = [];
     } finally {
       this.loadingHistory = false;
     }
@@ -313,36 +474,148 @@ export class ZeroMinMaxPanel extends LitElement {
       return;
     }
     
+    // Check if batch processing is needed (>500 articles)
+    const useBatchProcessing = this.previewCount > 500;
+    const estimatedTime = useBatchProcessing 
+      ? Math.ceil(this.previewCount / 500) * 2 // ~2 seconds per 500 articles
+      : Math.ceil(this.previewCount / 100); // ~1 second per 100 articles
+    
     // Confirm dialog
-    const confirmed = confirm(
-      `Sunteți sigur că doriți să resetați MIN/MAX la 0 pentru:\n\n` +
-      `• ${this.previewCount} înregistrări\n` +
-      `• ${this.selectedBranches.length} sucursale\n` +
-      `• Filtru cod: "${this.materialCodeFilter}%"\n\n` +
-      `Această acțiune nu poate fi anulată!`
-    );
+    const confirmMessage = useBatchProcessing
+      ? `⚠️ PROCESARE ÎN BATCH-URI\n\n` +
+        `Sunteți sigur că doriți să resetați MIN/MAX la 0 pentru:\n\n` +
+        `• ${this.previewCount} înregistrări\n` +
+        `• ${this.selectedBranches.length} sucursale\n` +
+        `• Filtru cod: "${this.materialCodeFilter}%"\n\n` +
+        `Datorită numărului mare de înregistrări (>${500}),\n` +
+        `procesarea se va face în batch-uri de câte 500 articole.\n\n` +
+        `Timp estimat: ~${estimatedTime} secunde\n\n` +
+        `Această acțiune nu poate fi anulată!\n` +
+        `Veți putea anula procesarea între batch-uri.`
+      : `Sunteți sigur că doriți să resetați MIN/MAX la 0 pentru:\n\n` +
+        `• ${this.previewCount} înregistrări\n` +
+        `• ${this.selectedBranches.length} sucursale\n` +
+        `• Filtru cod: "${this.materialCodeFilter}%"\n\n` +
+        `Această acțiune nu poate fi anulată!`;
+    
+    const confirmed = confirm(confirmMessage);
     
     if (!confirmed) return;
+    
+    // DEBUG MODE: Show query instead of executing
+    if (this.debugMode) {
+      const branchList = this.selectedBranches.map(b => `'${b}'`).join(', ');
+      const estimatedSQL = 
+        `UPDATE MTRBRNLIMITS\n` +
+        `SET CCCMINAUTO = 0,\n` +
+        `    CCCMAXAUTO = 0,\n` +
+        `    CCCLASTUPDATE = GETDATE()\n` +
+        `WHERE COMPANY = '1000'\n` +
+        `  AND MTRL LIKE '${this.materialCodeFilter}%'\n` +
+        `  AND BRANCH IN (${branchList})\n` +
+        `  AND (CCCMINAUTO > 0 OR CCCMAXAUTO > 0);\n\n` +
+        `-- Estimare: ~${this.previewCount} rânduri afectate\n` +
+        `-- User: ${window.appUserName || 'unknown'}`;
+      
+      const debugInfo = {
+        service: 'zero-minmax',
+        method: useBatchProcessing ? 'processBatch' : 'process',
+        payload: {
+          token: '***HIDDEN***',
+          filter: this.materialCodeFilter,
+          branches: this.selectedBranches,
+          username: window.appUserName || 'unknown'
+        },
+        stats: {
+          previewCount: this.previewCount,
+          branchCount: this.selectedBranches.length,
+          branchCodes: this.selectedBranches.join(', '),
+          useBatchProcessing,
+          estimatedTime: `${estimatedTime}s`
+        },
+        estimatedSQL: estimatedSQL
+      };
+      
+      console.log('🐛 DEBUG MODE - Query would be:', debugInfo);
+      console.log('\n📝 SQL Query:\n' + estimatedSQL);
+      
+      alert(
+        '🐛 DEBUG MODE ACTIVAT\n\n' +
+        'Query-ul NU va fi executat!\n\n' +
+        '═══════════════════════════════\n' +
+        'SERVICE CALL:\n' +
+        '═══════════════════════════════\n' +
+        `zero-minmax.${useBatchProcessing ? 'processBatch' : 'process'}()\n\n` +
+        'Parametri:\n' +
+        `• Filtru: "${this.materialCodeFilter}%"\n` +
+        `• Sucursale: ${this.selectedBranches.length} (${this.selectedBranches.slice(0, 5).join(', ')}${this.selectedBranches.length > 5 ? '...' : ''})\n` +
+        `• Înregistrări: ${this.previewCount}\n` +
+        `• Batch processing: ${useBatchProcessing ? 'DA (>500)' : 'NU'}\n` +
+        `• Timp estimat: ${estimatedTime}s\n` +
+        `• User: ${window.appUserName || 'unknown'}\n\n` +
+        '═══════════════════════════════\n' +
+        'SQL QUERY (estimat):\n' +
+        '═══════════════════════════════\n\n' +
+        estimatedSQL + '\n\n' +
+        '═══════════════════════════════\n\n' +
+        'Verifică consola pentru detalii complete și SQL formatat.'
+      );
+      return;
+    }
     
     this.loadingReset = true;
     this.error = '';
     this.success = '';
-    this.resetProgress = { current: 0, total: this.selectedBranches.length, percent: 0 };
     
     try {
       if (!this._service) {
         throw new Error('Service not available');
       }
       
-      const result = await this._service.process({
-        token: window.token,
-        filter: this.materialCodeFilter,
-        branches: this.selectedBranches,
-        username: window.appUserName || 'unknown'
-      });
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Reset operation failed');
+      if (useBatchProcessing) {
+        // Use batch processing for large datasets
+        this.resetProgress = { 
+          current: 0, 
+          total: this.previewCount, 
+          percent: 0,
+          currentChunk: 0,
+          totalChunks: Math.ceil(this.previewCount / 500),
+          mode: 'batch'
+        };
+        
+        const result = await this._service.processBatch({
+          token: window.token,
+          filter: this.materialCodeFilter,
+          branches: this.selectedBranches,
+          userId: window.appUserId || 0
+        });
+        
+        if (!result.success && !result.cancelled) {
+          throw new Error(result.error || 'Batch reset operation failed');
+        }
+        
+        if (result.cancelled) {
+          this.success = `Procesare anulată. ${result.processedCount || 0} din ${this.previewCount} înregistrări au fost resetate.`;
+        }
+      } else {
+        // Use regular processing for small datasets
+        this.resetProgress = { 
+          current: 0, 
+          total: this.selectedBranches.length, 
+          percent: 0,
+          mode: 'regular'
+        };
+        
+        const result = await this._service.process({
+          token: window.token,
+          filter: this.materialCodeFilter,
+          branches: this.selectedBranches,
+          username: window.appUserName || 'unknown'
+        });
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Reset operation failed');
+        }
       }
       
       // Success message will come from real-time event
@@ -389,17 +662,20 @@ export class ZeroMinMaxPanel extends LitElement {
   }
 
   toggleBranchDropdown(e) {
-    this.showBranchDropdown = !this.showBranchDropdown;
     e.stopPropagation();
+    this.showBranchDropdown = !this.showBranchDropdown;
     if (this.showBranchDropdown) {
       document.addEventListener('click', this.closeBranchDropdown, { capture: true, once: true });
       setTimeout(() => this.querySelector('.fancy-dropdown-header input')?.focus(), 0);
     }
   }
 
+
+
   closeBranchDropdown(e) {
     const dropdownMenu = this.querySelector('.fancy-dropdown-menu');
     if (dropdownMenu && dropdownMenu.contains(e?.target)) {
+      // Click was inside dropdown, re-add listener
       document.addEventListener('click', this.closeBranchDropdown, { capture: true, once: true });
       return;
     }
@@ -408,11 +684,12 @@ export class ZeroMinMaxPanel extends LitElement {
 
   toggleBranch(branch, e) {
     e.stopPropagation();
-    const index = this.selectedBranches.indexOf(branch);
+    const branchStr = String(branch);
+    const index = this.selectedBranches.indexOf(branchStr);
     if (index > -1) {
-      this.selectedBranches = this.selectedBranches.filter(b => b !== branch);
+      this.selectedBranches = this.selectedBranches.filter(b => b !== branchStr);
     } else {
-      this.selectedBranches = [...this.selectedBranches, branch].sort();
+      this.selectedBranches = [...this.selectedBranches, branchStr].sort();
     }
   }
 
@@ -449,6 +726,47 @@ export class ZeroMinMaxPanel extends LitElement {
     return str.length > maxLen ? str.substring(0, maxLen) + '...' : str;
   }
 
+  _openHelpModal() {
+    // Create modal if not exists
+    let modal = document.getElementById('zeroMinMaxHelpModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'zeroMinMaxHelpModal';
+      modal.className = 'modal fade';
+      modal.tabIndex = -1;
+      modal.innerHTML = `
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">
+                <i class="fas fa-question-circle text-primary me-2"></i>
+                Documentație Zero Min/Max
+              </h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+              <iframe 
+                src="help/zero-minmax-help.html" 
+                style="width: 100%; height: 70vh; border: none;"
+                title="Documentație Zero Min/Max">
+              </iframe>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Închide</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    }
+    
+    // Show modal using Bootstrap 5 API without backdrop
+    const bsModal = new bootstrap.Modal(modal, {
+      backdrop: false
+    });
+    bsModal.show();
+  }
+
   // === Render Methods ===
   
   renderBranchDropdown() {
@@ -460,9 +778,9 @@ export class ZeroMinMaxPanel extends LitElement {
 
     return html`
       <div class="fancy-dropdown-menu" 
-           style="position: absolute; z-index: 99999 !important; top: 100%; left: 0; right: 0;"
+           style="position: absolute; z-index: 1001 !important; top: 100%; left: 0; right: 0;"
            @click=${this.handleDropdownClick}>
-        <div class="fancy-dropdown-header" style="z-index: 99998 !important;">
+        <div class="fancy-dropdown-header" style="z-index: 10001 !important; position: sticky; top: 0; background: #fff; padding: 10px; border-bottom: 1px solid #eee;">
           <input type="text" class="form-control form-control-sm" 
                  placeholder="Caută sucursală..."
                  .value=${this.branchSearchTerm}
@@ -474,16 +792,19 @@ export class ZeroMinMaxPanel extends LitElement {
           <button class="btn btn-sm btn-link py-0" @click=${this.clearBranches}>Șterge tot</button>
         </div>
         <div class="fancy-dropdown-items">
-          ${filteredBranches.length > 0 ? filteredBranches.map(([code, name]) => html`
-            <div class="fancy-dropdown-item">
-              <div class="form-check">
-                <input type="checkbox" id="branch-${code}" class="form-check-input"
-                       .checked=${this.selectedBranches.includes(code)}
-                       @change=${e => this.toggleBranch(code, e)}>
-                <label class="form-check-label" for="branch-${code}">${code} - ${name}</label>
+          ${filteredBranches.length > 0 ? filteredBranches.map(([code, name]) => {
+            const isChecked = this.selectedBranches.includes(code);
+            return html`
+              <div class="fancy-dropdown-item">
+                <div class="form-check">
+                  <input type="checkbox" id="branch-${code}" class="form-check-input"
+                         ?checked=${isChecked}
+                         @change=${e => this.toggleBranch(code, e)}>
+                  <label class="form-check-label" for="branch-${code}">${code} - ${name}</label>
+                </div>
               </div>
-            </div>
-          `) : html`<div class="text-muted text-center small p-2">Nu s-au găsit rezultate.</div>`}
+            `;
+          }) : html`<div class="text-muted text-center small p-2">Nu s-au găsit rezultate.</div>`}
         </div>
       </div>
     `;
@@ -495,11 +816,11 @@ export class ZeroMinMaxPanel extends LitElement {
     const allSelected = branchCount > 0 && branchCount === totalBranches;
 
     return html`
-      <div class="card mb-3 shadow-sm">
+      <div class="card mb-3 shadow-sm" style="overflow: visible; position: relative; z-index: 1000;">
         <div class="card-header bg-primary text-white">
           <i class="fas fa-filter me-2"></i>Filtre
         </div>
-        <div class="card-body">
+        <div class="card-body" style="overflow: visible;">
           <div class="row g-3 align-items-end">
             <!-- Material Code Filter -->
             <div class="col-md-4">
@@ -518,7 +839,7 @@ export class ZeroMinMaxPanel extends LitElement {
             </div>
             
             <!-- Branch Selection -->
-            <div class="col-md-5">
+            <div class="col-md-5" style="position: relative; z-index: 100;">
               <label class="form-label fw-semibold">
                 <i class="fas fa-building me-1"></i>Sucursale
               </label>
@@ -544,6 +865,22 @@ export class ZeroMinMaxPanel extends LitElement {
                     ? html`<span class="spinner-border spinner-border-sm me-1"></span>Se încarcă...`
                     : html`<i class="fas fa-search me-1"></i>Previzualizare`}
                 </button>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Debug Mode Toggle -->
+          <div class="row mt-3">
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="debugModeToggle"
+                       .checked=${this.debugMode}
+                       @change=${e => this.debugMode = e.target.checked}>
+                <label class="form-check-label" for="debugModeToggle">
+                  <i class="fas fa-bug me-1 text-warning"></i>
+                  <strong>Debug Mode</strong> - Afișează query-ul fără a-l executa
+                  ${this.debugMode ? html`<span class="badge bg-warning text-dark ms-2">ACTIVAT</span>` : ''}
+                </label>
               </div>
             </div>
           </div>
@@ -590,20 +927,20 @@ export class ZeroMinMaxPanel extends LitElement {
                   <th>Sucursală</th>
                   <th class="text-end">MIN Auto</th>
                   <th class="text-end">MAX Auto</th>
-                  <th class="text-end">Remain MIN</th>
-                  <th class="text-end">Remain MAX</th>
+                  <th class="text-end">Min manual</th>
+                  <th class="text-end">Max manual</th>
                 </tr>
               </thead>
               <tbody>
                 ${this.previewData.map(row => html`
                   <tr>
-                    <td><code>${row.CODE}</code></td>
-                    <td title="${row.NAME}">${this._truncate(row.NAME, 30)}</td>
-                    <td><span class="badge bg-info">${row.BRANCH}</span></td>
-                    <td class="text-end ${row.CCCMINAUTO > 0 ? 'text-danger fw-bold' : ''}">${row.CCCMINAUTO}</td>
-                    <td class="text-end ${row.CCCMAXAUTO > 0 ? 'text-danger fw-bold' : ''}">${row.CCCMAXAUTO}</td>
-                    <td class="text-end">${row.REMAINLIMMIN || 0}</td>
-                    <td class="text-end">${row.REMAINLIMMAX || 0}</td>
+                    <td><code>${row.code}</code></td>
+                    <td title="${row.name}">${this._truncate(row.name, 30)}</td>
+                    <td><span class="badge bg-info">${row.branchName || row.branch}</span></td>
+                    <td class="text-end ${row.cccminauto > 0 ? 'text-danger fw-bold' : ''}">${row.cccminauto}</td>
+                    <td class="text-end ${row.cccmaxauto > 0 ? 'text-danger fw-bold' : ''}">${row.cccmaxauto}</td>
+                    <td class="text-end">${row.remainlimmin || 0}</td>
+                    <td class="text-end">${row.remainlimmax || 0}</td>
                   </tr>
                 `)}
               </tbody>
@@ -617,6 +954,49 @@ export class ZeroMinMaxPanel extends LitElement {
 
   renderProgress() {
     const progress = this.resetProgress;
+    
+    // Batch processing progress
+    if (progress.mode === 'batch') {
+      const batchInfo = progress.totalChunks > 0 
+        ? `Batch ${progress.currentChunk}/${progress.totalChunks}` 
+        : 'Procesare...';
+      
+      return html`
+        <div class="p-3 bg-light border-bottom">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span>
+              📦 <strong>${batchInfo}</strong>
+            </span>
+            ${this.currentBatchId ? html`
+              <button class="btn btn-sm btn-warning" @click="${this._handleCancelBatch}">
+                ✖ Anulează
+              </button>
+            ` : ''}
+          </div>
+          <div class="d-flex justify-content-between mb-1">
+            <span>Procesate: <strong>${progress.current}/${progress.total} articole</strong></span>
+            <span><strong>${progress.percent}%</strong></span>
+          </div>
+          <div class="progress" style="height: 24px;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
+                 role="progressbar" 
+                 style="width: ${progress.percent}%"
+                 aria-valuenow="${progress.percent}" 
+                 aria-valuemin="0" 
+                 aria-valuemax="100">
+              ${progress.percent}%
+            </div>
+          </div>
+          ${progress.totalChunks > 0 ? html`
+            <div class="text-muted small mt-1">
+              Timp estimat rămas: ~${Math.ceil((progress.totalChunks - progress.currentChunk) * 2)}s
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+    
+    // Regular processing progress
     return html`
       <div class="p-3 bg-light border-bottom">
         <div class="d-flex justify-content-between mb-1">
@@ -693,11 +1073,11 @@ export class ZeroMinMaxPanel extends LitElement {
   renderHistory() {
     return html`
       <div class="card shadow-sm">
-        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+        <div class="card-header d-flex justify-content-between align-items-center">
           <span>
             <i class="fas fa-history me-2"></i>Istoric Resetări
           </span>
-          <button class="btn btn-sm btn-outline-light" 
+          <button class="btn btn-sm btn-outline-primary" 
                   @click=${() => { this.showHistory = !this.showHistory; if (this.showHistory) this._loadHistory(); }}>
             ${this.showHistory ? 'Ascunde' : 'Afișează'}
           </button>
@@ -710,26 +1090,24 @@ export class ZeroMinMaxPanel extends LitElement {
                 ? html`<div class="text-muted text-center p-3">Nu există istoric.</div>`
                 : html`
                   <div class="table-responsive">
-                    <table class="table table-sm table-striped mb-0">
-                      <thead class="table-light">
+                    <table class="table table-striped table-hover mb-0">
+                      <thead class="table-dark">
                         <tr>
-                          <th>Data</th>
-                          <th>Utilizator</th>
-                          <th>Filtru</th>
-                          <th>Sucursale</th>
-                          <th class="text-end">Articole</th>
-                          <th class="text-end">Total Reset</th>
+                          <th style="min-width: 140px;">Data</th>
+                          <th style="min-width: 120px;">Batch ID</th>
+                          <th style="min-width: 100px;">Filtru</th>
+                          <th style="min-width: 100px;">Sucursale</th>
+                          <th class="text-end" style="min-width: 100px;">Total Reset</th>
                         </tr>
                       </thead>
                       <tbody>
                         ${this.historyData.map(h => html`
                           <tr>
-                            <td>${this._formatDate(h.CREATED_AT)}</td>
-                            <td>${h.USERNAME || h.USER_ID || '-'}</td>
-                            <td><code>${h.CODE_FILTER}%</code></td>
-                            <td>${h.BRANCH_COUNT} sucursale</td>
-                            <td class="text-end">${h.ARTICLE_COUNT}</td>
-                            <td class="text-end fw-bold">${h.TOTAL_RESET}</td>
+                            <td style="font-size: 0.9rem;">${this._formatDate(h.resetatLa)}</td>
+                            <td style="font-size: 0.85rem;"><code>${h.batchId}</code></td>
+                            <td><code style="font-size: 0.95rem; background: #f8f9fa; padding: 2px 6px; border-radius: 3px;">${h.filtruFolosit || '-'}</code></td>
+                            <td><span class="badge bg-info">${h.branchCount} sucursale</span></td>
+                            <td class="text-end"><span class="badge bg-success fs-6">${h.totalRecords}</span></td>
                           </tr>
                         `)}
                       </tbody>
@@ -773,13 +1151,23 @@ export class ZeroMinMaxPanel extends LitElement {
       <div class="zero-minmax-panel p-3">
         <!-- Header -->
         <div class="d-flex justify-content-between align-items-center mb-3">
-          <h4 class="mb-0">
-            <i class="fas fa-eraser text-primary me-2"></i>
-            Reset Min/Max Auto
-          </h4>
-          <small class="text-muted">
-            Resetare valori CCCMINAUTO și CCCMAXAUTO la 0
-          </small>
+          <div>
+            <h4 class="mb-0">
+              <i class="fas fa-eraser text-primary me-2"></i>
+              Reset Min/Max Auto
+            </h4>
+          </div>
+          <div class="d-flex gap-2 align-items-center">
+            <small class="text-muted me-2">
+              Resetare valori CCCMINAUTO și CCCMAXAUTO la 0
+            </small>
+            <button class="btn btn-outline-primary btn-sm" 
+                    @click=${this._openHelpModal}
+                    title="Ajutor și documentație">
+              <i class="fas fa-question-circle me-1"></i>
+              Ajutor
+            </button>
+          </div>
         </div>
         
         <!-- Messages -->

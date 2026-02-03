@@ -243,8 +243,8 @@ export class TopAbcControlPanel extends LitElement {
 
   render() {
     return html`
-      <div class="card mb-2 border-light shadow-sm">
-        <div class="card-body p-3">
+      <div class="card mb-2 border-light shadow-sm" style="overflow: visible;">
+        <div class="card-body p-3" style="overflow: visible;">
           <h5 class="card-title mb-3">Settings for Top ABC Analysis</h5>
           
           <!-- Row 1 - Primary Controls -->
@@ -285,7 +285,7 @@ export class TopAbcControlPanel extends LitElement {
           <!-- Row 2 - Combined row with all selections -->
           <div class="row mb-3">
             <!-- Branch Selection (Required) -->
-            <div class="col-md-3">
+            <div class="col-md-3" style="position: relative; z-index: 100;">
               <div class="input-group input-group-sm mb-2">
                 <span class="input-group-text">Branch<span class="text-danger ms-1">*</span></span>
                 <div class="form-control p-0">
@@ -305,7 +305,7 @@ export class TopAbcControlPanel extends LitElement {
             </div>
 
             <!-- Supplier Selection -->
-            <div class="col-md-3">
+            <div class="col-md-3" style="position: relative; z-index: 90;">
               <div class="input-group input-group-sm mb-2">
                 <span class="input-group-text">Supplier</span>
                 <div class="form-control p-0">

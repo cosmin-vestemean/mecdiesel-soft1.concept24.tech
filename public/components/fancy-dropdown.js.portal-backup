@@ -60,9 +60,13 @@ export class FancyDropdown extends LitElement {
     // Generate a unique ID for this dropdown instance
     this.uniqueId = `dropdown_${Math.random().toString(36).substr(2, 9)}`;
     
+    // Debounce timer for position updates
+    this._positionUpdateTimer = null;
+    
     // Bind methods to this context
     this.closeDropdown = this.closeDropdown.bind(this);
     this._updateMenuPosition = this._updateMenuPosition.bind(this);
+    this._debouncedUpdateMenuPosition = this._debouncedUpdateMenuPosition.bind(this);
   }
 
   // Override to use Light DOM instead of Shadow DOM
@@ -73,8 +77,11 @@ export class FancyDropdown extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     document.removeEventListener('click', this.closeDropdown, { capture: true });
-    window.removeEventListener('scroll', this._updateMenuPosition, true);
-    window.removeEventListener('resize', this._updateMenuPosition);
+    window.removeEventListener('scroll', this._debouncedUpdateMenuPosition, true);
+    window.removeEventListener('resize', this._debouncedUpdateMenuPosition);
+    if (this._positionUpdateTimer) {
+      clearTimeout(this._positionUpdateTimer);
+    }
     this._cleanupPortal();
   }
 
@@ -128,8 +135,8 @@ export class FancyDropdown extends LitElement {
       document.removeEventListener('click', this.closeDropdown, { capture: true });
       document.addEventListener('click', this.closeDropdown, { capture: true, once: true });
 
-      window.addEventListener('scroll', this._updateMenuPosition, true);
-      window.addEventListener('resize', this._updateMenuPosition);
+      window.addEventListener('scroll', this._debouncedUpdateMenuPosition, true);
+      window.addEventListener('resize', this._debouncedUpdateMenuPosition);
 
       // Render portal after a tick to ensure toggle button is rendered
       setTimeout(() => {
@@ -145,8 +152,11 @@ export class FancyDropdown extends LitElement {
       // Explicit close via toggle
       this.searchTerm = '';
       document.removeEventListener('click', this.closeDropdown, { capture: true });
-      window.removeEventListener('scroll', this._updateMenuPosition, true);
-      window.removeEventListener('resize', this._updateMenuPosition);
+      window.removeEventListener('scroll', this._debouncedUpdateMenuPosition, true);
+      window.removeEventListener('resize', this._debouncedUpdateMenuPosition);
+      if (this._positionUpdateTimer) {
+        clearTimeout(this._positionUpdateTimer);
+      }
       this._menuStyle = '';
       this._cleanupPortal();
       this.dispatchEvent(new CustomEvent('dropdown-closed', { bubbles: true, composed: true }));
@@ -205,6 +215,15 @@ export class FancyDropdown extends LitElement {
         'overflow-x: hidden !important'
       ].join('; ');
     }
+  }
+
+  _debouncedUpdateMenuPosition() {
+    if (this._positionUpdateTimer) {
+      clearTimeout(this._positionUpdateTimer);
+    }
+    this._positionUpdateTimer = setTimeout(() => {
+      this._updateMenuPosition();
+    }, 16); // ~60fps
   }
 
   _updateMenuPosition() {
@@ -390,8 +409,11 @@ export class FancyDropdown extends LitElement {
       this.open = false;
       this.searchTerm = ''; // Clear search term when closing
       document.removeEventListener('click', this.closeDropdown, { capture: true });
-      window.removeEventListener('scroll', this._updateMenuPosition, true);
-      window.removeEventListener('resize', this._updateMenuPosition);
+      window.removeEventListener('scroll', this._debouncedUpdateMenuPosition, true);
+      window.removeEventListener('resize', this._debouncedUpdateMenuPosition);
+      if (this._positionUpdateTimer) {
+        clearTimeout(this._positionUpdateTimer);
+      }
       this._menuStyle = '';
       this._cleanupPortal();
       this.dispatchEvent(new CustomEvent('dropdown-closed', { bubbles: true, composed: true }));

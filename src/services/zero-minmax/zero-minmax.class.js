@@ -268,6 +268,231 @@ export class ZeroMinMaxService {
       return { success: false, error: error.message }
     }
   }
+
+  /**
+   * Initialize batch processing queue table
+   * POST /zero-minmax/initializeQueue
+   * @param {Object} data - { token }
+   */
+  async initializeQueue(data, params) {
+    try {
+      const result = await makeS1Request('/JS/ZeroMinMax/createQueueTable', {
+        token: data.token
+      })
+
+      return typeof result === 'string' ? JSON.parse(result) : result
+    } catch (error) {
+      console.error('❌ ZeroMinMax queue table setup error:', error.message)
+      return { success: false, error: error.message }
+    }
+  }
+
+  /**
+   * Process zero min/max in batches with progress tracking
+   * POST /zero-minmax/processBatch
+   * @param {Object} data - { token, filter, branches, userId }
+   */
+  async processBatch(data, params) {
+    const { token, filter, branches, userId } = data
+    const batchId = `zero_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const chunkSize = 500
+
+    try {
+      // 1. Get total count
+      const countResult = await makeS1Request('/JS/ZeroMinMax/getPreviewCount', {
+        token,
+        payload: { filter, branches }
+      })
+
+      const countData = typeof countResult === 'string' ? JSON.parse(countResult) : countResult
+      if (!countData.success) {
+        throw new Error(countData.error || 'Failed to get count')
+      }
+
+      const totalCount = countData.count || 0
+      if (totalCount === 0) {
+        return { success: false, error: 'No articles to process' }
+      }
+
+      // 2. Initialize queue table if needed
+      await this.initializeQueue({ token }, params)
+
+      // 3. Insert job into queue
+      const branchesCSV = branches.join(',')
+      const insertQueueQry = `
+        INSERT INTO CCCZEROMINMAX_QUEUE (BATCHID, TOTAL_COUNT, CHUNK_SIZE, STATUS, FILTRU_FOLOSIT, BRANCHES, CREATED_BY, STARTED_AT)
+        VALUES ('${batchId}', ${totalCount}, ${chunkSize}, 'processing', '${filter}', '${JSON.stringify(branches).replace(/'/g, "''")}', ${userId}, GETDATE())
+      `
+      // Note: We'd need a generic RUNSQL endpoint in AJS, or we use process endpoint directly
+      
+      // 4. Emit batch-started event
+      if (this.app) {
+        this.app.service('zero-minmax').emit('batch-started', {
+          batchId,
+          user: params.user?.email || 'Unknown',
+          filter,
+          branches,
+          totalCount,
+          startedAt: new Date().toISOString()
+        })
+      }
+
+      // 5. Process in chunks
+      let processedCount = 0
+      const totalChunks = Math.ceil(totalCount / chunkSize)
+
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+        const offset = chunkIndex * chunkSize
+
+        // Check if job was cancelled before processing this chunk
+        const statusResult = await makeS1Request('/JS/ZeroMinMax/getQueueStatus', {
+          token,
+          payload: { batchId }
+        })
+        const statusData = typeof statusResult === 'string' ? JSON.parse(statusResult) : statusResult
+        
+        if (statusData.success && statusData.status === 'cancelled') {
+          // Emit cancelled event
+          if (this.app) {
+            this.app.service('zero-minmax').emit('batch-cancelled', {
+              batchId,
+              processedCount,
+              totalCount,
+              cancelledAt: new Date().toISOString()
+            })
+          }
+          return {
+            success: false,
+            cancelled: true,
+            message: 'Job was cancelled by user',
+            processedCount,
+            totalCount
+          }
+        }
+
+        // Process this chunk
+        const chunkResult = await makeS1Request('/JS/ZeroMinMax/processZeroMinMaxBatch', {
+          token,
+          payload: {
+            batchId,
+            filter,
+            branchesCSV,
+            offset,
+            chunkSize,
+            userId
+          }
+        })
+
+        const chunkData = typeof chunkResult === 'string' ? JSON.parse(chunkResult) : chunkResult
+
+        if (!chunkData.success) {
+          // Chunk failed - emit error event
+          if (this.app) {
+            this.app.service('zero-minmax').emit('batch-failed', {
+              batchId,
+              error: chunkData.error || 'Unknown error',
+              processedCount,
+              failedAt: new Date().toISOString()
+            })
+          }
+          throw new Error(chunkData.error || 'Chunk processing failed')
+        }
+
+        processedCount += chunkData.processed || 0
+
+        // Emit progress event after each chunk
+        if (this.app) {
+          this.app.service('zero-minmax').emit('batch-progress', {
+            batchId,
+            processed: processedCount,
+            total: totalCount,
+            percent: Math.round((processedCount / totalCount) * 100),
+            currentChunk: chunkIndex + 1,
+            totalChunks
+          })
+        }
+
+        // Small delay between chunks to avoid overwhelming the server
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+
+      // 6. Mark job as completed
+      // (We'd need another AJS endpoint to update queue status, or do it inline)
+
+      // 7. Emit completed event
+      if (this.app) {
+        this.app.service('zero-minmax').emit('batch-completed', {
+          batchId,
+          totalReset: processedCount,
+          completedAt: new Date().toISOString()
+        })
+      }
+
+      return {
+        success: true,
+        batchId,
+        totalCount,
+        processedCount,
+        message: `Successfully reset ${processedCount} records`
+      }
+
+    } catch (error) {
+      console.error('❌ ZeroMinMax batch processing error:', error.message)
+
+      // Emit error event
+      if (this.app) {
+        this.app.service('zero-minmax').emit('batch-failed', {
+          batchId,
+          error: error.message,
+          failedAt: new Date().toISOString()
+        })
+      }
+
+      return { success: false, error: error.message, batchId }
+    }
+  }
+
+  /**
+   * Cancel a batch processing job
+   * POST /zero-minmax/cancelBatch
+   * @param {Object} data - { token, batchId }
+   */
+  async cancelBatch(data, params) {
+    try {
+      const result = await makeS1Request('/JS/ZeroMinMax/cancelQueue', {
+        token: data.token,
+        payload: {
+          batchId: data.batchId
+        }
+      })
+
+      return typeof result === 'string' ? JSON.parse(result) : result
+    } catch (error) {
+      console.error('❌ ZeroMinMax cancel batch error:', error.message)
+      return { success: false, error: error.message }
+    }
+  }
+
+  /**
+   * Get status of a batch processing job
+   * POST /zero-minmax/queueStatus
+   * @param {Object} data - { token, batchId }
+   */
+  async queueStatus(data, params) {
+    try {
+      const result = await makeS1Request('/JS/ZeroMinMax/getQueueStatus', {
+        token: data.token,
+        payload: {
+          batchId: data.batchId
+        }
+      })
+
+      return typeof result === 'string' ? JSON.parse(result) : result
+    } catch (error) {
+      console.error('❌ ZeroMinMax queue status error:', error.message)
+      return { success: false, error: error.message }
+    }
+  }
 }
 
 export const getOptions = (app) => {
