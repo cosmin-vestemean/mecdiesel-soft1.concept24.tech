@@ -281,7 +281,10 @@ export class FancyDropdown extends LitElement {
       const itemKey = input.id.replace(`${this.uniqueId}-item-`, '');
       input.addEventListener('change', (e) => {
         this.toggleItem(itemKey, e);
-        this._renderPortal();
+        // Only re-render if dropdown is still open (single-select closes it)
+        if (this.open) {
+          this._renderPortal();
+        }
       });
     });
     
@@ -294,7 +297,10 @@ export class FancyDropdown extends LitElement {
           if (input) {
             const itemKey = input.id.replace(`${this.uniqueId}-item-`, '');
             this.toggleItem(itemKey, e);
-            this._renderPortal();
+            // Only re-render if dropdown is still open (single-select closes it)
+            if (this.open) {
+              this._renderPortal();
+            }
           }
         }
       });
@@ -364,6 +370,26 @@ export class FancyDropdown extends LitElement {
     html += '</div>';
     
     return html;
+  }
+
+  /**
+   * Manually close the dropdown (e.g. via close button inside the portal).
+   */
+  closeDropdownManually(e) {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    if (this.open) {
+      this.open = false;
+      this.searchTerm = '';
+      document.removeEventListener('click', this.closeDropdown, { capture: true });
+      window.removeEventListener('scroll', this._updateMenuPosition, true);
+      window.removeEventListener('resize', this._updateMenuPosition);
+      this._menuStyle = '';
+      this._cleanupPortal();
+      this.dispatchEvent(new CustomEvent('dropdown-closed', { bubbles: true, composed: true }));
+    }
   }
 
   /**
