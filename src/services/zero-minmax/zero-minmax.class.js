@@ -340,13 +340,8 @@ export class ZeroMinMaxService {
       // 2. Initialize queue table if needed
       await this.initializeQueue({ token }, params)
 
-      // 3. Insert job into queue
+      // 3. Queue record is now created by AJS processZeroMinMaxBatch on first chunk (offset=0)
       const branchesCSV = branches.join(',')
-      const insertQueueQry = `
-        INSERT INTO CCCZEROMINMAX_QUEUE (BATCHID, TOTAL_COUNT, CHUNK_SIZE, STATUS, FILTRU_FOLOSIT, BRANCHES, CREATED_BY, STARTED_AT)
-        VALUES ('${batchId}', ${totalCount}, ${chunkSize}, 'processing', '${filter}', '${JSON.stringify(branches).replace(/'/g, "''")}', ${userId}, GETDATE())
-      `
-      // Note: We'd need a generic RUNSQL endpoint in AJS, or we use process endpoint directly
       
       // 4. Emit batch-started event
       if (this.app) {
