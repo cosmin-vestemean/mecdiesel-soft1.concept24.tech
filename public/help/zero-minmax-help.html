@@ -219,26 +219,65 @@
             <th>Descriere</th>
         </tr>
         <tr>
-            <td><strong>Batch ID</strong></td>
-            <td>Identificator unic al operațiunii (ex: zero_1733150400000_abc123)</td>
-        </tr>
-        <tr>
-            <td><strong>Data/Ora</strong></td>
+            <td><strong>Data</strong></td>
             <td>Timestamp resetare (format: DD.MM.YYYY HH:mm:ss)</td>
         </tr>
         <tr>
-            <td><strong>Utilizator</strong></td>
-            <td>Username-ul care a inițiat resetarea</td>
+            <td><strong>Batch ID</strong></td>
+            <td>Identificator unic al operațiunii (ex: zero_1733150400000_abc123)</td>
         </tr>
         <tr>
             <td><strong>Filtru</strong></td>
             <td>Filtrul de cod material folosit (ex: FS%)</td>
         </tr>
         <tr>
-            <td><strong>Count</strong></td>
+            <td><strong>Sucursale</strong></td>
+            <td>Număr de sucursale afectate (ex: "5 sucursale")</td>
+        </tr>
+        <tr>
+            <td><strong>Total Reset</strong></td>
             <td>Număr total de înregistrări resetate</td>
         </tr>
+        <tr>
+            <td><strong>Acțiuni</strong></td>
+            <td>Buton <strong>"👁️ Vezi detalii"</strong> - deschide modal cu toate articolele resetate</td>
+        </tr>
     </table>
+
+    <div class="success-box">
+        <h3>✨ Funcționalitate: Vezi Detalii Batch</h3>
+        <p>Click pe butonul <strong>"👁️ Vezi detalii"</strong> din coloana "Acțiuni" pentru a deschide un modal cu toate articolele din acel batch:</p>
+        
+        <h4>Ce vedeți în modal:</h4>
+        <ul>
+            <li><strong>Header informativ</strong>:
+                <ul>
+                    <li>Data și ora resetării</li>
+                    <li>Filtrul folosit (ex: "FS%")</li>
+                    <li>Total înregistrări în batch</li>
+                </ul>
+            </li>
+            <li><strong>Tabel detaliat cu toate articolele</strong>:
+                <ul>
+                    <li><strong>Cod</strong> - Codul articolului (ex: FS001234)</li>
+                    <li><strong>Denumire Material</strong> - Numele complet al articolului</li>
+                    <li><strong>Sucursala</strong> - Codul branch-ului (ex: 1200)</li>
+                    <li><strong>Nume Sucursală</strong> - Denumirea branch-ului (ex: CLUJ)</li>
+                    <li><strong>Min Auto Vechi</strong> - Valoarea CCCMINAUTO înainte de resetare (badge galben dacă >0)</li>
+                    <li><strong>Max Auto Vechi</strong> - Valoarea CCCMAXAUTO înainte de resetare (badge galben dacă >0)</li>
+                </ul>
+            </li>
+            <li><strong>Paginare</strong>: Navigare prin pagini dacă sunt multe înregistrări (50 per pagină)</li>
+        </ul>
+        
+        <h4>Cazuri de utilizare:</h4>
+        <ul>
+            <li><strong>Audit</strong>: Verificați ce articole au fost resetate într-o anumită operațiune</li>
+            <li><strong>Recuperare date</strong>: Vedeți valorile vechi min/max pentru a le restaura manual dacă este necesar</li>
+            <li><strong>Validare</strong>: Confirmați că resetarea a afectat articolele corecte pe branch-urile corecte</li>
+            <li><strong>Documentare</strong>: Export/screenshot pentru raportare către management</li>
+        </ul>
+    </div>
 
     <div class="info-box">
         <strong>💡 Tip:</strong> Istoricul este păstrat permanent în tabelul <code>CCCZEROMINMAX</code> pentru audit complet. Include valorile vechi (<code>OLD_CCCMINAUTO</code>, <code>OLD_CCCMAXAUTO</code>) pentru fiecare articol resetat.
@@ -334,7 +373,7 @@
     <p>Articolele procesate până în momentul anulării <strong>rămân resetate</strong>. Nu se face rollback automat. Puteți rula din nou procesarea pentru articolele rămase neprocesate.</p>
 
     <h3>Pot anula o resetare după finalizare?</h3>
-    <p>Nu direct din interfață. Valorile vechi sunt salvate în tabelul <code>CCCZEROMINMAX</code> (coloanele <code>OLD_CCCMINAUTO</code>, <code>OLD_CCCMAXAUTO</code>). Pentru rollback, contactați administratorul.</p>
+    <p>Nu direct din interfață. Valorile vechi sunt salvate în tabelul <code>CCCZEROMINMAX</code> (coloanele <code>OLD_CCCMINAUTO</code>, <code>OLD_CCCMAXAUTO</code>). Pentru a vedea valorile vechi și pentru eventuale restaurări manuale, utilizați butonul <strong>"Vezi detalii"</strong> din istoric. Pentru rollback automat, contactați administratorul.</p>
 
     <h3>De ce HQ (1000) nu apare în listă?</h3>
     <p>Branch-ul 1000 (Headquarter) este exclus automat din procesare pentru a preveni resetări accidentale la nivel central.</p>

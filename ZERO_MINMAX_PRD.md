@@ -292,6 +292,26 @@ app.service('zero-minmax').on('progress', (data) => {
 - [ ] **6.9** Test: Procesare 2000+ articole cu monitoring progres real-time ⏳ **Gata pentru testare manuală**
 - [x] **6.10** Documentare: Update PRD cu specificații batch processing ✅
 
+### Phase 7: Batch Details Viewer (Enhancement)
+**Motivație**: Utilizatorii trebuie să poată vizualiza detaliile complete ale fiecărui batch din istoric pentru audit și verificare. Implementare modal cu tabel detaliat și paginare.
+
+- [x] **7.1** Backend AJS: Funcție `getBatchDetails(obj)` - returnează toate înregistrările din CCCZEROMINMAX pentru un batchId specific ✅
+- [x] **7.2** Backend AJS: JOIN cu MTRL și BRANCH pentru a obține denumiri complete (materialName, branchName) ✅
+- [x] **7.3** Backend AJS: Paginare în getBatchDetails (50 înregistrări per pagină) + info batch (data, filtru, total) ✅
+- [x] **7.4** Feathers: Metodă `batchDetails(data, params)` - wrapper pentru AJS getBatchDetails ✅
+- [x] **7.5** Feathers: Export metodă `batchDetails` în zero-minmax.shared.js ✅
+- [x] **7.6** Frontend: Adăugare proprietăți reactive pentru modal state (batchDetailsData, batchDetailsInfo, etc.) ✅
+- [x] **7.7** Frontend: Metodă `_openBatchDetailsModal(batchId)` - inițializare și deschidere modal Bootstrap ✅
+- [x] **7.8** Frontend: Metodă `_loadBatchDetails(batchId, page)` - încărcare date cu loading state ✅
+- [x] **7.9** Frontend: Metodă `_goToBatchDetailsPage(page)` - navigare între pagini în modal ✅
+- [x] **7.10** Frontend: Render modal Bootstrap XL cu header (batch info), tabel detalii, paginare footer ✅
+- [x] **7.11** Frontend: Adăugare coloană "Acțiuni" în tabelul de istoric cu buton "Vezi detalii" ✅
+- [x] **7.12** Frontend: Styling pentru tabel detalii (badges pentru valori, truncate pentru denumiri lungi) ✅
+- [ ] **7.13** Test: Deschidere modal pentru batch cu <50 înregistrări ⏳ **Gata pentru testare manuală**
+- [ ] **7.14** Test: Deschidere modal pentru batch cu >50 înregistrări + paginare ⏳ **Gata pentru testare manuală**
+- [ ] **7.15** Test: Verificare afișare corectă denumiri materiale și branch-uri ⏳ **Gata pentru testare manuală**
+- [x] **7.16** Documentare: Update PRD și help HTML cu specificații batch details viewer ✅
+
 ---
 
 ## Progress Log
@@ -305,6 +325,7 @@ app.service('zero-minmax').on('progress', (data) => {
 | 2026-02-02 | Phase 4: Integration | ✅ Complet | Tab în index.html L240, handler în userInteractions.js L291, hierarchical L29, socketConfig.js L74 |
 | 2026-02-02 | Phase 5: Testing | 🔄 Gata pentru QA | **Toate componentele implementate, așteptăm testare manuală** |
 | 2026-02-02 | Phase 6: Batch Processing | ✅ Complet | Batch processing implementat (400+ linii cod) - gata pentru testare cu volume mari |
+| 2026-02-03 | Phase 7: Batch Details | ✅ Complet | Modal "Vezi detalii" în istoric - 120+ linii funcție AJS + 180+ linii frontend + modal Bootstrap XL |
 
 ---
 
@@ -374,34 +395,43 @@ app.service('zero-minmax').on('started', (data) => {
 ### ✅ Ce s-a implementat (100%)
 
 #### Backend (AJS):
-- ✅ [S1-MEC/AJS/ZeroMinMax.js](S1-MEC/AJS/ZeroMinMax.js) (625 linii)
+- ✅ [S1-MEC/AJS/ZeroMinMax.js](S1-MEC/AJS/ZeroMinMax.js) (1045+ linii)
   - `setup()` - creare tabel CCCZEROMINMAX + indexes
   - `getPreviewData()` - preview articole cu paginare
   - `getPreviewCount()` - count articole afectate
   - `processZeroMinMax()` - resetare în tranzacție SQL
   - `getActiveBranches()` - lista branch-uri active
   - `getResetHistory()` - istoric resetări
+  - `getBatchDetails()` - **[NOU]** detalii complete pentru un batch specific (paginare, JOIN cu MTRL și BRANCH pentru nume)
   - `getResetSummary()` - rezumat batches
   - `cleanup()` - curățare istoric vechi
+  - `processZeroMinMaxBatch()` - procesare în batch-uri de 500
+  - `cancelQueue()` - anulare job în curs
+  - `getQueueStatus()` - status job
 
 #### Backend (Feathers):
 - ✅ [src/services/zero-minmax/](src/services/zero-minmax/)
-  - `zero-minmax.class.js` (276 linii) - serviciu principal cu metode initialize, preview, count, process, branches, history, summary, cleanup
-  - `zero-minmax.js` (94 linii) - configurare serviciu cu real-time events (started, completed, error, progress)
-  - `zero-minmax.shared.js` - path și metode exportate
+  - `zero-minmax.class.js` (540+ linii) - serviciu principal cu metode initialize, preview, count, process, branches, history, **batchDetails**, summary, cleanup, processBatch, cancelBatch, queueStatus
+  - `zero-minmax.js` (94 linii) - configurare serviciu cu real-time events (started, completed, error, progress, batch-*)
+  - `zero-minmax.shared.js` - path și metode exportate (include batchDetails)
 - ✅ [src/services/index.js](src/services/index.js#L13) - serviciu înregistrat
 - ✅ [src/channels.js](src/channels.js) - channels pentru real-time notifications
 
 #### Frontend (LitElement):
-- ✅ [public/components/zero-minmax/zero-minmax-panel.js](public/components/zero-minmax/zero-minmax-panel.js) (923 linii)
+- ✅ [public/components/zero-minmax/zero-minmax-panel.js](public/components/zero-minmax/zero-minmax-panel.js) (1450+ linii)
   - Filtru cod articol cu valoare default "FS"
   - Fancy dropdown multi-select pentru branch-uri (toate active pre-selectate, fără HQ)
   - Preview cu tabel paginat (50 per pagină)
   - Buton Resetează cu dialog confirmare
   - Progress bar și status indicators
   - Istoric resetări cu tabel paginat
+  - **[NOU]** Buton "Vezi detalii" în istoric → deschide modal Bootstrap cu detalii batch
+  - **[NOU]** Modal batch details (XL size) cu tabel complet: cod, denumire, branch, nume branch, valori vechi min/max
+  - **[NOU]** Paginare în modal pentru batch details (50 înregistrări per pagină)
+  - **[NOU]** Info header în modal: data resetare, filtru folosit, total înregistrări
   - Real-time listeners pentru notificări (warning când alt user rulează proces)
   - Validări UI (butoane dezactivate când filtru gol sau niciun branch selectat)
+  - Batch processing support (>500 articole) cu progress și cancel button
 
 #### Integration:
 - ✅ [public/index.html](public/index.html#L240) - Tab "Min Max" în secțiunea Achiziții (primul tab)

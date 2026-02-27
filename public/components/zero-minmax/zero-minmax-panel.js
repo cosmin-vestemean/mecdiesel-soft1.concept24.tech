@@ -40,6 +40,16 @@ export class ZeroMinMaxPanel extends LitElement {
       historyData: { type: Array },
       showHistory: { type: Boolean, state: true },
       
+      // Batch details modal
+      batchDetailsModal: { type: Object },
+      batchDetailsData: { type: Array },
+      batchDetailsInfo: { type: Object },
+      batchDetailsPage: { type: Number },
+      batchDetailsPageSize: { type: Number },
+      batchDetailsTotalPages: { type: Number },
+      batchDetailsTotalCount: { type: Number },
+      loadingBatchDetails: { type: Boolean },
+      
       // Loading states
       loading: { type: Boolean },
       loadingPreview: { type: Boolean },
@@ -86,6 +96,16 @@ export class ZeroMinMaxPanel extends LitElement {
     // History state
     this.historyData = [];
     this.showHistory = false;
+    
+    // Batch details modal
+    this.batchDetailsModal = null;
+    this.batchDetailsData = [];
+    this.batchDetailsInfo = null;
+    this.batchDetailsPage = 1;
+    this.batchDetailsPageSize = 50;
+    this.batchDetailsTotalPages = 0;
+    this.batchDetailsTotalCount = 0;
+    this.loadingBatchDetails = false;
     
     // Loading states
     this.loading = false;
@@ -454,6 +474,72 @@ export class ZeroMinMaxPanel extends LitElement {
     } finally {
       this.loadingHistory = false;
     }
+  }
+
+  // === Batch Details Modal ===
+  
+  async _openBatchDetailsModal(batchId) {
+    this.batchDetailsPage = 1;
+    this.batchDetailsData = [];
+    this.batchDetailsInfo = null;
+    
+    // Initialize modal if not already
+    if (!this.batchDetailsModal) {
+      const modalEl = this.querySelector('#batchDetailsModal');
+      if (modalEl) {
+        this.batchDetailsModal = new bootstrap.Modal(modalEl);
+      }
+    }
+    
+    if (this.batchDetailsModal) {
+      this.batchDetailsModal.show();
+      await this._loadBatchDetails(batchId, 1);
+    }
+  }
+  
+  async _loadBatchDetails(batchId, page = 1) {
+    this.loadingBatchDetails = true;
+    this.requestUpdate();
+    
+    try {
+      if (!this._service) {
+        throw new Error('Service not available');
+      }
+      
+      const result = await this._service.batchDetails({
+        token: window.token,
+        batchId: batchId,
+        page: page,
+        pageSize: this.batchDetailsPageSize
+      });
+      
+      if (result.success) {
+        this.batchDetailsData = result.data || [];
+        this.batchDetailsInfo = result.batchInfo || {};
+        this.batchDetailsPage = result.page || 1;
+        this.batchDetailsTotalPages = result.totalPages || 0;
+        this.batchDetailsTotalCount = result.totalCount || 0;
+        console.log('✅ ZeroMinMaxPanel: Loaded batch details', this.batchDetailsData.length, 'records');
+      } else {
+        console.warn('⚠️ ZeroMinMaxPanel: Failed to load batch details', result);
+        this.error = result.error || 'Failed to load batch details';
+        this.batchDetailsData = [];
+      }
+    } catch (err) {
+      console.error('❌ ZeroMinMaxPanel: Error loading batch details', err);
+      this.error = `Eroare la încărcarea detaliilor: ${err.message}`;
+      this.batchDetailsData = [];
+    } finally {
+      this.loadingBatchDetails = false;
+      this.requestUpdate();
+    }
+  }
+  
+  async _goToBatchDetailsPage(page) {
+    if (page < 1 || page > this.batchDetailsTotalPages) return;
+    if (!this.batchDetailsInfo?.batchId) return;
+    
+    await this._loadBatchDetails(this.batchDetailsInfo.batchId, page);
   }
 
   // === Actions ===
@@ -1098,6 +1184,7 @@ export class ZeroMinMaxPanel extends LitElement {
                           <th style="min-width: 100px;">Filtru</th>
                           <th style="min-width: 100px;">Sucursale</th>
                           <th class="text-end" style="min-width: 100px;">Total Reset</th>
+                          <th class="text-center" style="min-width: 120px;">Acțiuni</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1108,6 +1195,13 @@ export class ZeroMinMaxPanel extends LitElement {
                             <td><code style="font-size: 0.95rem; background: #f8f9fa; padding: 2px 6px; border-radius: 3px;">${h.filtruFolosit || '-'}</code></td>
                             <td><span class="badge bg-info">${h.branchCount} sucursale</span></td>
                             <td class="text-end"><span class="badge bg-success fs-6">${h.totalRecords}</span></td>
+                            <td class="text-center">
+                              <button class="btn btn-sm btn-outline-primary" 
+                                      @click=${() => this._openBatchDetailsModal(h.batchId)}
+                                      title="Vezi detalii articole">
+                                <i class="fas fa-eye me-1"></i>Vezi detalii
+                              </button>
+                            </td>
                           </tr>
                         `)}
                       </tbody>
@@ -1181,6 +1275,153 @@ export class ZeroMinMaxPanel extends LitElement {
         
         <!-- History -->
         ${this.renderHistory()}
+        
+        <!-- Batch Details Modal -->
+        ${this.renderBatchDetailsModal()}
+      </div>
+    `;
+  }
+  
+  renderBatchDetailsModal() {
+    return html`
+      <!-- Modal pentru detalii batch -->
+      <div class="modal fade" id="batchDetailsModal" tabindex="-1" aria-labelledby="batchDetailsModalLabel" aria-hidden="true" data-bs-backdrop="false">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+          <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+              <h5 class="modal-title" id="batchDetailsModalLabel">
+                <i class="fas fa-list-alt me-2"></i>
+                Detalii Batch: ${this.batchDetailsInfo?.batchId || '-'}
+              </h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              ${this.batchDetailsInfo ? html`
+                <div class="row mb-3">
+                  <div class="col-md-4">
+                    <div class="card bg-light">
+                      <div class="card-body py-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                          <span class="text-muted small">Data resetare:</span>
+                          <strong>${this._formatDate(this.batchDetailsInfo.resetatLa)}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="card bg-light">
+                      <div class="card-body py-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                          <span class="text-muted small">Filtru folosit:</span>
+                          <code class="bg-white px-2 py-1 rounded">${this.batchDetailsInfo.filtruFolosit || '-'}</code>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="card bg-light">
+                      <div class="card-body py-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                          <span class="text-muted small">Total înregistrări:</span>
+                          <span class="badge bg-success fs-6">${this.batchDetailsTotalCount}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ` : ''}
+              
+              ${this.loadingBatchDetails ? html`
+                <div class="text-center p-5">
+                  <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Se încarcă...</span>
+                  </div>
+                  <p class="text-muted">Se încarcă detaliile...</p>
+                </div>
+              ` : this.batchDetailsData.length === 0 ? html`
+                <div class="alert alert-info">
+                  <i class="fas fa-info-circle me-2"></i>
+                  Nu există detalii disponibile pentru acest batch.
+                </div>
+              ` : html`
+                <div class="table-responsive">
+                  <table class="table table-striped table-hover table-sm">
+                    <thead class="table-dark sticky-top">
+                      <tr>
+                        <th style="width: 120px;">Cod</th>
+                        <th style="min-width: 200px;">Denumire Material</th>
+                        <th style="width: 100px;">Sucursala</th>
+                        <th style="min-width: 150px;">Nume Sucursală</th>
+                        <th class="text-end" style="width: 100px;">Min Auto Vechi</th>
+                        <th class="text-end" style="width: 100px;">Max Auto Vechi</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${this.batchDetailsData.map(item => html`
+                        <tr>
+                          <td><code class="small">${item.code}</code></td>
+                          <td class="small" title="${item.materialName}">${item.materialName}</td>
+                          <td class="text-center"><span class="badge bg-info">${item.branch}</span></td>
+                          <td class="small">${item.branchName}</td>
+                          <td class="text-end">
+                            <span class="badge ${item.oldCccminauto > 0 ? 'bg-warning text-dark' : 'bg-secondary'}">
+                              ${item.oldCccminauto}
+                            </span>
+                          </td>
+                          <td class="text-end">
+                            <span class="badge ${item.oldCccmaxauto > 0 ? 'bg-warning text-dark' : 'bg-secondary'}">
+                              ${item.oldCccmaxauto}
+                            </span>
+                          </td>
+                        </tr>
+                      `)}
+                    </tbody>
+                  </table>
+                </div>
+                
+                <!-- Pagination for batch details -->
+                ${this.batchDetailsTotalPages > 1 ? html`
+                  <div class="d-flex justify-content-between align-items-center mt-3 px-2">
+                    <div class="text-muted small">
+                      Pagina ${this.batchDetailsPage} din ${this.batchDetailsTotalPages} 
+                      (${this.batchDetailsTotalCount} total înregistrări)
+                    </div>
+                    <div class="btn-group" role="group">
+                      <button class="btn btn-sm btn-outline-secondary" 
+                              @click=${() => this._goToBatchDetailsPage(1)}
+                              ?disabled=${this.batchDetailsPage === 1 || this.loadingBatchDetails}>
+                        <i class="fas fa-angle-double-left"></i>
+                      </button>
+                      <button class="btn btn-sm btn-outline-secondary" 
+                              @click=${() => this._goToBatchDetailsPage(this.batchDetailsPage - 1)}
+                              ?disabled=${this.batchDetailsPage === 1 || this.loadingBatchDetails}>
+                        <i class="fas fa-angle-left"></i>
+                      </button>
+                      <button class="btn btn-sm btn-outline-secondary disabled">
+                        ${this.batchDetailsPage}
+                      </button>
+                      <button class="btn btn-sm btn-outline-secondary" 
+                              @click=${() => this._goToBatchDetailsPage(this.batchDetailsPage + 1)}
+                              ?disabled=${this.batchDetailsPage >= this.batchDetailsTotalPages || this.loadingBatchDetails}>
+                        <i class="fas fa-angle-right"></i>
+                      </button>
+                      <button class="btn btn-sm btn-outline-secondary" 
+                              @click=${() => this._goToBatchDetailsPage(this.batchDetailsTotalPages)}
+                              ?disabled=${this.batchDetailsPage >= this.batchDetailsTotalPages || this.loadingBatchDetails}>
+                        <i class="fas fa-angle-double-right"></i>
+                      </button>
+                    </div>
+                  </div>
+                ` : ''}
+              `}
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                <i class="fas fa-times me-1"></i>Închide
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     `;
   }

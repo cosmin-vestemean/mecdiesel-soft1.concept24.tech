@@ -228,6 +228,29 @@ export class ZeroMinMaxService {
   }
 
   /**
+   * Get detailed records for a specific batch
+   * POST /zero-minmax/batchDetails
+   * @param {Object} data - { token, batchId, page, pageSize }
+   */
+  async batchDetails(data, params) {
+    try {
+      const result = await makeS1Request('/JS/ZeroMinMax/getBatchDetails', {
+        token: data.token,
+        payload: {
+          batchId: data.batchId,
+          page: data.page || 1,
+          pageSize: data.pageSize || 50
+        }
+      })
+
+      return typeof result === 'string' ? JSON.parse(result) : result
+    } catch (error) {
+      console.error('❌ ZeroMinMax batchDetails error:', error.message)
+      return { success: false, error: error.message }
+    }
+  }
+
+  /**
    * Get reset batch summaries
    * POST /zero-minmax/summary
    * @param {Object} data - { token, limit }

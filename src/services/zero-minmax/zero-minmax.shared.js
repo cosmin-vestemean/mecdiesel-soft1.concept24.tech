@@ -13,6 +13,7 @@ export const zeroMinmaxMethods = [
   'cancelBatch',     // Cancel a batch processing job
   'queueStatus',     // Get status of a batch processing job
   'history',         // Get reset history
+  'batchDetails',    // Get detailed records for a specific batch
   'summary',         // Get reset batch summaries
   'cleanup'          // Remove old history records
 ]

@@ -1,0 +1,31 @@
+Subiect: Noua funcționalitate: Zero Min/Max - Resetare automată valori CCCMINAUTO/CCCMAXAUTO
+
+Salutare tuturor,
+
+Vă informăm că a fost implementată o nouă funcționalitate în sistemul Dubhe: modulul "Zero Min/Max", disponibil în secțiunea Achiziții.
+
+SCOP:
+Resetarea valorilor CCCMINAUTO și CCCMAXAUTO la 0 pentru articole selectate, cu tracking complet și audit trail.
+
+FUNCȚIONALITĂȚI PRINCIPALE:
+• Filtrare flexibilă după prefix cod material (ex: FS, IVP, etc)
+• Selecție multiplă branch-uri (HQ exclus automat)
+• Previzualizare articole afectate înainte de execuție
+• Procesare optimizată: <500 articole (sincronă) / >500 articole (batch processing automat)
+• Istoric complet al operațiunilor cu valorile vechi salvate
+• Notificări real-time pentru toți utilizatorii conectați
+• Opțiune de anulare pentru procesări lungi
+
+ACCESARE:
+Meniu: Achiziții → Tab "Min Max"
+Buton "Ajutor" disponibil în interfață pentru documentație completă.
+
+OBSERVAȚII IMPORTANTE:
+- Operațiunea este ireversibilă din interfață
+- Preview-ul este obligatoriu înainte de resetare
+- Toate operațiunile sunt înregistrate în tabelul CCCZEROMINMAX pentru audit
+- Pentru mai multe detalii actionati butonul "Ajutor" din interfață.
+
+Pentru întrebări sau asistență tehnică, vă rugăm să contactați echipa de development.
+
+Cu respect

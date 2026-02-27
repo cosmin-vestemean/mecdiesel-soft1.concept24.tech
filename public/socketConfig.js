@@ -74,11 +74,16 @@ client.use("batch-queue", socketClient.service("batch-queue"), {
 client.use("zero-minmax", socketClient.service("zero-minmax"), {
   methods: [
     "initialize",
+    "initializeQueue",
     "branches",
     "count",
     "preview",
     "process",
+    "processBatch",
+    "cancelBatch",
+    "queueStatus",
     "history",
+    "batchDetails",
     "summary",
     "cleanup"
   ],
