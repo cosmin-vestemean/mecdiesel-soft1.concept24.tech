@@ -240,6 +240,11 @@
                   <i class="fas fa-eraser me-1"></i>Min Max
                 </button>
               </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="exportMinMaxButton" data-bs-toggle="tab" type="button" role="tab">
+                  <i class="fas fa-file-export me-1"></i>Export Min/Max
+                </button>
+              </li>
             </ul>
             
             <!-- Contextual Controls -->
@@ -320,6 +325,9 @@
               </div>
               <div id="zeroMinMaxContent">
                 <zero-minmax-panel></zero-minmax-panel>
+              </div>
+              <div id="exportMinMaxContent">
+                <export-minmax-panel></export-minmax-panel>
               </div>
             </div>
           </div>
@@ -457,6 +465,8 @@
     <script type="module" src="components/top-abc/top-abc-container.js"></script>
     <!-- Zero Min/Max Reset component -->
     <script type="module" src="components/zero-minmax/zero-minmax-panel.js"></script>
+    <!-- Export Min/Max component -->
+    <script type="module" src="components/export-minmax/export-minmax-panel.js"></script>
     <!-- Batch Processing component -->
     <script type="module" src="components/batch-processing/batch-processing-container.js"></script>
     <!-- Load print_config content via JavaScript instead of inline script -->

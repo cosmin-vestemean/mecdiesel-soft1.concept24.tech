@@ -89,4 +89,13 @@ client.use("zero-minmax", socketClient.service("zero-minmax"), {
   ],
 });
 
+client.use("export-minmax", socketClient.service("export-minmax"), {
+  methods: [
+    "branches",
+    "exportHQ",
+    "exportBranches",
+    "exportCounts"
+  ],
+});
+
 export { client };

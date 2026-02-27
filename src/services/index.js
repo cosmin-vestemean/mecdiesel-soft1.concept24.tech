@@ -12,6 +12,8 @@ import { mecItem } from './mec_item/mec_item.js'
 
 import { zeroMinmax } from './zero-minmax/zero-minmax.js'
 
+import { exportMinmax } from './export-minmax/export-minmax.js'
+
 export const services = (app) => {
   app.configure(mecRoItemRelSupplier)
 
@@ -26,6 +28,8 @@ export const services = (app) => {
   app.configure(mecItem)
 
   app.configure(zeroMinmax)
+
+  app.configure(exportMinmax)
 
   // All services will be registered here
 }
