@@ -111,6 +111,7 @@ export function initializeUserInteractions() {
     "convAutoContent",
     "stockChangesContent",
     "batchApp",
+    "onlineOrdersLogContent",
     // "batchSize", // DEPRECATED - now in batch-processing-container
     "print_config",
     "branchReplenishContent", // Make sure this is included
@@ -201,6 +202,16 @@ export function initializeUserInteractions() {
   $("#batchButton").click(() => {
     hideAllButArray(["batchApp"]);
     paginationManager.setActiveTab("batchButton");
+  });
+
+  $("#webShopButton").click(() => {
+    hideAllButArray(["onlineOrdersLogContent"]);
+    paginationManager.setActiveTab("webShopButton");
+
+    const panel = document.querySelector("online-orders-log-panel");
+    if (panel && typeof panel.activate === "function") {
+      panel.activate();
+    }
   });
 
   $("#stockChangesButton").click(() => {

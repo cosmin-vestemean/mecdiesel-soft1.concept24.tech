@@ -262,6 +262,49 @@ class s1Service {
     });
   }
 
+  async setupOnlineOrdersLog(data, params) {
+    return request({
+      method: "POST",
+      uri: "/JS/WebShop/setupOnlineOrdersLog",
+      body: {
+        clientID: data.token,
+        appId: data.appId || "2002",
+      },
+      json: true,
+      gzip: true,
+    });
+  }
+
+  async logOnlineOrderPayload(data, params) {
+    return request({
+      method: "POST",
+      uri: "/JS/WebShop/logOnlineOrderPayload",
+      body: {
+        clientID: data.token,
+        appId: data.appId || "2002",
+        payload: data.payload,
+      },
+      json: true,
+      gzip: true,
+    });
+  }
+
+  async getOnlineOrdersLog(data, params) {
+    return request({
+      method: "POST",
+      uri: "/JS/WebShop/getOnlineOrdersLog",
+      body: {
+        clientID: data.token,
+        appId: data.appId || "2002",
+        page: data.page,
+        pageSize: data.pageSize,
+        search: data.search || "",
+      },
+      json: true,
+      gzip: true,
+    });
+  }
+
   async getAnalyticsForBranchReplenishment(data, params) {
     // Increase timeout when debug mode is enabled (diagnostic queries take longer)
     const timeout = data.debug ? 300000 : 120000; // 5 minutes for debug, 2 minutes for normal
@@ -526,6 +569,9 @@ app.use("/s1", new s1Service(), {
     "getAllPrintTemplatesForSoSource",
     "processListOfStocks",
     "getSqlDataset",
+    "setupOnlineOrdersLog",
+    "logOnlineOrderPayload",
+    "getOnlineOrdersLog",
     "getAnalyticsForBranchReplenishment",
     "getRegisteredUsers",
     "validateUserPwd",

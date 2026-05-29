@@ -23,6 +23,9 @@ client.use("s1", socketClient.service("s1"), {
     "getAllPrintTemplatesForSoSource",
     "processListOfStocks",
     "getSqlDataset",
+    "setupOnlineOrdersLog",
+    "logOnlineOrderPayload",
+    "getOnlineOrdersLog",
     "getAnalyticsForBranchReplenishment",
     "getRegisteredUsers", // Keep registered method
     "validateUserPwd", // Keep registered method

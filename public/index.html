@@ -193,6 +193,11 @@
                   Batch
                 </button>
               </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="webShopButton" data-bs-toggle="tab" type="button" role="tab">
+                  Web shop
+                </button>
+              </li>
             </ul>
 
             <!-- Sub-app Navigation for Conversie Auto -->
@@ -306,6 +311,9 @@
               <!-- Batch Processing - New LitElement Component -->
               <div id="batchApp">
                 <batch-processing-container></batch-processing-container>
+              </div>
+              <div id="onlineOrdersLogContent">
+                <online-orders-log-panel></online-orders-log-panel>
               </div>
               <div id="print_config">
                 <script>
@@ -469,6 +477,8 @@
     <script type="module" src="components/export-minmax/export-minmax-panel.js"></script>
     <!-- Batch Processing component -->
     <script type="module" src="components/batch-processing/batch-processing-container.js"></script>
+    <!-- Online orders log component -->
+    <script type="module" src="components/online-orders-log/online-orders-log-panel.js"></script>
     <!-- Load print_config content via JavaScript instead of inline script -->
     <script>
       $(function() {
