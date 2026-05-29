@@ -13,6 +13,11 @@ class HierarchicalNavigation {
         defaultTab: 'mappingsButton',
         tabs: ['mappingsButton', 'itemsButton', 'errorsButton', 'stockChangesButton', 'batchButton']
       },
+      'web-shop': {
+        name: 'Web shop',
+        defaultTab: 'webShopButton',
+        tabs: ['webShopButton']
+      },
       'conversie-auto': {
         name: 'Conversie Auto',
         defaultTab: 'convAutoButton',
@@ -248,6 +253,11 @@ class HierarchicalNavigation {
         'items1000': true
       },
       'conversie-auto': {
+        'tables': false,
+        'tablesLabel': false,
+        'searchItems': false
+      },
+      'web-shop': {
         'tables': false,
         'tablesLabel': false,
         'searchItems': false
