@@ -707,7 +707,7 @@ export class ZeroMinMaxPanel extends LitElement {
       // Success message will come from real-time event
       // but set a backup message in case
       if (!this.success) {
-        this.success = `Reset complet! ${result.data?.totalReset || 0} înregistrări actualizate.`;
+        this.success = `Reset complet! ${this.previewCount} înregistrări actualizate.`;
       }
       
       // Refresh preview and history

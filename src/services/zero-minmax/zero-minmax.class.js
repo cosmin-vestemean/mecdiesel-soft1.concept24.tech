@@ -332,7 +332,7 @@ export class ZeroMinMaxService {
         throw new Error(countData.error || 'Failed to get count')
       }
 
-      const totalCount = countData.count || 0
+      const totalCount = (countData.data && countData.data.count) || countData.count || 0
       if (totalCount === 0) {
         return { success: false, error: 'No articles to process' }
       }
