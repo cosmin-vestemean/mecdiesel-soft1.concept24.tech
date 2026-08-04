@@ -1,0 +1,15 @@
+{
+  "servers": {
+    "softone-mec": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${workspaceFolder}/mcp-server/index.js"],
+      "env": {
+        "S1_BASE_URL": "https://mecdiesel.oncloud.gr/s1services",
+        "S1_USERNAME": "mecws",
+        "S1_PASSWORD": "@28t$F",
+        "S1_APP_ID": "2002"
+      }
+    }
+  }
+}

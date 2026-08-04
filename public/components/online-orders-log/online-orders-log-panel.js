@@ -16,6 +16,8 @@ export class OnlineOrdersLogPanel extends LitElement {
       totalCount: { type: Number },
       setupComplete: { type: Boolean },
       hasLoaded: { type: Boolean },
+      isValidFilter: { type: Object },
+      dateFilter: { type: String },
       _service: { type: Object, state: true },
     };
   }
@@ -34,6 +36,8 @@ export class OnlineOrdersLogPanel extends LitElement {
     this.totalCount = 0;
     this.setupComplete = false;
     this.hasLoaded = false;
+    this.isValidFilter = null;
+    this.dateFilter = '';
     this._service = client.service('s1');
   }
 
@@ -105,6 +109,8 @@ export class OnlineOrdersLogPanel extends LitElement {
         page,
         pageSize: this.pageSize,
         search: this.searchQuery,
+        isValid: this.isValidFilter,
+        dateFilter: this.dateFilter,
       });
 
       if (!result || !result.success) {
@@ -146,6 +152,21 @@ export class OnlineOrdersLogPanel extends LitElement {
   _clearSearch() {
     this.searchInput = '';
     this.searchQuery = '';
+    this.loadLogs(1);
+  }
+
+  _setIsValidFilter(value) {
+    this.isValidFilter = this.isValidFilter === value ? null : value;
+    this.loadLogs(1);
+  }
+
+  _onDateFilterChange(event) {
+    this.dateFilter = event.target.value;
+    this.loadLogs(1);
+  }
+
+  _clearDateFilter() {
+    this.dateFilter = '';
     this.loadLogs(1);
   }
 
@@ -234,8 +255,8 @@ export class OnlineOrdersLogPanel extends LitElement {
                 </td>
                 <td>${row.SOCARRIER || '-'}</td>
                 <td>
-                  <span class="badge ${row.VALIDATIONSTATUS === 1 ? 'text-bg-success' : 'text-bg-warning'}">
-                    ${row.VALIDATIONSTATUS === 1 ? 'Valid' : 'Needs attention'}
+                  <span class="badge ${row.VALIDATIONSTATUS == 1 ? 'text-bg-success' : 'text-bg-warning'}">
+                    ${row.VALIDATIONSTATUS == 1 ? 'Valid' : 'Needs attention'}
                   </span>
                 </td>
                 <td>
@@ -343,8 +364,27 @@ export class OnlineOrdersLogPanel extends LitElement {
               </div>
             </div>
 
+            <div class="d-flex flex-wrap gap-2 mb-3">
+              <span class="text-muted small align-self-center me-1">Status:</span>
+              <button
+                class="btn btn-sm ${this.isValidFilter === null ? 'btn-secondary' : 'btn-outline-secondary'}"
+                @click=${() => { this.isValidFilter = null; this.loadLogs(1); }}
+                ?disabled=${this.loading}
+              >All</button>
+              <button
+                class="btn btn-sm ${this.isValidFilter === 1 ? 'btn-success' : 'btn-outline-success'}"
+                @click=${() => this._setIsValidFilter(1)}
+                ?disabled=${this.loading}
+              >Valid</button>
+              <button
+                class="btn btn-sm ${this.isValidFilter === 0 ? 'btn-warning' : 'btn-outline-warning'}"
+                @click=${() => this._setIsValidFilter(0)}
+                ?disabled=${this.loading}
+              >Needs attention</button>
+            </div>
+
             <div class="row g-3 align-items-end mb-3">
-              <div class="col-lg-8">
+              <div class="col-lg-5">
                 <label class="form-label fw-semibold">Search</label>
                 <input
                   type="text"
@@ -354,6 +394,19 @@ export class OnlineOrdersLogPanel extends LitElement {
                   @input=${this._onSearchInput}
                   @keydown=${this._onSearchKeyDown}
                 />
+              </div>
+              <div class="col-lg-3">
+                <label class="form-label fw-semibold">Date</label>
+                <div class="d-flex gap-1">
+                  <input
+                    type="date"
+                    class="form-control"
+                    .value=${this.dateFilter}
+                    @change=${this._onDateFilterChange}
+                    ?disabled=${this.loading}
+                  />
+                  ${this.dateFilter ? html`<button class="btn btn-outline-secondary px-2" title="Clear date" @click=${this._clearDateFilter} ?disabled=${this.loading}>&times;</button>` : ''}
+                </div>
               </div>
               <div class="col-lg-4">
                 <div class="d-flex gap-2">

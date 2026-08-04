@@ -299,6 +299,8 @@ class s1Service {
         page: data.page,
         pageSize: data.pageSize,
         search: data.search || "",
+        isValid: data.isValid !== undefined ? data.isValid : null,
+        dateFilter: data.dateFilter || "",
       },
       json: true,
       gzip: true,

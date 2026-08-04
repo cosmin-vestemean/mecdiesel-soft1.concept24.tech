@@ -1,0 +1,14 @@
+{
+  "name": "softone-mec-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for querying SoftOne (S1) database and schema",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.24.0"
+  }
+}
