@@ -1,0 +1,93 @@
+Salut Cosmin ,
+
+ 
+
+Dorim sa implementam un model complet diferit de calcul minmax .
+
+Noul model este de tip matrice ABC+XYZ – adica combina tipul de reper de tip A,B,C cu tipul de cerere pentru produs X, Y,Z .
+
+Pentru ca aceasta implementare este mult mai complexa decat modul curent de calcul – te rugam sa stabilim o intalnire saptamana viitoare – luni sau marti
+
+ca sa putem mai in detaliu cerintele si modul de implementare.
+
+ 
+
+💡 Idei de bază
+
+1. Ce face engine-ul
+
+Calculează automat nivelurile MIN și MAX de stoc pentru fiecare produs (SKU) din fiecare locație, pentru a optimiza comenzile către furnizori — evitând atât suprastocul cât și rupturile de stoc.
+
+2. Clasificarea produselor — 3 cicluri de viață
+
+STANDARD (~12.502 SKU) — produse cu vânzări regulate → calcul complet MIN/MAX
+NOU/REACTIVAT (~123 SKU) — produse recent introduse → calcul simplificat, conservator
+ON DEMAND (~33.223 SKU = 72% din total!) — fără istoric suficient → MIN = MAX = 0, se comandă doar la cererea clientului
+3. Clasificarea ABC + XYZ
+
+ABC — după valoarea vânzărilor din 52 săptămâni (A = top 80%, B = 80-95%, C = restul)
+XYZ — după volatilitatea cererii (X = stabilă, Y = medie, Z = volatilă)
+Combinația determină coeficientul de acoperire COV_TGT (ex: AX = 2,75 luni, CZ = 0)
+4. Formula MIN/MAX v5 HYBRID
+
+Calcul în mai mulți pași:
+
+Medie ponderată a vânzărilor (4S×30% + 13S×40% + 26S×15% + 52S×15%)
+Stoc de siguranță bazat pe Lead Time și factorul SSF (1,28–1,65)
+3 plafoane obligatorii simultane: max 6 luni consum, vânzările din 26 săptămâni, MAX calculat
+HQ primește inflație +30% față de filiale (este agregator pur, fără vânzări proprii)
+ 
+5. Reguli business speciale
+
+HQ CAP: ENG_MAX(HQ) ≤ suma filiale × 1,5 → afectează 4.208 SKU (~9%)
+București minim 30% din ENG_MIN(HQ) — cea mai mare filială
+Pack Rules: reguli speciale per tip produs (discuri frână, bucșe, injectoare, pistoane)
+ 
+6. Flags externe
+
+
+
+Flag
+
+Efect
+
+SKU afectați
+
+În lichidare
+
+BUY_QTY = 0
+
+1.917 SKU
+
+Blocat furnizor
+
+MIN = MAX = 0
+
+7.813 SKU
+
+Exclus
+
+MIN = MAX = 0
+
+18.292 SKU
+
+7. Output
+
+Fișier minmax_union.xlsx (~16 MB)
+39 coloane per SKU (vânzări, clasificare, engine, comparație ERP, flags)
+16 sheet-uri (HQ + 13 filiale + SUMMARY)
+Coloana FLAG compară engine vs ERP curent (✓ OK / ↑ / ↓ / ⚠)
+8. Cerințe tehnice de implementare
+
+Rulare săptămânală (recomandat luni)
+Date fresh din ERP minim 1×/săptămână
+Minim 52 săptămâni de istoric necesar
+Timp de calcul curent: ~80 secunde în Python
+Validare prin rulare paralelă 1-2 săptămâni Python vs ERP
+9. Pași următori
+
+Confirmare specificații cu echipa ERP
+Identificare tabele ERP surse
+Mapare câmpuri → 39 coloane output
+Planificare job-uri automate săptămânale
+Validare paralelă Python vs ERP
