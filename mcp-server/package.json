@@ -1,14 +1,26 @@
 {
-  "name": "softone-mec-mcp-server",
-  "version": "1.0.0",
-  "description": "MCP server for querying SoftOne (S1) database and schema",
+  "name": "s1-api-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Global MCP server for SoftOne (S1) web service access, shared across projects. Credentials/config come from each project's own .env via mcp.json envFile.",
   "type": "module",
-  "main": "index.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "start": "node index.js"
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
-    "zod": "^3.24.0"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "dotenv": "^16.4.7",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "tsx": "^4.20.6",
+    "typescript": "^5.8.3"
   }
 }

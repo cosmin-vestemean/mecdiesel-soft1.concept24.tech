@@ -25,43 +25,24 @@
 
 Verificări rulate direct pe ERP-ul de producție (`DUBHE ROMANIA SRL`, company 1000).
 
-### 1.1 Lista de filiale — blocajul #1 se reduce la 4 poziții
+### 1.1 Lista de filiale — rezolvat: cele 4 diferențe sunt depozite închise
 
-`BRANCH` conține **18 înregistrări active**: HQ + 17 filiale. Engine-ul Python calculează 13.
+`BRANCH` conține **18 înregistrări active** (`ISACTIVE = 1`), dar engine-ul Python calculează 13. Verificarea join-ului cu `WHOUSE` (`WHOUSE.CCCBRANCH = BRANCH.BRANCH`) **închide itemul deschis #1**: cele 4 filiale lipsă au **depozitul dezactivat** (`WHOUSE.ISACTIVE = 0`) — sunt locații închise fizic, ale căror înregistrări `BRANCH` au rămas active.
 
-| BRANCH | NAME | În engine |
-|---|---|---|
-| 1000 | HQ | da (agregator) |
-| 1200 | CLUJ | da |
-| 1300 | CONSTANTA | da |
-| 1400 | GALATI | da |
-| 1500 | PLOIESTI | da |
-| 1600 | IASI | da |
-| 1700 | SIBIU | da |
-| 1800 | CRAIOVA | da |
-| 1900 | ORADEA | da |
-| 2000 | PITESTI | da |
-| 2100 | BRASOV | da |
-| 2200 | BUCURESTI | da |
-| 2300 | ARAD | **nu — de confirmat** |
-| 2400 | VOLUNTARI | **nu — de confirmat** |
-| 2600 | MIHAILESTI | **nu — de confirmat** |
-| 2700 | TG. MURES | da |
-| 2800 | TIMISOARA | da |
-| 2900 | RAMNICU VALCEA | **nu — de confirmat** |
+| BRANCH | NAME | `BRANCH.ISACTIVE` | `WHOUSE.ISACTIVE` | Stoc rămas (FISCPRD 2026) | Concluzie |
+|---|---|---|---|---|---|
+| 2300 | ARAD | 1 | **0** | 4 SKU, total −8 | închis — rezidual negativ |
+| 2400 | VOLUNTARI | 1 | **0** | 1 SKU, total −16 | închis — rezidual negativ |
+| 2600 | MIHAILESTI | 1 | **0** | 3 SKU, total −476 | închis — rezidual negativ |
+| 2900 | RAMNICU VALCEA | 1 | **0** | 0 SKU | închis — curat |
 
-Diferența față de engine este **exact 4 filiale**. „Târgoviște" și „București Automotive" din documentație **nu există** în `BRANCH`; „Bacău" este confirmat absent. Întrebarea către client se reduce la aceste 4 poziții.
+Chiar dacă cererea istorică a VOLUNTARI (1.161 linii) și RM. VÂLCEA (1.611 linii) ar fi motiv de includere, **nu există depozit activ** în care să se dimensioneze stoc — cererea lor a fost onorată prin cross-shipping sau înainte de închidere. `INCLUS = 0` nu mai e un default precaut, ci starea de fapt.
 
-Verificare de volum pe cele 4 (52 săptămâni), pentru a separa decizia reală de cea formală:
+> **Sursa de adevăr pentru motor:** lista filialelor se obține din `WHOUSE.ISACTIVE = 1 AND CCCBRANCH IS NOT NULL` (company 1000), **nu** din `BRANCH.ISACTIVE = 1`. Prima dă exact cele 13 filiale + HQ pe care le calculează engine-ul Python; a doua dă 18, din care 4 sunt moarte. Diferența de 4 nu era o decizie de business, ci o inconsecvență de date între `BRANCH` și `WHOUSE`.
 
-| Filială | Cod | Linii care intră în statistici | Consecința excluderii |
-|---|---|---|---|
-| ARAD | 2300 | **0** | niciuna — excludere fără impact |
-| MIHĂILEȘTI | 2600 | **0** | niciuna — excludere fără impact |
-| VOLUNTARI | 2400 | **1.161** | cererea reală nu generează niciun nivel de stoc |
-| RÂMNICU VÂLCEA | 2900 | **1.611** | idem |
+> **Notă HQ:** `WHOUSE` 1000 „HQ" (company 1000) este și el inactiv; depozitul real al HQ este `WHOUSE` 1000 „Depozit Central" (company **1001**, `ISACTIVE = 1`). La scrierea în ERP, HQ folosește acest `WHOUSE` — vezi `applyToErp`, Faza 3.
 
-Decizia rămâne deschisă doar pentru 2400 și 2900 (~2.770 linii de cerere reală) — vezi §10, item 1.
+> **Atenție la `sp_GetMtrlsDat`:** dacă filtrează pe `BRANCH.ISACTIVE`, Branch Replenishment expune și cele 4 locații moarte în UI. De verificat la Faza 6 — nu e blocant pentru v5.
 
 ### 1.2 Excluderi clienți — C0.1 confirmat, plus o entitate nouă
 
@@ -470,7 +451,7 @@ Scrierea în ERP **nu este automată**: rezultatele se calculează și se inspec
 
 | # | Item | Blochează? | Default aplicat |
 |---|---|---|---|
-| 1 | Filialele VOLUNTARI (2400, 1.161 linii) și RM. VÂLCEA (2900, 1.611 linii) — ARAD și MIHĂILEȘTI au 0 linii, excluderea lor e fără impact | nu | `INCLUS = 0` |
+| 1 | ~~Filialele VOLUNTARI, RM. VÂLCEA, ARAD, MIHĂILEȘTI~~ | — | ✅ **rezolvat 01.09.2026: toate 4 au `WHOUSE.ISACTIVE = 0` — depozite închise fizic, nu decizii de business. `INCLUS = 0` este starea de fapt** (vezi §1.1) |
 | 2 | ~~Valorile `COV_MEDIU` + maparea MARE/MEDIU/MIC~~ | nu | ✅ **rezolvat 14.08.2026: matricea și maparea filială→categorie sunt editabile manual de beneficiar oricând** (`MEDIU = MIC` doar ca fallback inițial, până la completare) |
 | 3 | ~~`SSF` flat 1.28 vs. per clasă ABC (item L4)~~ | — | ✅ **rezolvat 14.08.2026: rămâne flat 1.28** |
 | 4 | `CX = 2.00 > BY = 2.00` (item I2) | nu | valorile din spec |

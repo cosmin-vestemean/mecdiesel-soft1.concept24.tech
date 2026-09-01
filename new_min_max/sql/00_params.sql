@@ -159,15 +159,17 @@ WHERE NOT EXISTS (
 
 -- Clasa OD (ON DEMAND) nu primeste acoperire: MIN = MAX = BUY = 0.
 INSERT INTO CCCMINMAXCOV (CLASA, MARIME, COV)
-SELECT m.MARIME, 0
+SELECT 'OD', m.MARIME, 0
 FROM (VALUES ('MARE'), ('MEDIU'), ('MIC')) m (MARIME)
 WHERE NOT EXISTS (SELECT 1 FROM CCCMINMAXCOV c WHERE c.CLASA = 'OD' AND c.MARIME = m.MARIME);
 
 --=====================================================================
 -- 7. SEED — configurare filiale
---    ARAD 2300 si MIHAILESTI 2600: 0 linii statistice, excluderea e fara impact.
---    VOLUNTARI 2400 (1.161 linii) si RM. VALCEA 2900 (1.611 linii): INCLUS = 0
---    pana la confirmarea clientului — au cerere reala.
+--    Cele 4 filiale cu INCLUS = 0 (ARAD 2300, VOLUNTARI 2400, MIHAILESTI 2600,
+--    RM. VALCEA 2900) au WHOUSE.ISACTIVE = 0 — depozite inchise fizic, nu decizii
+--    de business. BRANCH.ISACTIVE = 1 peste tot, dar nu exista depozit activ
+--    in care sa se dimensioneze stocul. Sursa de adevar pentru motor este
+--    WHOUSE.ISACTIVE = 1 AND CCCBRANCH IS NOT NULL, nu BRANCH.ISACTIVE.
 --=====================================================================
 
 ;WITH br (BRANCH, MARIME, INCLUS, ESTE_HQ, ESTE_PODEA) AS (
@@ -184,12 +186,12 @@ WHERE NOT EXISTS (SELECT 1 FROM CCCMINMAXCOV c WHERE c.CLASA = 'OD' AND c.MARIME
         (2000, 'MIC',  1, 0, 0),  -- PITESTI
         (2100, 'MIC',  1, 0, 0),  -- BRASOV
         (2200, 'MARE', 1, 0, 1),  -- BUCURESTI — tinta regulii de podea
-        (2300, 'MIC',  0, 0, 0),  -- ARAD — 0 linii
-        (2400, 'MIC',  0, 0, 0),  -- VOLUNTARI — de confirmat
-        (2600, 'MIC',  0, 0, 0),  -- MIHAILESTI — 0 linii
+        (2300, 'MIC',  0, 0, 0),  -- ARAD — WHOUSE inchis
+        (2400, 'MIC',  0, 0, 0),  -- VOLUNTARI — WHOUSE inchis
+        (2600, 'MIC',  0, 0, 0),  -- MIHAILESTI — WHOUSE inchis
         (2700, 'MIC',  1, 0, 0),  -- TG. MURES
         (2800, 'MARE', 1, 0, 0),  -- TIMISOARA
-        (2900, 'MIC',  0, 0, 0)   -- RAMNICU VALCEA — de confirmat
+        (2900, 'MIC',  0, 0, 0)   -- RAMNICU VALCEA — WHOUSE inchis
     ) v (BRANCH, MARIME, INCLUS, ESTE_HQ, ESTE_PODEA)
 )
 INSERT INTO CCCMINMAXBRANCH (BRANCH, MARIME, INCLUS, ESTE_HQ, ESTE_PODEA)

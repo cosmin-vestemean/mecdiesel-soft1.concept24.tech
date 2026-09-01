@@ -1,14 +1,13 @@
 {
   "servers": {
-    "softone-mec": {
+    "s1-api": {
       "type": "stdio",
       "command": "node",
-      "args": ["${workspaceFolder}/mcp-server/index.js"],
+      "args": ["${workspaceFolder}/mcp-server/launch-project-env.mjs"],
       "env": {
-        "S1_BASE_URL": "https://mecdiesel.oncloud.gr/s1services",
-        "S1_USERNAME": "mecws",
-        "S1_PASSWORD": "@28t$F",
-        "S1_APP_ID": "2002"
+        "CLAUDE_PROJECT_DIR": "${workspaceFolder}",
+        "S1_SQL_ENDPOINT_PATH": "/JS/WSMCP/execSql",
+        "S1_CUSTOM_WS_PREFIX": "/JS/WSMCP/"
       }
     }
   }

@@ -21,11 +21,23 @@ BEGIN
     CREATE TABLE #EmitBranches (branch INT PRIMARY KEY);
     CREATE TABLE #DestBranches (branch INT PRIMARY KEY);
 
+    -- Only allow branches with an ACTIVE warehouse (WHOUSE.ISACTIVE=1).
+    -- Inactive branches (e.g. 2300 ARAD, 2400 VOLUNTARI, 2600 MIHAILESTI, 2900 RAMNICU VALCEA) are excluded.
     INSERT INTO #EmitBranches (branch)
-    SELECT CAST(value AS INT) FROM STRING_SPLIT(@branchesEmit, ',');
+    SELECT CAST(value AS INT) FROM STRING_SPLIT(@branchesEmit, ',')
+    WHERE CAST(value AS INT) IN (
+        SELECT w.CCCBRANCH FROM WHOUSE w
+        INNER JOIN BRANCH b ON b.BRANCH = w.CCCBRANCH AND b.COMPANY = w.COMPANY
+        WHERE w.COMPANY = @company AND w.ISACTIVE = 1 AND b.ISACTIVE = 1
+    );
 
     INSERT INTO #DestBranches (branch)
-    SELECT CAST(value AS INT) FROM STRING_SPLIT(@branchesDest, ',');    -- Create temp table for pre-calculated pending orders
+    SELECT CAST(value AS INT) FROM STRING_SPLIT(@branchesDest, ',')
+    WHERE CAST(value AS INT) IN (
+        SELECT w.CCCBRANCH FROM WHOUSE w
+        INNER JOIN BRANCH b ON b.BRANCH = w.CCCBRANCH AND b.COMPANY = w.COMPANY
+        WHERE w.COMPANY = @company AND w.ISACTIVE = 1 AND b.ISACTIVE = 1
+    );    -- Create temp table for pre-calculated pending orders
     CREATE TABLE #PendingOrders (
         mtrl INT,
         branchFrom INT,

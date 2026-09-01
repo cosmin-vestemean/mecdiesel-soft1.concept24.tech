@@ -76,12 +76,13 @@ export class ReplenishmentStore {
       uniqueDestinations: [],
       
       // Static data
+      // Only branches with active warehouse (WHOUSE.ISACTIVE=1) in S1.
+      // Excluded (inactive in S1): 2300 ARAD, 2400 VOLUNTARI, 2600 MIHAILESTI, 2900 RAMNICU VALCEA
       branches: {
         '1200': 'CLUJ', '1300': 'CONSTANTA', '1400': 'GALATI',
         '1500': 'PLOIESTI', '1600': 'IASI', '1700': 'SIBIU', '1800': 'CRAIOVA',
         '1900': 'ORADEA', '2000': 'PITESTI', '2100': 'BRASOV', '2200': 'BUCURESTI',
-        '2300': 'ARAD', '2400': 'VOLUNTARI', '2600': 'MIHAILESTI', '2700': 'TG. MURES',
-        '2800': 'TIMISOARA', '2900': 'RAMNICU VALCEA'
+        '2700': 'TG. MURES', '2800': 'TIMISOARA'
       }
     };
   }
