@@ -9,6 +9,15 @@
         "S1_SQL_ENDPOINT_PATH": "/JS/WSMCP/execSql",
         "S1_CUSTOM_WS_PREFIX": "/JS/WSMCP/"
       }
+    },
+    "python-executor": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${workspaceFolder}/mcp-python-executor/index.js"],
+      "env": {
+        "PYTHON_EXECUTABLE": "${workspaceFolder}/mcp-python-executor/.venv/bin/python",
+        "PYTHON_WORKING_DIRECTORY": "${workspaceFolder}"
+      }
     }
   }
 }

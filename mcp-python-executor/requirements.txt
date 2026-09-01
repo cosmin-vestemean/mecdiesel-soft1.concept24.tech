@@ -1,0 +1,9 @@
+pandas
+numpy
+matplotlib
+plotly
+pyodbc
+SQLAlchemy
+lxml
+httpx
+rich
