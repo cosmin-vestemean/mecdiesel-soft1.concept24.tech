@@ -154,7 +154,7 @@ export class BranchReplenishmentContainer extends LitElement {
         diagnostics = response.diagnostics || [];
       } else {
         // Unexpected format
-        throw new Error('Invalid response format from server');
+        throw new Error(response?.error || response?.message || 'Invalid response format from server');
       }
 
       // Set data in store

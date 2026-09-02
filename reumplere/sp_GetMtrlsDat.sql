@@ -1,28 +1,22 @@
---The data is retrieved from a stored procedure that is executed in the database by internal mechanisms of the ERP
-
 CREATE OR ALTER PROCEDURE sp_GetMtrlsData
     @branchesEmit VARCHAR(100),
     @branchesDest VARCHAR(100),
     @company INT = 1000,
     @setConditionForNecesar BIT = 1,
-    @setConditionForLimits BIT = 1,  -- New parameter
+    @setConditionForLimits BIT = 1,
     @fiscalYear INT = NULL,
-    @materialCodeFilter VARCHAR(100) = NULL,  -- New parameter for material code filtering
-    @materialCodeFilterExclude BIT = 0  -- New parameter for exclusion mode (0=include, 1=exclude)
+    @materialCodeFilter VARCHAR(100) = NULL,
+    @materialCodeFilterExclude BIT = 0
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- Set default fiscal year if not provided
     IF @fiscalYear IS NULL
         SET @fiscalYear = YEAR(GETDATE());
 
-    -- Create temp tables for source and destination branches to avoid repeated STRING_SPLIT calls
     CREATE TABLE #EmitBranches (branch INT PRIMARY KEY);
     CREATE TABLE #DestBranches (branch INT PRIMARY KEY);
 
-    -- Only allow branches with an ACTIVE warehouse (WHOUSE.ISACTIVE=1).
-    -- Inactive branches (e.g. 2300 ARAD, 2400 VOLUNTARI, 2600 MIHAILESTI, 2900 RAMNICU VALCEA) are excluded.
     INSERT INTO #EmitBranches (branch)
     SELECT CAST(value AS INT) FROM STRING_SPLIT(@branchesEmit, ',')
     WHERE CAST(value AS INT) IN (
@@ -37,7 +31,7 @@ BEGIN
         SELECT w.CCCBRANCH FROM WHOUSE w
         INNER JOIN BRANCH b ON b.BRANCH = w.CCCBRANCH AND b.COMPANY = w.COMPANY
         WHERE w.COMPANY = @company AND w.ISACTIVE = 1 AND b.ISACTIVE = 1
-    );    -- Create temp table for pre-calculated pending orders
+    );
     CREATE TABLE #PendingOrders (
         mtrl INT,
         branchFrom INT,
@@ -45,13 +39,11 @@ BEGIN
         qty DECIMAL(18,4)
     );
 
-    -- Populate pending orders temp table once
-    -- This replaces multiple calls to getPendingStr() function
     INSERT INTO #PendingOrders
     SELECT 
         A.mtrl, 
         C.BRANCH AS branchFrom,
-        B.BRANCHSEC AS branchTo,  -- Changed: Now using BRANCHSEC as branchTo
+        B.BRANCHSEC AS branchTo,
         SUM((ISNULL(A.QTY1,0)) - (ISNULL(A.QTY1COV,0) + ISNULL(A.QTY1CANC,0)))
     FROM MTRLINES A 
     INNER JOIN findoc c ON (c.findoc=a.findoc AND c.company=a.company AND c.sosource=a.sosource)
@@ -64,18 +56,15 @@ BEGIN
         AND c.iscancel = 0
         AND c.sosource = 1151
         AND c.FPRMS = 3130
-        AND C.BRANCH IN (SELECT branch FROM #EmitBranches) -- FIX: Filter by source branch (emitBranches), not destination
-    GROUP BY A.mtrl, C.BRANCH, B.BRANCHSEC;  -- Changed: Added B.BRANCHSEC to GROUP BY
+        AND C.BRANCH IN (SELECT branch FROM #EmitBranches)
+    GROUP BY A.mtrl, C.BRANCH, B.BRANCHSEC;
 
-    -- Create index on the pending orders temp table
     CREATE NONCLUSTERED INDEX IX_PendingOrders_MTRL_BRANCHTO 
     ON #PendingOrders(mtrl, branchTo);
     
-    -- Add additional index for branchFrom lookups
     CREATE NONCLUSTERED INDEX IX_PendingOrders_MTRL_BRANCHFROM 
     ON #PendingOrders(mtrl, branchFrom);
 
-    -- Create temp table for pre-calculated unreceived transfers
     CREATE TABLE #UnreceivedTransfers (
         mtrl INT,
         branchFrom INT,
@@ -83,8 +72,6 @@ BEGIN
         qty DECIMAL(18,4)
     );
 
-    -- Populate unreceived transfers temp table once
-    -- This replaces multiple calls to transferuriNereceptionateStr() function
     INSERT INTO #UnreceivedTransfers
     SELECT 
         C.mtrl, 
@@ -102,22 +89,19 @@ BEGIN
         AND B.WHOUSESEC = 9999
         AND A.FISCPRD = @fiscalYear
         AND A.iscancel = 0
-        AND (A.BRANCH IN (SELECT branch FROM #EmitBranches) OR B.BRANCHSEC IN (SELECT branch FROM #DestBranches)) -- Include transfers from emit branches OR to dest branches
+        AND (A.BRANCH IN (SELECT branch FROM #EmitBranches) OR B.BRANCHSEC IN (SELECT branch FROM #DestBranches))
     GROUP BY C.mtrl, A.BRANCH, B.BRANCHSEC;
 
-    -- Create indexes on the unreceived transfers temp table
     CREATE NONCLUSTERED INDEX IX_UnreceivedTransfers_MTRL_BRANCH 
     ON #UnreceivedTransfers(mtrl, branchTo);
     CREATE NONCLUSTERED INDEX IX_UnreceivedTransfers_MTRL_BRANCHFROM_BRANCHTO 
     ON #UnreceivedTransfers(mtrl, branchFrom, branchTo);
 
-    -- Create temp table for branch limits with calculated max values
     CREATE TABLE #BranchLimits (
         mtrl INT,
         branch INT,
         MinLimit DECIMAL(18,4),
         MaxLimit DECIMAL(18,4),
-        -- Add columns to store precalculated values
         StockQty DECIMAL(18,4) NULL,
         PendingQty DECIMAL(18,4) NULL,
         TransferQty DECIMAL(18,4) NULL,
@@ -125,7 +109,6 @@ BEGIN
         MaxNecessity DECIMAL(18,4) NULL
     );
 
-    -- Populate branch limits temp table
     INSERT INTO #BranchLimits (mtrl, branch, MinLimit, MaxLimit)
     SELECT 
         mtrl, 
@@ -135,11 +118,9 @@ BEGIN
     FROM MTRBRNLIMITS 
     WHERE company = @company;
 
-    -- Create index on the branch limits temp table
     CREATE NONCLUSTERED INDEX IX_BranchLimits_MTRL_BRANCH 
     ON #BranchLimits(mtrl, branch);
 
-    -- Update stock quantities in the branch limits table
     UPDATE bl
     SET StockQty = ISNULL(stock.qty, 0)
     FROM #BranchLimits bl
@@ -162,27 +143,23 @@ BEGIN
         GROUP BY c.branch, a.mtrl
     ) stock ON (bl.mtrl = stock.mtrl AND bl.branch = stock.branch);
 
-    -- Update pending orders in the branch limits table
-    -- FIX: Exclude internal reservations (branchFrom = branchTo) from necessity calculation
     UPDATE bl
     SET PendingQty = ISNULL(pending.qty, 0)
     FROM #BranchLimits bl
     LEFT JOIN (
         SELECT mtrl, branchTo AS branch, SUM(qty) AS qty
         FROM #PendingOrders
-        WHERE branchFrom <> branchTo  -- FIX: Exclude internal reservations (2200->2200)
+        WHERE branchFrom <> branchTo
         GROUP BY mtrl, branchTo
     ) pending ON (bl.mtrl = pending.mtrl AND bl.branch = pending.branch);
 
-    -- Update transfers in the branch limits table
-    -- FIX: Exclude internal transfers (branchFrom = branchTo) from necessity calculation
     UPDATE bl
     SET TransferQty = ISNULL(transfer.qty, 0)
     FROM #BranchLimits bl
     LEFT JOIN (
         SELECT mtrl, branchTo AS branch, SUM(qty) AS qty
         FROM #UnreceivedTransfers
-        WHERE branchFrom <> branchTo  -- FIX: Exclude internal transfers (2200->2200)
+        WHERE branchFrom <> branchTo
         GROUP BY mtrl, branchTo
     ) transfer ON (bl.mtrl = transfer.mtrl AND bl.branch = transfer.branch);    -- Calculate necessity values
     UPDATE #BranchLimits
@@ -194,7 +171,6 @@ BEGIN
                        THEN (MaxLimit - StockQty - PendingQty - TransferQty)
                        ELSE 0 END;
 
-    -- Create temp table for ABC analysis data
     CREATE TABLE #LatestAbcData (
         mtrl INT,
         branch SMALLINT,
@@ -202,7 +178,6 @@ BEGIN
         abc CHAR(1)
     );
 
-    -- Get the most recent ABC analysis for each branch
     INSERT INTO #LatestAbcData (mtrl, branch, salesperc, abc)
     SELECT 
         abc.MTRL,
@@ -224,12 +199,9 @@ BEGIN
     INNER JOIN CCCTOPABCSUMMARY s2 ON abc.CCCTOPABCSUMMARYID = s2.CCCTOPABCSUMMARYID 
                                    AND s2.DATACALCUL = latest.latest_date;
 
-    -- Create index for performance
     CREATE NONCLUSTERED INDEX IX_LatestAbcData_MTRL_BRANCH 
     ON #LatestAbcData(mtrl, branch);
 
-    -- Main query using WITH clause
-    -- Create a CTE for branch necessity calculations
     WITH BranchNecessities AS (
         SELECT 
             bl.mtrl,
