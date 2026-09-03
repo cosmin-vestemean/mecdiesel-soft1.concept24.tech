@@ -23,7 +23,7 @@
   - Distribuție clase `STANDARD`: AX=117, AY=40, AZ=20, BX=58, BY=56, BZ=23, CX=21, CY=72, CZ=93, NOU=3, OD=85 (total 588).
   - Integritate perfectă: 0 NULL_LIFECYCLE, 0 NULL_ABC, 0 NULL_XYZ, 0 NULL_CLASA, 0 FORCED_Z_MISMATCH, 0 NEGATIVE_VZ, 0 NULL_SIGMA.
   - Același pipeline ca Faza 2 (winsorizare p95 per SKU -> netting -> serie 52S cu zerouri -> 12 bucket-uri lunare), agregat pe `MTRGROUP` x `BRANCH` cu Pareto ABC concurent per filială.
-- Pasul 0 din Faza 3 este închis: eligibilitatea HQ nu mai depinde de `WHOUSE` din compania demo, în **toate cele trei** proceduri care construiesc `#ActiveBranches` (`Classify`, `Prepare`, `ClassifyGroup`). `Classify` este instalat și validat live (`modify_date=03.09.2026 15:37`), rulare completă read-only în 225s cu toate controalele de integritate la 0. `Prepare` și `ClassifyGroup` sunt corectate în cod, dar așteaptă `/JS/NewMinMax/setup` pentru a ajunge în producție.
+- Pasul 0 din Faza 3 este închis: eligibilitatea HQ nu mai depinde de `WHOUSE` din compania demo, în **toate cele trei** proceduri care construiesc `#ActiveBranches` (`Classify`, `Prepare`, `ClassifyGroup`). Deploy confirmat live pe toate trei (`modify_date = 03.09.2026 16:11:58`, identic; `CLASSIFY_HAS_OLD_RULE = PREPARE_HAS_OLD_RULE = GROUP_HAS_OLD_RULE = 0`). Invarianți post-deploy: `Prepare` → `713.650 = 50.975 × 14` SKU×filiale, `ClassifyGroup` → `588 = 42 × 14` grupe×filiale, toate controalele `NULL_*`/`INVALID_*`/`FORCED_Z_MISMATCH`/`NEGATIVE_VZ` la zero. Distribuția claselor pe `ClassifyGroup` este identică cu rularea dinaintea fix-ului — corecția nu schimbă rezultatul funcțional de azi, doar elimină dependența fragilă de compania demo.
 - **Numărul de rânduri nu este criteriu de acceptanță.** Fereastra vine din `MAX(TRNDATE)` pe date vii: în aceeași sesiune populația a crescut 50.968 → 50.969 SKU și 221.165 → 221.168 linii, cu `AZI` neschimbat. Se verifică invariante: `TOTAL_ROWS = DISTINCT_ITEMS × DISTINCT_BRANCHES`, `DISTINCT_BRANCHES = 14`, `HQ_ROWS = DISTINCT_ITEMS`, controale la zero.
 - D1-D3 pentru Compute sunt închise read-only pe producție:
   - `STOC_QTY`: `MTRFINDATA.QTY1`, confirmat identic cu soldul `MTRBALSHEET` la 8 zecimale pe 5 SKU.
@@ -66,7 +66,6 @@
 - New params in seed: `MOD_ATRIBUIRE_FILIALA=CLIENT`, `HQ_DIN_AGREGAT_COMPANIE=1`, `FLAGS_ZERO_LA_APPLY=1`, `SIGMA_MIN=1.3`, `CZ_CYCLE_ZERO=1`, `WINSOR_SUB_PRAG=MEDIANA`, `PRAG_REC_HQ=39`/`PRAG_REC_BR=26`.
 
 ## Open Questions
-- **De deployat:** `Prepare` și `ClassifyGroup` au regula HQ corectată în cod, dar producția încă rulează forma veche (verificat: `PREPARE_HAS_OLD_RULE=1`, `GROUP_HAS_OLD_RULE=1`). Până la `/JS/NewMinMax/setup`, Faza 2b stă pe depozitul companiei demo 1001.
 - **D2a (03.09.2026):** cele 25 de linii `ORD_FURN` de pe depozitul 8002 „BONURI VALORICE” (`FPRMS 4500`, factură fără stoc) nu au `CCCBRANCH`. De decis cu clientul dacă se exclud complet din `ORD_FURN` sau intră în totalul de companie.
 - **Pierdere de cerere pe filialele închise (03.09.2026):** 2300/2400/2600/2900 au 7,25 mil RON (5,7% din valoarea 52S) atribuiți în mod `CLIENT`, dar `#IncludedLines` face `INNER JOIN #ActiveBranches` → dispar din **ambele** agregate, inclusiv din cel de companie care conduce achiziția de la furnizori. De decis: reatribuire către filiala care servește azi, sau măcar includere în agregatul de companie.
 - Faza 2b: formula exactă de agregare ABC pe grupă rămâne de confirmat cu clientul (§3.3.1, item deschis). Implementarea curentă partiționează cumulativul pe `BRANCH`, cu ordonare secundară deterministă pe `MTRGROUP_CODE`.
@@ -81,5 +80,4 @@
 - Cross-mode count comparison for `DOC` / `AGENT` / `CLIENT` is still pending: production parameter changes are blocked while project `S1_WRITE_MODE=off`. The active `CLIENT` mode is fully validated read-only.
 
 ## Next Step
-- Rulează `/JS/NewMinMax/setup` ca `Prepare` și `ClassifyGroup` să primească regula HQ corectată, apoi confirmă cu `PREPARE_HAS_OLD_RULE=0` / `GROUP_HAS_OLD_RULE=0`.
-- Faza 3 este **proiectată**, Pasul 0 și D1-D3 sunt închise — vezi `new_min_max/FAZA3_HANDOFF.md`. Urmează implementarea multi-fișier a `sp_MinMaxEngine_Compute` pe agentul **Implement (Sonnet)**, păstrând D4/D5/D2a ca decizii deschise la client.
+- Faza 3 este **proiectată**, Pasul 0 și D1-D3 sunt închise, deployul HQ e confirmat live pe toate cele trei proceduri — vezi `new_min_max/FAZA3_HANDOFF.md`. Urmează implementarea multi-fișier a `sp_MinMaxEngine_Compute` pe agentul **Implement (Sonnet)**, păstrând D4/D5/D2a ca decizii deschise la client.

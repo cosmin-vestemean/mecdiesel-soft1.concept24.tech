@@ -86,7 +86,19 @@ WHERE b.INCLUS = 1
     );
 ```
 
-Regula este acum identică în **toate cele trei** proceduri care construiesc `#ActiveBranches`: `Classify`, `Prepare`, `ClassifyGroup`. `Classify` este validat live; `Prepare` și `ClassifyGroup` necesită `/JS/NewMinMax/setup` pentru a ajunge în producție.
+Regula este acum identică în **toate cele trei** proceduri care construiesc `#ActiveBranches`: `Classify`, `Prepare`, `ClassifyGroup`. Toate trei sunt validate live (`modify_date = 03.09.2026 16:11:58`, identic pe toate); `CLASSIFY_HAS_OLD_RULE = PREPARE_HAS_OLD_RULE = GROUP_HAS_OLD_RULE = 0`.
+
+Invarianții după deploy, confirmați pe `@Company = 1000, @SummaryOnly = 1`:
+
+| Procedură | Invariant | Rezultat |
+|---|---|---|
+| `Prepare` | `RESULT_ROWS = DISTINCT_ITEMS × DISTINCT_BRANCHES` | `713.650 = 50.975 × 14` |
+| `Prepare` | `HQ_ROWS = DISTINCT_ITEMS`, `DISTINCT_BRANCHES = 14` | confirmat |
+| `Prepare` | `NULL_SIGMA` / `NULL_MIN_DOC` / `INVALID_WINDOW` / `INVALID_WEEK` / `INVALID_LAST_SALE` | toate `0` |
+| `ClassifyGroup` | `TOTAL_ROWS = DISTINCT_GROUPS × DISTINCT_BRANCHES` | `588 = 42 × 14` |
+| `ClassifyGroup` | `NULL_LIFECYCLE` / `NULL_ABC` / `NULL_XYZ` / `NULL_CLASA` / `FORCED_Z_MISMATCH` / `NEGATIVE_VZ` / `NULL_SIGMA` | toate `0` |
+
+Distribuția claselor pe `ClassifyGroup` (`AX=117, AY=40, AZ=20, BX=58, BY=56, BZ=23, CX=21, CY=72, CZ=93, NOU=3, OD=85`) este identică cu rularea validată înaintea fix-ului — corecția elimină o dependență fragilă de compania demo, nu schimbă rezultatul funcțional de azi.
 
 > ⚠️ **Numărul de rânduri nu este un criteriu de acceptanță.** Fereastra se derivă din `MAX(TRNDATE)` pe date vii, deci populația crește în cursul zilei — măsurat în aceeași sesiune: 50.968 → 50.969 SKU, 221.165 → 221.168 linii, cu `AZI` neschimbat. Verifică **invariante**, nu cifre: `TOTAL_ROWS = DISTINCT_ITEMS × DISTINCT_BRANCHES`, `DISTINCT_BRANCHES = 14`, `HQ_ROWS = DISTINCT_ITEMS`, și toate controalele `NULL_*` / `UNMATCHED_COV` / `FORCED_Z_MISMATCH` / `NEGATIVE_AVG` la zero.
 
