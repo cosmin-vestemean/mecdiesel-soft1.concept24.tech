@@ -38,9 +38,13 @@ Verificări rulate direct pe ERP-ul de producție (`DUBHE ROMANIA SRL`, company 
 
 Chiar dacă cererea istorică a VOLUNTARI (1.161 linii) și RM. VÂLCEA (1.611 linii) ar fi motiv de includere, **nu există depozit activ** în care să se dimensioneze stoc — cererea lor a fost onorată prin cross-shipping sau înainte de închidere. `INCLUS = 0` nu mai e un default precaut, ci starea de fapt.
 
-> **Sursa de adevăr pentru motor:** lista filialelor se obține din `WHOUSE.ISACTIVE = 1 AND CCCBRANCH IS NOT NULL` (company 1000), **nu** din `BRANCH.ISACTIVE = 1`. Prima dă exact cele 13 filiale + HQ pe care le calculează engine-ul Python; a doua dă 18, din care 4 sunt moarte. Diferența de 4 nu era o decizie de business, ci o inconsecvență de date între `BRANCH` și `WHOUSE`.
+> **Sursa de adevăr pentru motor:** lista filialelor **fizice** se obține din `WHOUSE.ISACTIVE = 1 AND CCCBRANCH IS NOT NULL AND WHOUSE.COMPANY = 1000`, **nu** din `BRANCH.ISACTIVE = 1`. Prima dă exact cele 13 filiale pe care le calculează engine-ul Python; a doua dă 18, din care 4 sunt moarte. Diferența de 4 nu era o decizie de business, ci o inconsecvență de date între `BRANCH` și `WHOUSE`. Rândul HQ (1000) se adaugă **separat**, ca rând virtual — nu trece prin acest filtru.
 
-> **Notă HQ:** `WHOUSE` 1000 „HQ" (company 1000) este și el inactiv; depozitul real al HQ este `WHOUSE` 1000 „Depozit Central" (company **1001**, `ISACTIVE = 1`). La scrierea în ERP, HQ folosește acest `WHOUSE` — vezi `applyToErp`, Faza 3.
+> **Notă HQ — corectat 03.09.2026, verificat pe producție:** „HQ" (branch 1000) **nu este o locație fizică**. `WHOUSE` 1000 „HQ" (company 1000) are `ISACTIVE = 0`, 26 SKU cu stoc total 0, 163 linii de vânzare în 52S (0,17% din valoare) și **zero poziții în `MTRBRNLIMITS`**. Rândul HQ din motor este **stratul de companie**, persistat în `MTRL` (`REMAINLIMMIN`/`REMAINLIMMAX` manual, `CCCMINAUTOCOMP`/`CCCMAXAUTOCOMP` auto), iar materializarea lui fizică este depozitul central **București 2200** (50% din stocul național, 113.534 SKU, 10.367 poziții `MTRBRNLIMITS` — de 5× următoarea filială). Regula „podea București" este exact puntea dintre cele două straturi.
+>
+> **Afirmație anterioară invalidată:** compania **1001** nu este a MEC — este `Demo S.R.L.`, `ISACTIVE = 0`, 0 articole, cu depozite `Magazin 1/2`, `Restaurant Baneasa`, `Restaurant Afi Cotroceni`. `WHOUSE` 1000 „Depozit Central" de acolo este un artefact al bazei demo SoftOne. La `applyToErp`, HQ **nu** folosește niciun `WHOUSE` și **nu** primește rânduri în `MTRBRNLIMITS`; se scrie exclusiv în `MTRL`.
+>
+> **Bug latent rezultat:** clauza `(w.COMPANY = @Company OR b.ESTE_HQ = 1)` din `sp_MinMaxEngine_Classify` §3 face ca filiala 1000 să treacă filtrul `EXISTS` **doar** datorită depozitului activ din compania demo. Eligibilitatea HQ trebuie să nu depindă deloc de `WHOUSE`.
 
 > **Atenție la `sp_GetMtrlsDat`:** dacă filtrează pe `BRANCH.ISACTIVE`, Branch Replenishment expune și cele 4 locații moarte în UI. De verificat la Faza 6 — nu e blocant pentru v5.
 

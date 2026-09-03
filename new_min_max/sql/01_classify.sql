@@ -6,11 +6,16 @@
 CREATE OR ALTER PROCEDURE dbo.sp_MinMaxEngine_Classify
     @Company SMALLINT,
     @Mtrl INT = NULL,
-    @SummaryOnly BIT = 0
+    @SummaryOnly BIT = 0,
+    @Persist BIT = 0,
+    @RunId INT = NULL OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
+
+    DECLARE @StartedAt DATETIME = GETDATE();
+    DECLARE @ParamsJson NVARCHAR(MAX);
 
     -- ---------------------------------------------------------------
     -- 1. Citire parametri din CCCMINMAXPARAMS
@@ -516,7 +521,107 @@ BEGIN
         ON cov.CLASA = xc.CLASA AND cov.MARIME = xc.MARIME;
 
     -- ---------------------------------------------------------------
-    -- 13. Output rezultate sau sumare de validare
+    -- 13. Persistenta rularii in CCCMINMAXRUN + CCCMINMAXDET
+    -- ---------------------------------------------------------------
+    IF @Persist = 1
+    BEGIN
+        SET @ParamsJson =
+            N'{"NRSAPT":' + CONVERT(NVARCHAR(32), @NrSaptamani) +
+            N',"WINSOR_PCT":' + CONVERT(NVARCHAR(32), CONVERT(DECIMAL(10, 4), @WinsorPct)) +
+            N',"WINSOR_MIN_LINII":' + CONVERT(NVARCHAR(32), @WinsorMinLinii) +
+            N',"WINSOR_SUB_PRAG":"' + @WinsorSubPrag + N'"' +
+            N',"SIGMA_MIN":' + CONVERT(NVARCHAR(32), @SigmaMin) +
+            N',"HQ_DIN_AGREGAT_COMPANIE":' + CONVERT(NVARCHAR(32), CONVERT(TINYINT, @HqDinAgregatCompanie)) +
+            N',"PRAG_REC_HQ":' + CONVERT(NVARCHAR(32), @PragRecHq) +
+            N',"PRAG_REC_BR":' + CONVERT(NVARCHAR(32), @PragRecBr) +
+            N',"SL_A":' + CONVERT(NVARCHAR(32), @SlA) +
+            N',"SL_B":' + CONVERT(NVARCHAR(32), @SlB) +
+            N',"SL_C":' + CONVERT(NVARCHAR(32), @SlC) +
+            N',"SSF":' + CONVERT(NVARCHAR(32), @SsfGlobal) +
+            N',"LT_ZILE":' + CONVERT(NVARCHAR(32), @LtZileGlobal) +
+            N',"FRECVENTA_ZILE":' + CONVERT(NVARCHAR(32), @FrecventaZileGlobal) +
+            N'}';
+
+        IF @RunId IS NULL
+        BEGIN
+            INSERT INTO CCCMINMAXRUN (COMPANY, AZI, FAZA, STATUS, MTRL, PARAMSJSON, STARTEDAT)
+            VALUES (@Company, @Azi, 'CLASSIFY', 'RUNNING', @Mtrl, @ParamsJson, @StartedAt);
+
+            SET @RunId = CONVERT(INT, SCOPE_IDENTITY());
+        END
+        ELSE
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM CCCMINMAXRUN WHERE RUNID = @RunId)
+                THROW 50004, 'sp_MinMaxEngine_Classify: the requested RUNID does not exist.', 1;
+
+            DELETE FROM CCCMINMAXDET WHERE RUNID = @RunId;
+
+            UPDATE CCCMINMAXRUN
+            SET COMPANY = @Company,
+                AZI = @Azi,
+                FAZA = 'CLASSIFY',
+                STATUS = 'RUNNING',
+                MTRL = @Mtrl,
+                PARAMSJSON = @ParamsJson,
+                STARTEDAT = @StartedAt,
+                FINISHEDAT = NULL,
+                DURATA_SEC = NULL,
+                NR_RANDURI = NULL,
+                ERRORMSG = NULL
+            WHERE RUNID = @RunId;
+        END;
+
+        BEGIN TRY
+            INSERT INTO CCCMINMAXDET (
+                RUNID, COMPANY, AZI, BRANCH, MARIME, ESTE_HQ, ESTE_PODEA,
+                MTRL, MTRSUP, CODE, MTRL_NAME,
+                MTRGROUP, MTRGROUP_CODE, MTRGROUP_NAME,
+                VZ_4S, VZ_13S, VZ_26S, VZ_52S, VAL_52S,
+                SAPT_VZ, SAPT_8S, SAPT_FARA, ULT_VANZ, MIN_DOC, SIGMA_WK,
+                LUNI_VZ, MAX_LUNA_QTY, MEAN_MTH, SIGMA_MTH, CV, IS_FORCED_Z,
+                LIFECYCLE, ABC, XYZ, CLASA, COV_TGT, SL, SSF, LT_ZILE, FRECVENTA_ZILE,
+                [AVG], ad, PREV_CUMULATIVE_PCT, CUMULATIVE_PCT, GRP_TOTAL_VAL, GRP_ITEM_COUNT,
+                WARN_GRUPA_MICA
+            )
+            SELECT
+                @RunId, COMPANY, AZI, BRANCH, MARIME, ESTE_HQ, ESTE_PODEA,
+                MTRL, MTRSUP, CODE, MTRL_NAME,
+                MTRGROUP, MTRGROUP_CODE, MTRGROUP_NAME,
+                VZ_4S, VZ_13S, VZ_26S, VZ_52S, VAL_52S,
+                SAPT_VZ, SAPT_8S, SAPT_FARA, ULT_VANZ, MIN_DOC, SIGMA_WK,
+                LUNI_VZ, MAX_LUNA_QTY, MEAN_MTH, SIGMA_MTH, CV, IS_FORCED_Z,
+                LIFECYCLE, ABC, XYZ, CLASA, COV_TGT, SL, SSF, LT_ZILE, FRECVENTA_ZILE,
+                [AVG], ad, PREV_CUMULATIVE_PCT, CUMULATIVE_PCT, GRP_TOTAL_VAL, GRP_ITEM_COUNT,
+                WARN_GRUPA_MICA
+            FROM #MinMaxClassified;
+
+            UPDATE CCCMINMAXRUN
+            SET STATUS = 'DONE',
+                FINISHEDAT = GETDATE(),
+                DURATA_SEC = DATEDIFF(SECOND, @StartedAt, GETDATE()),
+                NR_RANDURI = (SELECT COUNT(*) FROM CCCMINMAXDET WHERE RUNID = @RunId)
+            WHERE RUNID = @RunId;
+        END TRY
+        BEGIN CATCH
+            -- XACT_ABORT poate lasa tranzactia apelantului condamnata; atunci antetul nu mai poate fi marcat.
+            IF XACT_STATE() <> -1
+                UPDATE CCCMINMAXRUN
+                SET STATUS = 'ERROR',
+                    FINISHEDAT = GETDATE(),
+                    DURATA_SEC = DATEDIFF(SECOND, @StartedAt, GETDATE()),
+                    ERRORMSG = LEFT(ERROR_MESSAGE(), 500)
+                WHERE RUNID = @RunId;
+
+            THROW;
+        END CATCH;
+
+        SELECT RUNID, COMPANY, AZI, FAZA, STATUS, MTRL, NR_RANDURI, DURATA_SEC, STARTEDAT, FINISHEDAT
+        FROM CCCMINMAXRUN
+        WHERE RUNID = @RunId;
+    END;
+
+    -- ---------------------------------------------------------------
+    -- 14. Output rezultate sau sumare de validare
     -- ---------------------------------------------------------------
     IF @SummaryOnly = 1
     BEGIN
@@ -572,6 +677,10 @@ BEGIN
 
         RETURN;
     END;
+
+    -- Randurile sunt deja in CCCMINMAXDET; nu se mai streameaza setul complet.
+    IF @Persist = 1
+        RETURN;
 
     -- Returnare dataset clasificat complet
     SELECT

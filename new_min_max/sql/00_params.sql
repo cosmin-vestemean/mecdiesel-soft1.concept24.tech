@@ -88,7 +88,7 @@ CREATE INDEX IX_CCCMINMAXTEMPLATE_PREFIX ON CCCMINMAXTEMPLATE(PREFIX);
         -- Pre-procesare
         ('WINSOR_PCT',             '0.95',            'NUM',  'GLOBAL', '', 'Percentila de winsorizare, aplicata per linie de vanzare'),
         ('WINSOR_MIN_LINII',       '8',               'NUM',  'GLOBAL', '', 'Prag de linii peste care se aplica winsorizarea p95'),
-        ('WINSOR_SUB_PRAG',        'MEDIANA',         'STR',  'GLOBAL', '', 'Tratament SKU sub prag: NONE (spec) sau MEDIANA (plafon secundar) — E2'),
+        ('WINSOR_SUB_PRAG',        'MEDIANA',         'STR',  'GLOBAL', '', 'Tratament SKU sub prag: NONE (spec) sau MEDIANA (plafon secundar) - E2'),
         ('NRSAPT',                 '52',              'NUM',  'GLOBAL', '', 'Fereastra de analiza, in saptamani'),
 
         -- Eligibilitate
@@ -103,17 +103,17 @@ CREATE INDEX IX_CCCMINMAXTEMPLATE_PREFIX ON CCCMINMAXTEMPLATE(PREFIX);
         ('CZ_CYCLE_ZERO',          '1',               'BOOL', 'GLOBAL', '', 'Clasa CZ are cycle = 0 strict, fara termenul ad x FRECVENTA (E7)'),
 
         -- Perimetru de date
-        ('EXCLUDERI_CLIENTI',      'C.000003,MECDIS', 'LIST', 'GLOBAL', '', 'Coduri TRDR.CODE excluse (NU id-uri TRDR — codurile nu sunt unice). MECDI2 si INTE79 raman incluse'),
+        ('EXCLUDERI_CLIENTI',      'C.000003,MECDIS', 'LIST', 'GLOBAL', '', 'Coduri TRDR.CODE excluse (NU id-uri TRDR - codurile nu sunt unice). MECDI2 si INTE79 raman incluse'),
         ('EXCLUDERI_PREFIXE',      'DISC.,OTHER.',    'LIST', 'GLOBAL', '', 'Prefixe de cod articol excluse din calcul'),
-        ('MOD_ATRIBUIRE_FILIALA',  'CLIENT',          'STR',  'GLOBAL', '', 'DOC (FINDOC.BRANCH) / AGENT (PRSN.BRANCH) / CLIENT (TRDBRANCH.BRANCH) — I7, de confirmat'),
+        ('MOD_ATRIBUIRE_FILIALA',  'CLIENT',          'STR',  'GLOBAL', '', 'DOC (FINDOC.BRANCH) / AGENT (PRSN.BRANCH) / CLIENT (TRDBRANCH.BRANCH) - I7, de confirmat'),
         ('HQ_DIN_AGREGAT_COMPANIE','1',               'BOOL', 'GLOBAL', '', 'HQ se dimensioneaza pe vanzarile insumate ale filialelor; HQ nu are cerere proprie (I6)'),
 
         -- Scriere in ERP
         ('FLAGS_ZERO_LA_APPLY',    '1',               'BOOL', 'GLOBAL', '', 'Articolele cu LICHIDARE/BLOCAT/EXCLUDE se scriu cu MIN=MAX=0; in raport raman valorile calculate (E15)'),
 
         -- Fallback per prefix cod articol; randurile SCOPE='PREFIX' se adauga din UI
-        ('LT_ZILE',                '30',              'NUM',  'GLOBAL', '', 'FALLBACK lead time (zile). De suprascris per prefix cod articol — valoare de confirmat cu clientul'),
-        ('FRECVENTA_ZILE',         '14',              'NUM',  'GLOBAL', '', 'FALLBACK frecventa de comanda (zile). De suprascris per prefix cod articol — valoare de confirmat cu clientul')
+        ('LT_ZILE',                '30',              'NUM',  'GLOBAL', '', 'FALLBACK lead time (zile). De suprascris per prefix cod articol - valoare de confirmat cu clientul'),
+        ('FRECVENTA_ZILE',         '14',              'NUM',  'GLOBAL', '', 'FALLBACK frecventa de comanda (zile). De suprascris per prefix cod articol - valoare de confirmat cu clientul')
     ) v (PARAMKEY, PARAMVALUE, PARAMTYPE, SCOPE, SCOPEKEY, DESCRIERE)
 )
 INSERT INTO CCCMINMAXPARAMS (PARAMKEY, PARAMVALUE, PARAMTYPE, SCOPE, SCOPEKEY, DESCRIERE)
@@ -185,13 +185,13 @@ WHERE NOT EXISTS (SELECT 1 FROM CCCMINMAXCOV c WHERE c.CLASA = 'OD' AND c.MARIME
         (1900, 'MIC',  1, 0, 0),  -- ORADEA
         (2000, 'MIC',  1, 0, 0),  -- PITESTI
         (2100, 'MIC',  1, 0, 0),  -- BRASOV
-        (2200, 'MARE', 1, 0, 1),  -- BUCURESTI — tinta regulii de podea
-        (2300, 'MIC',  0, 0, 0),  -- ARAD — WHOUSE inchis
-        (2400, 'MIC',  0, 0, 0),  -- VOLUNTARI — WHOUSE inchis
-        (2600, 'MIC',  0, 0, 0),  -- MIHAILESTI — WHOUSE inchis
+        (2200, 'MARE', 1, 0, 1),  -- BUCURESTI - tinta regulii de podea
+        (2300, 'MIC',  0, 0, 0),  -- ARAD - WHOUSE inchis
+        (2400, 'MIC',  0, 0, 0),  -- VOLUNTARI - WHOUSE inchis
+        (2600, 'MIC',  0, 0, 0),  -- MIHAILESTI - WHOUSE inchis
         (2700, 'MIC',  1, 0, 0),  -- TG. MURES
         (2800, 'MARE', 1, 0, 0),  -- TIMISOARA
-        (2900, 'MIC',  0, 0, 0)   -- RAMNICU VALCEA — WHOUSE inchis
+        (2900, 'MIC',  0, 0, 0)   -- RAMNICU VALCEA - WHOUSE inchis
     ) v (BRANCH, MARIME, INCLUS, ESTE_HQ, ESTE_PODEA)
 )
 INSERT INTO CCCMINMAXBRANCH (BRANCH, MARIME, INCLUS, ESTE_HQ, ESTE_PODEA)

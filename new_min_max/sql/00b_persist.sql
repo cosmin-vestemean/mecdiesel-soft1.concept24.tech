@@ -1,0 +1,108 @@
+-- MIN/MAX Engine v5 HYBRID — tabele de persistenta a rularilor
+-- Ruleaza in baza S1 (DUBHE ROMANIA SRL, company 1000).
+-- Idempotent: DDL cu IF NOT EXISTS. Instalat din /JS/NewMinMax/setup.
+-- Referinta: new_min_max/PLAN_IMPLEMENTARE.md sectiunea 4.
+
+--=====================================================================
+-- 1. CCCMINMAXRUN — antet rulare, versionat (rularile NU se suprascriu)
+--=====================================================================
+
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='CCCMINMAXRUN' AND xtype='U')
+CREATE TABLE CCCMINMAXRUN (
+    RUNID INT NOT NULL IDENTITY(1,1) PRIMARY KEY,
+    COMPANY SMALLINT NOT NULL,
+    AZI DATE NULL,
+    FAZA VARCHAR(20) NOT NULL DEFAULT 'CLASSIFY',
+    STATUS VARCHAR(10) NOT NULL DEFAULT 'RUNNING',
+    MTRL INT NULL,
+    NR_RANDURI INT NULL,
+    DURATA_SEC INT NULL,
+    PARAMSJSON NVARCHAR(MAX) NULL,
+    ERRORMSG NVARCHAR(500) NULL,
+    STARTEDAT DATETIME NOT NULL DEFAULT GETDATE(),
+    FINISHEDAT DATETIME NULL,
+    CREATEDBY INT NULL
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='IX_CCCMINMAXRUN_COMPANY_STARTED')
+CREATE INDEX IX_CCCMINMAXRUN_COMPANY_STARTED ON CCCMINMAXRUN(COMPANY, STARTEDAT DESC);
+
+--=====================================================================
+-- 2. CCCMINMAXDET — rezultat per SKU x filiala, atasat unui RUNID
+--    Coloanele de clasificare sunt scrise de sp_MinMaxEngine_Classify.
+--    Faza 3 (sp_MinMaxEngine_Compute) adauga propriile coloane de calcul.
+--=====================================================================
+
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='CCCMINMAXDET' AND xtype='U')
+CREATE TABLE CCCMINMAXDET (
+    RUNID INT NOT NULL,
+    COMPANY SMALLINT NOT NULL,
+    AZI DATE NOT NULL,
+    BRANCH SMALLINT NOT NULL,
+    MARIME VARCHAR(6) NULL,
+    ESTE_HQ BIT NOT NULL,
+    ESTE_PODEA BIT NOT NULL,
+    MTRL INT NOT NULL,
+    MTRSUP INT NULL,
+    CODE VARCHAR(50) NULL,
+    MTRL_NAME VARCHAR(128) NULL,
+    MTRGROUP INT NULL,
+    MTRGROUP_CODE VARCHAR(10) NULL,
+    MTRGROUP_NAME VARCHAR(50) NULL,
+    VZ_4S DECIMAL(28, 8) NULL,
+    VZ_13S DECIMAL(28, 8) NULL,
+    VZ_26S DECIMAL(28, 8) NULL,
+    VZ_52S DECIMAL(28, 8) NULL,
+    VAL_52S DECIMAL(28, 8) NULL,
+    SAPT_VZ INT NULL,
+    SAPT_8S INT NULL,
+    SAPT_FARA INT NULL,
+    ULT_VANZ DATETIME NULL,
+    MIN_DOC DECIMAL(28, 8) NULL,
+    SIGMA_WK DECIMAL(28, 8) NULL,
+    LUNI_VZ INT NULL,
+    MAX_LUNA_QTY DECIMAL(28, 8) NULL,
+    MEAN_MTH DECIMAL(28, 8) NULL,
+    SIGMA_MTH DECIMAL(28, 8) NULL,
+    CV DECIMAL(28, 8) NULL,
+    IS_FORCED_Z BIT NULL,
+    LIFECYCLE VARCHAR(10) NULL,
+    ABC VARCHAR(1) NULL,
+    XYZ VARCHAR(1) NULL,
+    CLASA VARCHAR(3) NULL,
+    COV_TGT DECIMAL(10, 4) NULL,
+    SL DECIMAL(10, 4) NULL,
+    SSF DECIMAL(10, 4) NULL,
+    LT_ZILE INT NULL,
+    FRECVENTA_ZILE INT NULL,
+    [AVG] DECIMAL(28, 8) NULL,
+    ad DECIMAL(28, 8) NULL,
+    PREV_CUMULATIVE_PCT DECIMAL(28, 8) NULL,
+    CUMULATIVE_PCT DECIMAL(28, 8) NULL,
+    GRP_TOTAL_VAL DECIMAL(28, 8) NULL,
+    GRP_ITEM_COUNT INT NULL,
+    WARN_GRUPA_MICA BIT NULL,
+    CONSTRAINT PK_CCCMINMAXDET PRIMARY KEY CLUSTERED (RUNID, BRANCH, MTRL)
+);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='IX_CCCMINMAXDET_RUN_MTRL')
+CREATE INDEX IX_CCCMINMAXDET_RUN_MTRL ON CCCMINMAXDET(RUNID, MTRL);
+
+--=====================================================================
+-- 3. Aliniere coloane pentru instalari existente
+--    Sectiunea 2 e IF NOT EXISTS, deci un tabel deja creat nu isi schimba
+--    singur tipurile. Fiecare ALTER e no-op cand tipul este deja corect.
+--    Aici se adauga si coloanele fazelor urmatoare (Faza 3 = calcul).
+--=====================================================================
+
+IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_NAME='CCCMINMAXDET' AND COLUMN_NAME='MTRL_NAME' AND DATA_TYPE <> 'varchar')
+ALTER TABLE CCCMINMAXDET ALTER COLUMN MTRL_NAME VARCHAR(128) NULL;
+
+IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_NAME='CCCMINMAXDET' AND COLUMN_NAME='MTRGROUP_CODE' AND DATA_TYPE <> 'varchar')
+ALTER TABLE CCCMINMAXDET ALTER COLUMN MTRGROUP_CODE VARCHAR(10) NULL;
+
+IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_NAME='CCCMINMAXDET' AND COLUMN_NAME='MTRGROUP_NAME' AND DATA_TYPE <> 'varchar')
+ALTER TABLE CCCMINMAXDET ALTER COLUMN MTRGROUP_NAME VARCHAR(50) NULL;
