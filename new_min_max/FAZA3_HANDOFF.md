@@ -125,16 +125,7 @@ Mecanismul, nu doar rezultatul: raportul `CPU/Elapsed ≈ 1` arată că funcția
 
 **Proporție:** ambele variante costă secunde pentru doar ~4.500 de rânduri rezultat, fiindcă dominant este *găsirea* lor (3,79 mil. linii de achiziție doar pe compania 1000), nu evaluarea expresiei. Față de cele 225 s ale `Classify`, câștigul este de ordinul a 3% — real și gratuit, dar nu el decide performanța Fazei 3.
 
-**Precondiție care trebuie păzită.** Funcția nu este un simplu calcul aritmetic:
-
-```sql
-case when soanal is not null then dbo.fnSOAnalQty1(soanal, -1, -1, -1, 1)
-     else (IsNull(qty1,0)-IsNull(qty1cov,0)-IsNull(qty1canc,0)) end
-```
-
-Expresia directă este echivalentă **doar când `SOANAL IS NULL`**. Verificat: `SOANAL` este NULL pe toate cele 3.795.332 de linii de achiziție și, de fapt, nicio linie `MTRLINES` din compania 1000 nu are `SOANAL` — analiza pe mărimi/culori nu e folosită în această instalare. Echivalența este deci structurală azi, dar **dependentă de date**.
-
-→ `Compute` adaugă `WARN_SOANAL` (număr de rânduri cu `SOANAL IS NOT NULL` în populația `ORD_FURN`). Un `CASE` care apelează funcția doar pe ramura analitică **nu** ajută: simpla referire la UDF în expresie reintroduce planul serial. Garda trebuie să fie un contor care semnalează, nu o ramură care recalculează.
+**De ce e sigură substituția.** Funcția are și o ramură analitică (`case when soanal is not null then dbo.fnSOAnalQty1(...)`), deci expresia directă o înlocuiește exact doar când `SOANAL IS NULL`. Verificat: `SOANAL` este NULL pe toate cele 3.795.332 de linii de achiziție — analiza pe mărimi/culori nu e folosită în această instalare, deci ramura e cod mort.
 
 **Nivelul companie (rândul HQ) nu are depozit**, deci:
 
@@ -315,7 +306,7 @@ COMPUTE_PARAMSJSON NVARCHAR(MAX) NULL, COMPUTE_ERRORMSG NVARCHAR(500) NULL
 | Intermediari | `SAFETY`, `LT_STOCK`, `SLTS`, `BUF`, `CYCLE`, `MAX_RAW`, `MAX_INF`, `CAP6`, `VZ26_CAP`, `SUM_BR_MAX` |
 | Rezultat | `ENG_MIN`, `ENG_MAX`, `BUY_RAW`, `BUY_QTY`, `HQ_CAP_APLICAT`, `PODEA_APLICATA` |
 | Raportare | `ACOP_CUR`, `FLAG_RATIO`, `FLAG_TXT`, `TREND_PCT`, `STATUS_TREND`, `DISC_FLAG` |
-| Warnings | `WARN_VZ26_ZERO`, `WARN_STOC_NEG`, `WARN_STOC_MORT`, `WARN_SOANAL` |
+| Warnings | `WARN_VZ26_ZERO`, `WARN_STOC_NEG`, `WARN_STOC_MORT` |
 
 Tipuri: cantități și rapoarte `DECIMAL(28,8)`; bit-uri `BIT`; text `VARCHAR(n)` explicit (nu `NVARCHAR` — restul tabelului e `VARCHAR`).
 
