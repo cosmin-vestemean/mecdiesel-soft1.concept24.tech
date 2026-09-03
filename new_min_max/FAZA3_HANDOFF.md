@@ -99,7 +99,7 @@ D1-D3 au fost închise read-only pe producție la 03.09.2026. D4-D5 rămân de c
 | # | Întrebare | Opțiuni | Recomandare |
 |---|---|---|---|
 | **D1 — închis** | Sursa `STOC_QTY` | `MTRFINDATA.QTY1` per `WHOUSE` | Confirmat pe 5 SKU din București: identic la 8 zecimale cu `MTRBALSHEET SUM(IMPQTY1−EXPQTY1)`. Este și tiparul din `NecesarAchizitie.js` / `sp_GetMtrlsData`. |
-| **D2 — închis** | `ORD_FURN` | `MTRLINES`, strict `SOSOURCE=1251`, `PENDING=1`, `RESTCATEG=1`, document neanulat; cantitate `QTY1−QTY1COV−QTY1CANC`; filială `WHOUSE.CCCBRANCH` | Expresia directă este identică cu `FNSOGETLINEPEND` pe toate cele 4.535 linii (46.716,51 buc) și evită apelul scalar. `RESTCATEG=1` fără `SOSOURCE=1251` include greșit și 325 linii de vânzare. Premisa „SALESMAN=0” era falsă: 1.886 linii ar fi atribuite altei filiale după reprezentant. Depozitul destinație rămâne sursa filialei. |
+| **D2 — închis** | `ORD_FURN` | `MTRLINES`, strict `SOSOURCE=1251`, `PENDING=1`, `RESTCATEG=1`, document neanulat; cantitate `QTY1−QTY1COV−QTY1CANC`; filială `WHOUSE.CCCBRANCH` | Expresia directă este identică cu `FNSOGETLINEPEND` (0 linii diferite, verificat în aceeași instrucțiune) și **măsurat ~4,3–5× mai rapidă** — vezi §2.1. `RESTCATEG=1` fără `SOSOURCE=1251` include greșit și 325 linii de vânzare. Premisa „SALESMAN=0” era falsă: 1.886 linii ar fi atribuite altei filiale după reprezentant. Depozitul destinație rămâne sursa filialei. |
 | **D3 — închis** | `LAST_RECEIPT` | `MAX(MTRTRN.TRNDATE)` per `(COMPANY,MTRL)`, cu `MTRTRN.SOSOURCE=1251` și `TPRMS.FLG01=1` | `FLG01=1` identifică intrarea fizică în stoc (`NIR (QV)`, FPRMS 4260) și exclude comanda, lista de recepție și facturile „fără stoc”. Dacă lipsește: `LAST_RECEIPT=NULL`, `DISC_FLAG=NULL`, nu `0`. |
 | **D4** | Sentinela `VZ26_CAP = 9999` | valoare fixă moștenită din motorul Python | Devine parametru `VZ26_CAP_SENTINEL` (default `9999`, păstrează paritatea). Ca valoare fixă **capează real** orice SKU cu `MAX_inf > 9999` — plafon accidental. |
 | **D5** | Normalizarea `TREND` | $2\,VZ_{13S}/VZ_{26S}-1$ vs. $VZ_{13S}/(VZ_{26S}-VZ_{13S})-1$ | Prima. Pragurile ±10% / −30% nu sunt invariante la alegere — de confirmat cu clientul. |
@@ -107,6 +107,34 @@ D1-D3 au fost închise read-only pe producție la 03.09.2026. D4-D5 rămân de c
 D4–D5 se ridică la client.
 
 Note D2: cele 25 de linii fără `CCCBRANCH` sunt pe depozitul 8002 „BONURI VALORICE”, pe `FPRMS 4500 — Factură internă (fără stoc)`. **Decizie deschisă (D2a):** un depozit de bonuri valorice nu reprezintă marfă pe drum, deci probabil trebuie exclus complet din `ORD_FURN`, nu inclus în totalul de companie. De confirmat cu clientul înainte de a fixa comportamentul. Comenzile către filiale neincluse intră în totalul companiei, conform contractului HQ de mai jos.
+
+### 2.1 De ce expresia directă, și de ce nu e gratis (măsurat 03.09.2026)
+
+Serverul este **SQL Server 2016 SP3 (13.0.6300.2), compat level 130**. Inlining-ul de funcții scalare (Froid) apare abia în 2019 / compat 150 — deci `FNSOGETLINEPEND` se execută **o dată pe rând**, iar fiecare apel face un `SELECT` înapoi în `MTRLINES` după `(FINDOC, MTRLINES)`, pe rânduri pe care interogarea le are deja în mână.
+
+Același set de rânduri, două rulări independente, metrici din `sys.dm_exec_query_stats`:
+
+| Variantă | Elapsed | CPU | CPU/Elapsed | Logical reads |
+|---|---|---|---|---|
+| `FNSOGETLINEPEND` | 8,82 s | 8,75 s | **0,99 → plan serial** | 114.548 |
+| expresie directă | 2,07 s | 12,20 s | **5,90 → plan paralel** | 4.051.015 |
+
+Mecanismul, nu doar rezultatul: raportul `CPU/Elapsed ≈ 1` arată că funcția scalară **forțează planul serial** (comportament standard pe SQL Server ≤ 2017); expresia directă lasă optimizatorul să paralelizeze și consumă mai mult CPU total, dar se termină de ~4,3–5× mai repede.
+
+> Cele 114.548 de `logical reads` ale variantei UDF sunt **înșelătoare**: I/O-ul din interiorul funcției scalare nu se atribuie interogării apelante. Varianta „mai ieftină la citiri” este de fapt cea de 5× mai lentă.
+
+**Proporție:** ambele variante costă secunde pentru doar ~4.500 de rânduri rezultat, fiindcă dominant este *găsirea* lor (3,79 mil. linii de achiziție doar pe compania 1000), nu evaluarea expresiei. Față de cele 225 s ale `Classify`, câștigul este de ordinul a 3% — real și gratuit, dar nu el decide performanța Fazei 3.
+
+**Precondiție care trebuie păzită.** Funcția nu este un simplu calcul aritmetic:
+
+```sql
+case when soanal is not null then dbo.fnSOAnalQty1(soanal, -1, -1, -1, 1)
+     else (IsNull(qty1,0)-IsNull(qty1cov,0)-IsNull(qty1canc,0)) end
+```
+
+Expresia directă este echivalentă **doar când `SOANAL IS NULL`**. Verificat: `SOANAL` este NULL pe toate cele 3.795.332 de linii de achiziție și, de fapt, nicio linie `MTRLINES` din compania 1000 nu are `SOANAL` — analiza pe mărimi/culori nu e folosită în această instalare. Echivalența este deci structurală azi, dar **dependentă de date**.
+
+→ `Compute` adaugă `WARN_SOANAL` (număr de rânduri cu `SOANAL IS NOT NULL` în populația `ORD_FURN`). Un `CASE` care apelează funcția doar pe ramura analitică **nu** ajută: simpla referire la UDF în expresie reintroduce planul serial. Garda trebuie să fie un contor care semnalează, nu o ramură care recalculează.
 
 **Nivelul companie (rândul HQ) nu are depozit**, deci:
 
@@ -287,7 +315,7 @@ COMPUTE_PARAMSJSON NVARCHAR(MAX) NULL, COMPUTE_ERRORMSG NVARCHAR(500) NULL
 | Intermediari | `SAFETY`, `LT_STOCK`, `SLTS`, `BUF`, `CYCLE`, `MAX_RAW`, `MAX_INF`, `CAP6`, `VZ26_CAP`, `SUM_BR_MAX` |
 | Rezultat | `ENG_MIN`, `ENG_MAX`, `BUY_RAW`, `BUY_QTY`, `HQ_CAP_APLICAT`, `PODEA_APLICATA` |
 | Raportare | `ACOP_CUR`, `FLAG_RATIO`, `FLAG_TXT`, `TREND_PCT`, `STATUS_TREND`, `DISC_FLAG` |
-| Warnings | `WARN_VZ26_ZERO`, `WARN_STOC_NEG`, `WARN_STOC_MORT` |
+| Warnings | `WARN_VZ26_ZERO`, `WARN_STOC_NEG`, `WARN_STOC_MORT`, `WARN_SOANAL` |
 
 Tipuri: cantități și rapoarte `DECIMAL(28,8)`; bit-uri `BIT`; text `VARCHAR(n)` explicit (nu `NVARCHAR` — restul tabelului e `VARCHAR`).
 
