@@ -114,17 +114,21 @@ BEGIN
 
     -- ---------------------------------------------------------------
     -- 4. Filiale active incluse
+    -- HQ este un rand virtual (stratul de companie), deci nu se testeaza contra WHOUSE.
     -- ---------------------------------------------------------------
     SELECT b.BRANCH, b.MARIME, b.ESTE_HQ, b.ESTE_PODEA
     INTO #ActiveBranches
     FROM CCCMINMAXBRANCH b
     WHERE b.INCLUS = 1
-        AND EXISTS (
-            SELECT 1
-            FROM WHOUSE w
-            WHERE w.CCCBRANCH = b.BRANCH
-                AND w.ISACTIVE = 1
-                AND (w.COMPANY = @Company OR b.ESTE_HQ = 1)
+        AND (
+            b.ESTE_HQ = 1
+            OR EXISTS (
+                SELECT 1
+                FROM WHOUSE w
+                WHERE w.CCCBRANCH = b.BRANCH
+                    AND w.COMPANY = @Company
+                    AND w.ISACTIVE = 1
+            )
         );
 
     IF NOT EXISTS (SELECT 1 FROM #ActiveBranches)

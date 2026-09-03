@@ -18,11 +18,24 @@ function extract(fn) {
 const pairs = [
     ['getParamTablesSql', 'new_min_max/sql/00_params.sql'],
     ['getPersistTablesSql', 'new_min_max/sql/00b_persist.sql'],
+    ['getSalesLinesFunctionSql', 'new_min_max/sql/00c_sales_lines.sql'],
+    ['getPrepareProcedureSql', 'new_min_max/sql/00d_prepare.sql'],
     ['getClassifyProcedureSql', 'new_min_max/sql/01_classify.sql'],
     ['getClassifyGroupProcedureSql', 'new_min_max/sql/02_classify_group.sql']
 ];
 
 let failed = 0;
+
+// Un bloc SQL neinregistrat aici ar diverge tacit: nimic nu l-ar compara cu o sursa.
+const embedded = (js.match(/function\s+(get\w*Sql)\s*\(/g) || [])
+    .map(m => m.replace(/function\s+/, '').replace(/\s*\($/, ''));
+const registered = new Set(pairs.map(([fn]) => fn));
+for (const fn of embedded) {
+    if (!registered.has(fn)) {
+        console.log(fn.padEnd(32), 'UNREGISTERED (no new_min_max/sql/*.sql pair)');
+        failed++;
+    }
+}
 for (const [fn, rel] of pairs) {
     const fromJs = extract(fn);
     if (fromJs === null) {

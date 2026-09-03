@@ -53,17 +53,22 @@ Merită comunicat clientului: motorul reproduce practica existentă, nu o înloc
 
 ---
 
-## 1. Pasul 0 — bug blocant în `sp_MinMaxEngine_Classify`
+## 1. Pasul 0 — ÎNCHIS: eligibilitatea HQ nu mai depinde de compania demo
 
-`new_min_max/sql/01_classify.sql` §3:
+Forma veche testa HQ contra `WHOUSE`:
 
 ```sql
 AND (w.COMPANY = @Company OR b.ESTE_HQ = 1)
 ```
 
-Filiala 1000 trece filtrul `EXISTS` **doar** pentru că `WHOUSE` 1000 din compania **demo 1001** este activ (cel din compania 1000 are `ISACTIVE = 0`). Dacă cineva dezactivează acel depozit demo, HQ dispare tăcut din motor.
+Filiala 1000 trecea filtrul `EXISTS` **doar** pentru că `WHOUSE` 1000 din compania **demo 1001** este activ (cel din compania 1000 are `ISACTIVE = 0`). Verificat pe producție:
 
-**Fix:** HQ este virtual, deci nu se testează deloc contra `WHOUSE`.
+| COMPANY | WHOUSE | NAME | CCCBRANCH | ISACTIVE |
+|---|---|---|---|---|
+| 1000 | 1000 | HQ | 1000 | **0** |
+| 1001 | 1000 | Depozit Central | 1000 | **1** |
+
+**Fix aplicat:** HQ este virtual, deci nu se testează deloc contra `WHOUSE`.
 
 ```sql
 SELECT b.BRANCH, b.MARIME, b.ESTE_HQ, b.ESTE_PODEA
@@ -81,23 +86,27 @@ WHERE b.INCLUS = 1
     );
 ```
 
-**După fix:** `node new_min_max/tools/sync-check.cjs` → `/JS/NewMinMax/setup` → re-rulare `@Company=1000, @SummaryOnly=1`. Rezultatul așteptat este identic cu cel validat (713.370 rânduri, 14 filiale). Dacă diferă, oprește-te și raportează.
+Regula este acum identică în **toate cele trei** proceduri care construiesc `#ActiveBranches`: `Classify`, `Prepare`, `ClassifyGroup`. `Classify` este validat live; `Prepare` și `ClassifyGroup` necesită `/JS/NewMinMax/setup` pentru a ajunge în producție.
+
+> ⚠️ **Numărul de rânduri nu este un criteriu de acceptanță.** Fereastra se derivă din `MAX(TRNDATE)` pe date vii, deci populația crește în cursul zilei — măsurat în aceeași sesiune: 50.968 → 50.969 SKU, 221.165 → 221.168 linii, cu `AZI` neschimbat. Verifică **invariante**, nu cifre: `TOTAL_ROWS = DISTINCT_ITEMS × DISTINCT_BRANCHES`, `DISTINCT_BRANCHES = 14`, `HQ_ROWS = DISTINCT_ITEMS`, și toate controalele `NULL_*` / `UNMATCHED_COV` / `FORCED_Z_MISMATCH` / `NEGATIVE_AVG` la zero.
 
 ---
 
 ## 2. Decizii de închis înainte de a scrie procedura
 
-Toate se rezolvă read-only (`S1_WRITE_MODE=off` nu blochează `SELECT`). Nu implementa `STOC_QTY` / `ORD_FURN` pe presupuneri.
+D1-D3 au fost închise read-only pe producție la 03.09.2026. D4-D5 rămân de confirmat cu clientul.
 
 | # | Întrebare | Opțiuni | Recomandare |
 |---|---|---|---|
-| **D1** | Sursa `STOC_QTY` | `MTRFINDATA.QTY1` per `WHOUSE` (folosit de `NecesarAchizitie.js`) vs. `MTRBALSHEET` `SUM(IMPQTY1−EXPQTY1)` (folosit de `Stocuri.js`, `sp_GetMtrlsDat.sql`) | `MTRFINDATA` — sursa modulului de achiziții. **Validează pe 5 SKU față de ecranul de stoc S1 înainte de a fixa.** |
-| **D2** | `ORD_FURN` | `RESTCATEG = 1` prin `FNSOGETLINEPEND` (tiparul `getPending` din `NecesarAchizitie.js`) vs. `SOSOURCE=1151 / FPRMS=3153` | `RESTCATEG=1`. La comenzi de achiziție `SALESMAN=0`, deci atribuirea se reduce la `WHOUSE.CCCBRANCH` — confirmă pe date. |
-| **D3** | `LAST_RECEIPT` | `SOSOURCE` pentru recepții de achiziție neconfirmat în repo | Dacă rămâne neclar: `DISC_FLAG = NULL`, **nu** `0`. Un fals „nu e discontinuat" e mai rău decât un necunoscut. |
+| **D1 — închis** | Sursa `STOC_QTY` | `MTRFINDATA.QTY1` per `WHOUSE` | Confirmat pe 5 SKU din București: identic la 8 zecimale cu `MTRBALSHEET SUM(IMPQTY1−EXPQTY1)`. Este și tiparul din `NecesarAchizitie.js` / `sp_GetMtrlsData`. |
+| **D2 — închis** | `ORD_FURN` | `MTRLINES`, strict `SOSOURCE=1251`, `PENDING=1`, `RESTCATEG=1`, document neanulat; cantitate `QTY1−QTY1COV−QTY1CANC`; filială `WHOUSE.CCCBRANCH` | Expresia directă este identică cu `FNSOGETLINEPEND` pe toate cele 4.535 linii (46.716,51 buc) și evită apelul scalar. `RESTCATEG=1` fără `SOSOURCE=1251` include greșit și 325 linii de vânzare. Premisa „SALESMAN=0” era falsă: 1.886 linii ar fi atribuite altei filiale după reprezentant. Depozitul destinație rămâne sursa filialei. |
+| **D3 — închis** | `LAST_RECEIPT` | `MAX(MTRTRN.TRNDATE)` per `(COMPANY,MTRL)`, cu `MTRTRN.SOSOURCE=1251` și `TPRMS.FLG01=1` | `FLG01=1` identifică intrarea fizică în stoc (`NIR (QV)`, FPRMS 4260) și exclude comanda, lista de recepție și facturile „fără stoc”. Dacă lipsește: `LAST_RECEIPT=NULL`, `DISC_FLAG=NULL`, nu `0`. |
 | **D4** | Sentinela `VZ26_CAP = 9999` | valoare fixă moștenită din motorul Python | Devine parametru `VZ26_CAP_SENTINEL` (default `9999`, păstrează paritatea). Ca valoare fixă **capează real** orice SKU cu `MAX_inf > 9999` — plafon accidental. |
 | **D5** | Normalizarea `TREND` | $2\,VZ_{13S}/VZ_{26S}-1$ vs. $VZ_{13S}/(VZ_{26S}-VZ_{13S})-1$ | Prima. Pragurile ±10% / −30% nu sunt invariante la alegere — de confirmat cu clientul. |
 
-D1–D3 se închid de tine, prin interogări. D4–D5 se ridică la client.
+D4–D5 se ridică la client.
+
+Note D2: cele 25 de linii fără `CCCBRANCH` sunt pe depozitul 8002 „BONURI VALORICE”, pe `FPRMS 4500 — Factură internă (fără stoc)`. **Decizie deschisă (D2a):** un depozit de bonuri valorice nu reprezintă marfă pe drum, deci probabil trebuie exclus complet din `ORD_FURN`, nu inclus în totalul de companie. De confirmat cu clientul înainte de a fixa comportamentul. Comenzile către filiale neincluse intră în totalul companiei, conform contractului HQ de mai jos.
 
 **Nivelul companie (rândul HQ) nu are depozit**, deci:
 
@@ -190,7 +199,8 @@ BUY_QTY  = CEILING(BUY_RAW / N_PACK) * N_PACK                                   
 ACOP_CUR   = STOC_QTY / AVG                                    -- luni
 FLAG_RATIO = ENG_MAX / ERP_MAX,  ERP_MAX = MAX_MANUAL (F10)
 TREND_PCT  = 2.0 * VZ_13S / VZ_26S - 1                         -- D5
-DISC_FLAG  = CASE WHEN DATEDIFF(DAY, LAST_RECEIPT, AZI) > 365 THEN 1 ELSE 0 END
+DISC_FLAG  = CASE WHEN LAST_RECEIPT IS NULL THEN NULL
+                  WHEN DATEDIFF(DAY, LAST_RECEIPT, AZI) > 365 THEN 1 ELSE 0 END
 ```
 
 | `FLAG_RATIO` | `FLAG_TXT` |
@@ -297,14 +307,15 @@ Coloanele intermediare nu sunt lux: fără ele, un `ENG_MAX` contestat de client
 
 | Fișier | Ce |
 |---|---|
-| `new_min_max/sql/01_classify.sql` | **Pasul 0** — fix eligibilitate HQ (§1) |
 | `new_min_max/sql/00_params.sql` | seed `VZ26_CAP_SENTINEL` |
 | `new_min_max/sql/00b_persist.sql` | ~35 coloane noi × 2 locuri (`CREATE TABLE` + aliniere) |
 | `new_min_max/sql/03_compute.sql` | **nou** — procedura, ~500–600 linii |
 | `S1-MEC/AJS/NewMinMax.js` | `getComputeSql()` + înregistrare în `setup()` |
-| `new_min_max/tools/sync-check.cjs` | extindere la al 5-lea bloc SQL |
+| `new_min_max/tools/sync-check.cjs` | pereche nouă pentru `getComputeSql` (garda de acoperire eșuează altfel) |
 
 `S1-MEC/AJS/NewMinMax.js` și `external/MEC/SyncItalia/S1/AJS/NewMinMax.js` sunt **același inode** (hardlink) — editezi unul, se actualizează ambele. Fără `cp`.
+
+> ⚠️ Hardlink-ul **nu** înseamnă versionare comună: fișierul este urmărit doar de submodulul `external/MEC`, nu de repo-ul principal. Orice modificare de AJS cere **două** commit-uri — unul în submodul, unul în repo-ul principal pentru pointer — altfel se livrează SQL fără oglindă.
 
 ---
 
