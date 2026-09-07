@@ -107,6 +107,47 @@ function buildResultsFilterPayload (filters) {
   return out;
 }
 
+// Read-back verification for saveParams() (§12.1): compares what params()
+// returns AFTER the save against the normalized payload that was sent, using
+// the same row identities the service uses server-side. Returns a short
+// description of the first mismatch found, or null when everything matches.
+// NOTE (confirmed live 07.09.2026): a genuinely empty-string SCOPEKEY comes
+// back from execSql/WSMCP as JSON `null`, not `''` (DATALENGTH=0 but the
+// column is NOT NULL) — both sides must coerce with `|| ''`, or every GLOBAL
+// param save would spuriously report a mismatch.
+function findSaveMismatch (fresh, { branchUpdates, covUpdates, paramsUpdates } = {}) {
+  const paramsByKey = new Map(
+    (fresh.params || []).map((r) => [`${r.PARAMKEY}|${r.SCOPE}|${r.SCOPEKEY || ''}`, String(r.PARAMVALUE)])
+  );
+  for (const p of (paramsUpdates || [])) {
+    const key = `${p.paramKey}|${p.scope || 'GLOBAL'}|${p.scopeKey || ''}`;
+    if (!paramsByKey.has(key) || paramsByKey.get(key) !== String(p.paramValue)) {
+      return `parametru ${key}`;
+    }
+  }
+
+  const covByKey = new Map((fresh.cov || []).map((r) => [`${r.CLASA}|${r.MARIME}`, Number(r.COV)]));
+  for (const c of (covUpdates || [])) {
+    const key = `${c.clasa}|${c.marime}`;
+    if (!covByKey.has(key) || covByKey.get(key) !== Number(c.cov)) {
+      return `COV ${key}`;
+    }
+  }
+
+  const branchByKey = new Map((fresh.branches || []).map((r) => [String(r.BRANCH), {
+    estePodea: Boolean(r.ESTE_PODEA), inclus: Boolean(r.INCLUS), marime: r.MARIME
+  }]));
+  for (const b of (branchUpdates || [])) {
+    const key = String(b.branch);
+    const row = branchByKey.get(key);
+    if (!row || row.estePodea !== Boolean(b.estePodea) || row.inclus !== Boolean(b.inclus) || row.marime !== b.marime) {
+      return `filiala ${key}`;
+    }
+  }
+
+  return null;
+}
+
 export class MinmaxEngineStore {
   constructor () {
     this._listeners = new Set();
@@ -134,7 +175,7 @@ export class MinmaxEngineStore {
       pageSize: DEFAULT_PAGE_SIZE,
 
       // Params/COV/branches (CCCMINMAXPARAMS et al.) — contract §7
-      params: { branches: [], cov: [], error: '', params: [], saveError: '', saving: false },
+      params: { branches: [], cov: [], error: '', params: [], saveError: '', saving: false, writesEnabled: false },
       resolvedRunId: null, // actual RUNID the last successful results() call used
       rows: [],
 
@@ -289,7 +330,8 @@ export class MinmaxEngineStore {
           ...newState.params,
           branches: Array.isArray(action.payload.branches) ? action.payload.branches : [],
           cov: Array.isArray(action.payload.cov) ? action.payload.cov : [],
-          params: Array.isArray(action.payload.params) ? action.payload.params : []
+          params: Array.isArray(action.payload.params) ? action.payload.params : [],
+          writesEnabled: action.payload.writesEnabled === true
         };
         break;
 
@@ -441,8 +483,7 @@ export class MinmaxEngineStore {
     this.dispatch({ type: 'SET_PARAMS_LOADING', payload: true });
     this.dispatch({ type: 'SET_PARAMS_ERROR', payload: '' });
     try {
-      const response = await this._getService().params({ token: this._token() });
-      this.dispatch({ type: 'SET_PARAMS_DATA', payload: response });
+      await this._fetchParams();
     } catch (err) {
       console.error('minmax-engine-store: loadParams failed', err);
       this.dispatch({ type: 'SET_PARAMS_ERROR', payload: (err && err.message) || 'Nu s-au putut incarca parametrii.' });
@@ -451,7 +492,20 @@ export class MinmaxEngineStore {
     }
   }
 
+  // Raw fetch, no try/catch: saveParams() needs the rejection to propagate
+  // (§12.1) instead of being swallowed the way the public loadParams() does.
+  async _fetchParams () {
+    const response = await this._getService().params({ token: this._token() });
+    this.dispatch({ type: 'SET_PARAMS_DATA', payload: response });
+    return response;
+  }
+
   // --- Async Orchestration: saveParams() — the ONLY write path, contract §7 ---
+  // Drafts are only cleared by the caller (minmax-params-panel) once this
+  // resolves `true`. Per §12.1, that requires three things to all succeed:
+  // the transaction itself, the params() reload, and a read-back match
+  // against what was sent — a reload failure or a mismatch must surface as
+  // a save error, not a silent success.
   async saveParams ({ branchUpdates, covUpdates, paramsUpdates } = {}) {
     this.dispatch({ type: 'SET_PARAMS_SAVING', payload: true });
     this.dispatch({ type: 'SET_PARAMS_SAVE_ERROR', payload: '' });
@@ -462,7 +516,13 @@ export class MinmaxEngineStore {
         paramsUpdates,
         token: this._token()
       });
-      await this.loadParams();
+
+      const fresh = await this._fetchParams();
+      const mismatch = findSaveMismatch(fresh, { branchUpdates, covUpdates, paramsUpdates });
+      if (mismatch) {
+        throw new Error(`Salvarea a reusit dar recitirea nu corespunde (${mismatch}).`);
+      }
+
       return true;
     } catch (err) {
       console.error('minmax-engine-store: saveParams failed', err);
@@ -472,6 +532,7 @@ export class MinmaxEngineStore {
       this.dispatch({ type: 'SET_PARAMS_SAVING', payload: false });
     }
   }
+
 
   // --- Async Orchestration: explain() drawer — read-only, contract §6 ---
   // Uses resolvedRunId (the actual RUNID the last results() call resolved to),

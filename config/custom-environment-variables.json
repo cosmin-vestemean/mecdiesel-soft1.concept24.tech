@@ -8,8 +8,12 @@
     "secret": "FEATHERS_SECRET"
   },
   "minmaxEngine": {
-    "s1BaseUrl": "S1_BASE_URL",
     "s1AppId": "S1_APP_ID",
-    "s1AuthKey": "S1_APP_WS_SHARED_SECRET"
+    "s1AuthKey": "S1_APP_WS_SHARED_SECRET",
+    "s1BaseUrl": "S1_BASE_URL",
+    "writesEnabled": {
+      "__format": "boolean",
+      "__name": "MINMAX_ENGINE_WRITES_ENABLED"
+    }
   }
 }

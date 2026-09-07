@@ -524,6 +524,16 @@ hook `authenticate` pe toate metodele, rol `minmax.read` pentru citiri și `minm
 nu din JavaScript-ul public. Token-ul S1 rămâne separat și este folosit doar ca `clientID` pentru
 transportul WSMCP.
 
+**Decis 07.09.2026 (alternativa era tabela administrată):** sursa rolurilor este **configurația
+server-side** — `minmaxEngine.readers` / `minmaxEngine.editors`, suprascrise prin
+`MINMAX_ENGINE_READERS` / `MINMAX_ENGINE_EDITORS`. Motivul decisiv nu este comoditatea, ci că
+singurul canal de scriere al aplicației în baza S1 este `execSql` cu cheia `ALLOW_WRITE=1`, limitat
+de whitelist-ul de tabele; o tabelă ACL administrabilă din aplicație ar trebui adăugată în acel
+whitelist, iar atunci exact canalul protejat de `minmax.edit` și-ar putea acorda singur
+`minmax.edit`. Implicit `editors: []` (fail-closed) și `readers: "*"` (orice utilizator autentificat
+contra S1); `minmax.edit` include `minmax.read`. Tot lookup-ul stă într-un singur `resolveRoles(refid)`,
+astfel încât înlocuirea cu o tabelă administrată să rămână o schimbare într-un fișier.
+
 Whitelist-ul celor patru tabele și cheia dedicată `ALLOW_WRITE=1` rămân obligatorii: autorizarea
 utilizatorului și limitarea capabilității SQL sunt controale independente. Se adaugă audit pentru
 save cu REFID, timestamp și cheile logice modificate, fără valori secrete.

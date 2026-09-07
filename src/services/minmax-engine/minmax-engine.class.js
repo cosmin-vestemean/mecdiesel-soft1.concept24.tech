@@ -7,6 +7,7 @@
 // /JS/WSMCP/execSql. authKey lives only in server config (env-backed), never
 // in the browser.
 
+import { Forbidden } from '@feathersjs/errors'
 import rp from 'request-promise'
 import { classifySql } from './sql-guard.js'
 
@@ -18,6 +19,11 @@ const MAX_PAGE_SIZE = 500
 const DEFAULT_PAGE_SIZE = 100
 const DEFAULT_HISTORY_LIMIT = 20
 const MAX_HISTORY_LIMIT = 50
+// Row-count cap per saveParams() collection, checked before any SQL is
+// composed (FAZA5_CONTRACT.md §12.2). Generous relative to the real table
+// sizes (33 COV rows, 18 branches) — this guards against a malformed/huge
+// payload, not against legitimate use.
+const MAX_BATCH_ROWS = 500
 
 // API filter/sort field -> CCCMINMAXDET column. The ONLY source of SQL
 // identifiers accepted for results(); never built from request input.
@@ -119,6 +125,12 @@ function requireToken (data) {
     throw new Error('Missing S1 session token (data.token).')
   }
   return token
+}
+
+function validateRowCount (rows, label) {
+  if (rows.length > MAX_BATCH_ROWS) {
+    throw new Error(`Too many ${label} rows in one save (${rows.length} > ${MAX_BATCH_ROWS}).`)
+  }
 }
 
 // Binds a value as the next positional parameter and returns its `:N`
@@ -266,6 +278,12 @@ export class MinmaxEngineService {
     }
   }
 
+  _writesEnabled () {
+    const cfg = (this.app && this.app.get('minmaxEngine')) || {}
+    const flagStr = cfg.writesEnabled !== undefined ? cfg.writesEnabled : process.env.MINMAX_ENGINE_WRITES_ENABLED
+    return flagStr === true || flagStr === 'true'
+  }
+
   async _execSql (sql, sqlParams, token) {
     const guard = classifySql(sql)
     if (!guard.ok) {
@@ -315,11 +333,44 @@ export class MinmaxEngineService {
       method: 'POST',
       uri: `${baseUrl}/JS/WSMCP/execSql`
     })
+    return this._checkTransactionResult(response)
+  }
+
+  // WSMCP's own execSql reports a rollback as {success:false, ...} when it
+  // matches the CATCH branch's status row with an EXACT lowercase `__ok`
+  // column (see S1-MEC/AJS/WSMCP.js). That match can miss a driver that
+  // normalizes the column to `__OK`, in which case WSMCP would return
+  // {success:true} with the rollback row disguised as ordinary data. This
+  // re-checks defensively, tolerant of case, and refuses to treat a missing
+  // result as success either (FAZA5_CONTRACT.md §12.1).
+  _checkTransactionResult (response) {
     if (response && response.success === false) {
-      throw new Error(response.error || 'S1 execSql call failed.')
+      const err = new Error(response.error || 'S1 execSql transaction failed.')
+      err.failedStep = response.failedStep
+      err.errNum = response.errorNumber
+      throw err
     }
+
+    const rows = extractRows(response)
+    if (!rows.length) {
+      throw new Error('S1 execSql returned no result for the transaction.')
+    }
+
+    const statusRow = rows[0]
+    const okKey = Object.prototype.hasOwnProperty.call(statusRow, '__ok')
+      ? '__ok'
+      : (Object.prototype.hasOwnProperty.call(statusRow, '__OK') ? '__OK' : undefined)
+
+    if (okKey && Number(statusRow[okKey]) === 0) {
+      const err = new Error(statusRow.errMsg || statusRow.ERRMSG || 'S1 execSql transaction failed.')
+      err.failedStep = statusRow.failedStep !== undefined ? statusRow.failedStep : statusRow.FAILEDSTEP
+      err.errNum = statusRow.errNum !== undefined ? statusRow.errNum : statusRow.ERRNUM
+      throw err
+    }
+
     return response
   }
+
 
   // "Current run" is ESTE_CURENT=1 on a FULL, DONE, COMPUTE_STATUS=DONE
   // session — never MAX(RUNID). See FAZA5_CONTRACT.md §5 / §11.
@@ -431,7 +482,8 @@ export class MinmaxEngineService {
     return {
       branches: extractRows(branchRes),
       cov: extractRows(covRes),
-      params: extractRows(paramsRes)
+      params: extractRows(paramsRes),
+      writesEnabled: this._writesEnabled()
     }
   }
 
@@ -489,44 +541,78 @@ export class MinmaxEngineService {
   /**
    * Only write path in this service. Atomic (all-or-nothing) via
    * `statements`. Table scope enforced by classifySql's write whitelist.
-   * See FAZA5_CONTRACT.md §7.
+   * Each collection is serialized into a single OPENJSON parameter, so the
+   * positional-parameter cost stays constant (<= 4) regardless of how many
+   * rows are edited. See FAZA5_CONTRACT.md §7, §12.2.
    */
   async saveParams (data) {
+    if (!this._writesEnabled()) {
+      throw new Forbidden('Scrierea parametrilor MIN/MAX este dezactivata (MINMAX_ENGINE_WRITES_ENABLED).')
+    }
     const token = requireToken(data)
     const statements = []
 
-    for (const p of (data.paramsUpdates || [])) {
-      const paramKey = requireString(p.paramKey, 'paramKey')
-      const paramValue = requireString(p.paramValue, 'paramValue')
-      const paramType = p.paramType ? requireString(p.paramType, 'paramType') : 'STR'
-      const scope = p.scope ? requireString(p.scope, 'scope') : 'GLOBAL'
-      const scopeKey = typeof p.scopeKey === 'string' ? p.scopeKey.trim() : ''
-
+    const paramsUpdates = data.paramsUpdates || []
+    validateRowCount(paramsUpdates, 'paramsUpdates')
+    if (paramsUpdates.length) {
+      const rows = paramsUpdates.map((p) => ({
+        PARAMKEY: requireString(p.paramKey, 'paramKey'),
+        PARAMTYPE: p.paramType ? requireString(p.paramType, 'paramType') : 'STR',
+        PARAMVALUE: requireString(p.paramValue, 'paramValue'),
+        SCOPE: p.scope ? requireString(p.scope, 'scope') : 'GLOBAL',
+        SCOPEKEY: typeof p.scopeKey === 'string' ? p.scopeKey.trim() : ''
+      }))
+      const json = JSON.stringify(rows)
+      // Table immediately after UPDATE (no alias), per §12.2: referencedTable()
+      // in sql-guard.js extracts the alias otherwise and blocks the statement.
       statements.push({
-        params: [paramValue, paramKey, scope, scopeKey],
-        sql: 'UPDATE CCCMINMAXPARAMS SET PARAMVALUE = :1, UPDATEDAT = GETDATE() ' +
-          'WHERE PARAMKEY = :2 AND SCOPE = :3 AND SCOPEKEY = :4'
+        params: [json],
+        sql: 'UPDATE CCCMINMAXPARAMS SET PARAMVALUE = j.PARAMVALUE, UPDATEDAT = GETDATE() ' +
+          'FROM CCCMINMAXPARAMS INNER JOIN OPENJSON(:1) ' +
+          'WITH (PARAMKEY VARCHAR(50), SCOPE VARCHAR(20), SCOPEKEY VARCHAR(50), PARAMVALUE VARCHAR(255)) j ' +
+          'ON j.PARAMKEY = CCCMINMAXPARAMS.PARAMKEY AND j.SCOPE = CCCMINMAXPARAMS.SCOPE ' +
+          'AND j.SCOPEKEY = CCCMINMAXPARAMS.SCOPEKEY'
       })
       statements.push({
-        params: [paramKey, paramValue, paramType, scope, scopeKey],
+        params: [json],
         sql: 'INSERT INTO CCCMINMAXPARAMS (PARAMKEY, PARAMVALUE, PARAMTYPE, SCOPE, SCOPEKEY) ' +
-          'SELECT :1, :2, :3, :4, :5 WHERE NOT EXISTS (' +
-          'SELECT 1 FROM CCCMINMAXPARAMS WHERE PARAMKEY = :1 AND SCOPE = :4 AND SCOPEKEY = :5)'
+          'SELECT j.PARAMKEY, j.PARAMVALUE, j.PARAMTYPE, j.SCOPE, j.SCOPEKEY FROM OPENJSON(:1) ' +
+          'WITH (PARAMKEY VARCHAR(50), SCOPE VARCHAR(20), SCOPEKEY VARCHAR(50), PARAMVALUE VARCHAR(255), PARAMTYPE VARCHAR(10)) j ' +
+          'WHERE NOT EXISTS (SELECT 1 FROM CCCMINMAXPARAMS ' +
+          'WHERE PARAMKEY = j.PARAMKEY AND SCOPE = j.SCOPE AND SCOPEKEY = j.SCOPEKEY)'
       })
     }
 
-    for (const c of (data.covUpdates || [])) {
+    const covUpdates = data.covUpdates || []
+    validateRowCount(covUpdates, 'covUpdates')
+    if (covUpdates.length) {
+      const rows = covUpdates.map((c) => ({
+        CLASA: requireString(c.clasa, 'clasa'),
+        COV: sqlNumber(c.cov, 'cov'),
+        MARIME: requireString(c.marime, 'marime')
+      }))
       statements.push({
-        params: [sqlNumber(c.cov, 'cov'), requireString(c.clasa, 'clasa'), requireString(c.marime, 'marime')],
-        sql: 'UPDATE CCCMINMAXCOV SET COV = :1, UPDATEDAT = GETDATE() WHERE CLASA = :2 AND MARIME = :3'
+        params: [JSON.stringify(rows)],
+        sql: 'UPDATE CCCMINMAXCOV SET COV = j.COV, UPDATEDAT = GETDATE() ' +
+          'FROM CCCMINMAXCOV INNER JOIN OPENJSON(:1) WITH (CLASA VARCHAR(3), MARIME VARCHAR(6), COV FLOAT) j ' +
+          'ON j.CLASA = CCCMINMAXCOV.CLASA AND j.MARIME = CCCMINMAXCOV.MARIME'
       })
     }
 
-    for (const b of (data.branchUpdates || [])) {
+    const branchUpdates = data.branchUpdates || []
+    validateRowCount(branchUpdates, 'branchUpdates')
+    if (branchUpdates.length) {
+      const rows = branchUpdates.map((b) => ({
+        BRANCH: sqlInt(b.branch, 'branch'),
+        ESTE_PODEA: sqlBit(b.estePodea),
+        INCLUS: sqlBit(b.inclus),
+        MARIME: requireString(b.marime, 'marime')
+      }))
       statements.push({
-        params: [requireString(b.marime, 'marime'), sqlBit(b.inclus), sqlBit(b.estePodea), sqlInt(b.branch, 'branch')],
-        sql: 'UPDATE CCCMINMAXBRANCH SET MARIME = :1, INCLUS = :2, ESTE_PODEA = :3, UPDATEDAT = GETDATE() ' +
-          'WHERE BRANCH = :4'
+        params: [JSON.stringify(rows)],
+        sql: 'UPDATE CCCMINMAXBRANCH SET MARIME = j.MARIME, INCLUS = j.INCLUS, ESTE_PODEA = j.ESTE_PODEA, UPDATEDAT = GETDATE() ' +
+          'FROM CCCMINMAXBRANCH INNER JOIN OPENJSON(:1) WITH (BRANCH SMALLINT, MARIME VARCHAR(6), INCLUS BIT, ESTE_PODEA BIT) j ' +
+          'ON j.BRANCH = CCCMINMAXBRANCH.BRANCH'
       })
     }
 
@@ -534,8 +620,8 @@ export class MinmaxEngineService {
       throw new Error('saveParams called with no updates.')
     }
 
-    const response = await this._execStatements(statements, token)
-    return { response, success: true }
+    await this._execStatements(statements, token)
+    return { success: true }
   }
 }
 

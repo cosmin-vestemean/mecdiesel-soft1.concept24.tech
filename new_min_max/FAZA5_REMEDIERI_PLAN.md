@@ -114,12 +114,19 @@ group ABC) — numai ultima cerere modifică starea.
 
 ## Pasul 6 — §12.8: autorizare completă *(model: Opus pentru decizie, Sonnet pentru implementare)*
 
-**Decizie de luat înainte de cod** *(Opus, context mic)*: sursa server-side a rolurilor
-`minmax.read` / `minmax.edit` — configurație sau tabelă administrată. Vezi întrebarea deschisă din
-`.copilot/context/current-focus.md`.
+**Decizie luată 07.09.2026** *(Opus, context mic)*: rolurile vin din **configurație server-side**,
+nu dintr-o tabelă administrată — vezi motivarea în [FAZA5_CONTRACT.md](FAZA5_CONTRACT.md) §12.8.
+Forma: `minmaxEngine.readers` / `minmaxEngine.editors` în `config/default.json`, suprascrise prin
+`MINMAX_ENGINE_READERS` / `MINMAX_ENGINE_EDITORS` (CSV de REFID); implicit `editors: []`,
+`readers: "*"`; `minmax.edit` include `minmax.read`; comparația REFID se face ca `String`.
 
+- [ ] Tot lookup-ul de roluri într-un singur `resolveRoles(refid)` (`src/services/minmax-engine/roles.js`),
+      singurul loc care știe de unde vine lista.
 - [ ] Token de aplicație semnat după `validateUserPwd`, `sub = REFID`, **durată absolută 8 ore**, fără
-      refresh și fără sliding expiration.
+      refresh și fără sliding expiration. Semnare cu `authentication.secret` (`FEATHERS_SECRET`, deja
+      mapat setat în `.env` — a fost generat înainte de implementare), prin
+      `@feathersjs/authentication` cu `entity: null` + `JWTStrategy`, ca să nu fie nevoie de un
+      serviciu `users` local.
 - [ ] Token păstrat **doar în memoria paginii**; orice reload trece prin login. Token-ul S1 nu poate
       restaura sesiunea de aplicație.
 - [ ] Hook `authenticate` pe toate metodele; `minmax.read` la citiri, `minmax.edit` la `saveParams`.

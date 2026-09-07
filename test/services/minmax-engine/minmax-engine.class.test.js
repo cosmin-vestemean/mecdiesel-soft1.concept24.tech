@@ -230,8 +230,24 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
       assert.deepStrictEqual(result, {
         branches: [{ BRANCH: 1000 }],
         cov: [{ CLASA: 'AX' }],
-        params: [{ PARAMKEY: 'X' }]
+        params: [{ PARAMKEY: 'X' }],
+        writesEnabled: false
       })
+    })
+
+    it('returns writesEnabled: true when flag is enabled', async () => {
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXPARAMS'))
+        .reply(200, reply([]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXCOV'))
+        .reply(200, reply([]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXBRANCH'))
+        .reply(200, reply([]))
+
+      const service = makeService({ writesEnabled: true })
+      const result = await service.params({ token: 'tok' })
+
+      assert.strictEqual(result.writesEnabled, true)
     })
   })
 
@@ -277,20 +293,55 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
 
   describe('saveParams()', () => {
     it('rejects a call with no updates at all', async () => {
-      const service = makeService()
+      const service = makeService({ writesEnabled: true })
       await assert.rejects(service.saveParams({ token: 'tok' }), /saveParams called with no updates\./)
     })
 
-    it('sends one atomic statements batch, and every generated statement passes classifySql', async () => {
+    it('rejects with Forbidden when writes are disabled (flag OFF), even with valid payload', async () => {
+      const service = makeService({ writesEnabled: false })
+      const payload = {
+        branchUpdates: [{ branch: 1000, estePodea: true, inclus: true, marime: 'M' }],
+        covUpdates: [{ clasa: 'AX', cov: 1.5, marime: 'M' }],
+        paramsUpdates: [{ paramKey: 'K', paramValue: 'V' }],
+        token: 'tok'
+      }
+      await assert.rejects(service.saveParams(payload), (err) => {
+        return err.code === 403 && err.message.includes('MINMAX_ENGINE_WRITES_ENABLED')
+      })
+    })
+
+    it('allows saveParams when writes are enabled (flag ON) and calls the transport layer', async () => {
       let capturedBody
       nock(FAKE_BASE_URL)
         .post(EXEC_SQL_PATH, (body) => Array.isArray(body.statements))
         .reply(200, (uri, body) => {
           capturedBody = body
-          return { success: true }
+          return { data: [{ affected: 1 }], success: true }
         })
 
-      const service = makeService()
+      const service = makeService({ writesEnabled: true })
+      const payload = {
+        branchUpdates: [{ branch: 1000, estePodea: true, inclus: true, marime: 'M' }],
+        covUpdates: [{ clasa: 'AX', cov: 1.5, marime: 'M' }],
+        paramsUpdates: [{ paramKey: 'K', paramValue: 'V' }],
+        token: 'tok'
+      }
+      const result = await service.saveParams(payload)
+
+      assert.strictEqual(result.success, true)
+      assert.ok(capturedBody, 'transport layer was called')
+    })
+
+    it('sends one atomic statements batch with exactly one OPENJSON parameter per statement', async () => {
+      let capturedBody
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => Array.isArray(body.statements))
+        .reply(200, (uri, body) => {
+          capturedBody = body
+          return { data: [{ affected: 1 }], success: true }
+        })
+
+      const service = makeService({ writesEnabled: true })
       const result = await service.saveParams({
         branchUpdates: [{ branch: 1000, estePodea: true, inclus: true, marime: 'M' }],
         covUpdates: [{ clasa: 'AX', cov: 1.5, marime: 'M' }],
@@ -299,12 +350,115 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
       })
 
       assert.strictEqual(result.success, true)
-      // paramsUpdates emits an UPDATE + a guarded INSERT; cov and branch emit one UPDATE each.
+      // paramsUpdates emits an UPDATE + a guarded INSERT (both reuse the same
+      // JSON payload); cov and branch emit one UPDATE each: 4 statements.
       assert.strictEqual(capturedBody.statements.length, 4)
+      const totalParams = capturedBody.statements.reduce((sum, stmt) => sum + (stmt.params || []).length, 0)
+      assert.strictEqual(totalParams, 4, 'exactly one bound OPENJSON parameter per statement')
       for (const stmt of capturedBody.statements) {
+        assert.strictEqual(stmt.params.length, 1)
+        assert.ok(stmt.sql.includes('OPENJSON(:1)'), `statement should bind OPENJSON at :1: ${stmt.sql}`)
         const guard = classifySql(stmt.sql)
         assert.ok(guard.ok, `statement should pass classifySql: ${stmt.sql} (${guard.reason})`)
       }
     })
+
+    it('stays at 4 positional parameters even with 24 params + 33 COV + 18 branch updates in one save', async () => {
+      let capturedBody
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => Array.isArray(body.statements))
+        .reply(200, (uri, body) => {
+          capturedBody = body
+          return { data: [{ affected: 1 }], success: true }
+        })
+
+      const paramsUpdates = Array.from({ length: 24 }, (_, i) => ({ paramKey: `K${i}`, paramValue: `V${i}` }))
+      const covUpdates = []
+      for (const clasa of ['AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ', 'NOU', 'OD']) {
+        for (const marime of ['MARE', 'MEDIU', 'MIC']) {
+          covUpdates.push({ clasa, cov: 1, marime })
+        }
+      }
+      const branchUpdates = Array.from({ length: 18 }, (_, i) => ({ branch: 1000 + i, estePodea: false, inclus: true, marime: 'MIC' }))
+      assert.strictEqual(covUpdates.length, 33)
+
+      const service = makeService({ writesEnabled: true })
+      const result = await service.saveParams({ branchUpdates, covUpdates, paramsUpdates, token: 'tok' })
+
+      assert.strictEqual(result.success, true)
+      assert.strictEqual(capturedBody.statements.length, 4)
+      const totalParams = capturedBody.statements.reduce((sum, stmt) => sum + (stmt.params || []).length, 0)
+      assert.strictEqual(totalParams, 4)
+    })
+
+    it('rejects a single collection larger than the row-count cap before composing SQL', async () => {
+      const service = makeService({ writesEnabled: true })
+      const covUpdates = Array.from({ length: 501 }, () => ({ clasa: 'AX', cov: 1, marime: 'MARE' }))
+      await assert.rejects(
+        service.saveParams({ covUpdates, token: 'tok' }),
+        /Too many covUpdates rows in one save \(501 > 500\)/
+      )
+    })
+  })
+
+  describe('_execStatements() transaction result interpretation (§12.1)', () => {
+    it('rejects when WSMCP reports success:false for the transaction', async () => {
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => Array.isArray(body.statements))
+        .reply(200, { error: 'Transaction failed', errorNumber: 547, failedStep: 2, success: false })
+
+      const service = makeService()
+      await assert.rejects(
+        service._execStatements([{ params: ['x'], sql: 'UPDATE CCCMINMAXCOV SET COV = :1' }], 'tok'),
+        (err) => err.message === 'Transaction failed' && err.failedStep === 2 && err.errNum === 547
+      )
+    })
+
+    it('rejects when success:true but the status row reports __ok = 0 (lowercase)', async () => {
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => Array.isArray(body.statements))
+        .reply(200, { data: [{ __ok: 0, errMsg: 'FK violation', errNum: 547, failedStep: 3 }], success: true })
+
+      const service = makeService()
+      await assert.rejects(
+        service._execStatements([{ params: ['x'], sql: 'UPDATE CCCMINMAXCOV SET COV = :1' }], 'tok'),
+        (err) => err.message === 'FK violation' && err.failedStep === 3 && err.errNum === 547
+      )
+    })
+
+    it('rejects when success:true but the status row is cased __OK (driver normalization)', async () => {
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => Array.isArray(body.statements))
+        .reply(200, { data: [{ __OK: 0, ERRMSG: 'FK violation', ERRNUM: 547, FAILEDSTEP: 3 }], success: true })
+
+      const service = makeService()
+      await assert.rejects(
+        service._execStatements([{ params: ['x'], sql: 'UPDATE CCCMINMAXCOV SET COV = :1' }], 'tok'),
+        (err) => err.message === 'FK violation' && err.failedStep === 3 && err.errNum === 547
+      )
+    })
+
+    it('accepts a status row that explicitly reports __ok = 1', async () => {
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => Array.isArray(body.statements))
+        .reply(200, { data: [{ __ok: 1 }], success: true })
+
+      const service = makeService()
+      const response = await service._execStatements([{ params: ['x'], sql: 'UPDATE CCCMINMAXCOV SET COV = :1' }], 'tok')
+      assert.strictEqual(response.data[0].__ok, 1)
+    })
+
+    it('rejects when the transaction call returns no result rows at all', async () => {
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => Array.isArray(body.statements))
+        .reply(200, { data: [], success: true })
+
+      const service = makeService()
+      await assert.rejects(
+        service._execStatements([{ params: ['x'], sql: 'UPDATE CCCMINMAXCOV SET COV = :1' }], 'tok'),
+        /S1 execSql returned no result for the transaction\./
+      )
+    })
   })
 })
+

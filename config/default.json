@@ -9,6 +9,9 @@
     "default": 10,
     "max": 500
   },
+  "minmaxEngine": {
+    "writesEnabled": false
+  },
   "mssql": {
     "client": "mssql",
     "connection": {

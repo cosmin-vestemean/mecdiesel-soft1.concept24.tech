@@ -39,6 +39,7 @@ export class MinmaxParamsPanel extends LitElement {
       params: { type: Array },
       saveError: { type: String },
       saving: { type: Boolean },
+      writesEnabled: { type: Boolean },
       _branchEdits: { state: true, type: Object },
       _covEdits: { state: true, type: Object },
       _paramEdits: { state: true, type: Object }
@@ -54,6 +55,7 @@ export class MinmaxParamsPanel extends LitElement {
     this.params = [];
     this.saveError = '';
     this.saving = false;
+    this.writesEnabled = false;
     this._branchEdits = {};
     this._covEdits = {};
     this._paramEdits = {};
@@ -96,6 +98,7 @@ export class MinmaxParamsPanel extends LitElement {
     this.loading = state.params.loading;
     this.params = state.params.params;
     this.saveError = state.params.saveError;
+    this.writesEnabled = state.params.writesEnabled;
 
     // A save just completed (saving flipped back to false with no error):
     // the store already reloaded fresh data, so drop the now-stale drafts.
@@ -318,12 +321,13 @@ export class MinmaxParamsPanel extends LitElement {
             <button class="btn btn-sm btn-outline-secondary" ?disabled="${this.saving || !dirtyCount}" @click="${this._cancel}">
               <i class="fas fa-undo me-1"></i>Anuleaza
             </button>
-            <button class="btn btn-sm btn-primary" ?disabled="${this.saving || !dirtyCount}" @click="${this._save}">
+            <button class="btn btn-sm btn-primary" ?disabled="${this.saving || !dirtyCount || !this.writesEnabled}" @click="${this._save}">
               <i class="fas fa-save me-1"></i>Salveaza${dirtyCount ? ` (${dirtyCount})` : ''}
             </button>
           </div>
         </div>
         <div class="card-body">
+          ${!this.writesEnabled ? html`<div class="alert alert-warning py-2"><i class="fas fa-lock me-2"></i>Panou read-only: scrierea parametrilor este dezactivata pe server.</div>` : ''}
           ${this.saveError ? html`<div class="alert alert-danger py-2">${this.saveError}</div>` : ''}
 
           ${this.loading

@@ -1,8 +1,8 @@
 # Current Focus
 
 ## Last Updated
-- 07.09.2026 (sesiunea 28 — review secundar pe cod: cele 9 constatări confirmate, 3 soluții
-  corectate, 5 constatări noi adăugate; plan de execuție scris)
+- 07.09.2026 (sesiunea 29 — pasul 1 din planul de remediere implementat: contract
+  tranzacțional `__ok`/`__OK` + payload `OPENJSON` pentru `saveParams`)
 
 ## Current Goal
 - Faza 5: implementarea backend/frontend este cablată și fluxul read-only funcționează live, dar
@@ -36,15 +36,32 @@
   `statements`; succes numai după verificarea `__ok` și read-back.
 - Scrierea rămâne oprită până la autorizare. Sesiunea aplicației: 8 ore absolut, fără refresh sau
   sliding expiration, doar în memorie; orice reload trece prin login. Vezi wiki-urile Fazei 5.
+- 07.09.2026 — rolurile `minmax.read`/`minmax.edit` vin din **configurație server-side**, nu dintr-o
+  tabelă administrată: o tabelă ACL administrabilă din aplicație ar trebui adăugată în whitelist-ul
+  de scriere `execSql`, iar canalul protejat de `minmax.edit` și-ar putea acorda singur dreptul.
+  Implicit `editors: []`, `readers: "*"`; lookup izolat în `resolveRoles(refid)`. Detalii în
+  `FAZA5_CONTRACT.md` §12.8 și pasul 6 din planul de remediere.
 
 ## Open Questions
-- Sursa server-side pentru rolurile `minmax.read`/`minmax.edit` (config vs. tabelă administrată)
-  trebuie aleasă înainte de pasul 6 din planul de remediere (§12.8).
 - Vezi [minmax-engine-open-items.md](../wiki/minmax-engine-open-items.md) și
   `.copilot/context/open-threads.md` pentru firele de business/tangențiale existente.
 
 ## Next Step
-- Rulează `FAZA5_REMEDIERI_PLAN.md` cu agentul `Implement`, începând cu **pasul 0** (kill-switch
-  `MINMAX_ENGINE_WRITES_ENABLED=false`), pentru că serviciul este astăzi complet neautentificat
-  (`around: { all: [] }`). Abia apoi pasul 1 (§12.1 + §12.2).
+- **Pasul 0 este făcut** (07.09.2026): `MINMAX_ENGINE_WRITES_ENABLED` implicit `false`, `saveParams`
+  aruncă `Forbidden` ca primă instrucțiune, `params()` expune `writesEnabled` către store și
+  `minmax-params-panel` afișează read-only. 44 teste minmax-engine verzi.
+- **Pasul 1 este făcut** (07.09.2026, §12.1+§12.2): `_execStatements()`/`_checkTransactionResult()`
+  respinge rollback-ul (`response.success===false` SAU rând de stare `__ok`/`__OK` = 0, tolerant la
+  capitalizare, absența rândului = eroare); `saveParams()` compune `OPENJSON(:1)` per colecție
+  (paramsUpdates/covUpdates/branchUpdates), tabelă imediat după `UPDATE`, exact 4 parametri
+  poziționali indiferent de numărul de rânduri (validat cu 24+33+18). 60 teste minmax-engine verzi.
+  **Verificare live FĂCUTĂ** (cu confirmarea utilizatorului): `OPENJSON(:1)` confirmat funcțional prin
+  canalul WSMCP real (cheia app, ALLOW_WRITE=1) pe toate cele 3 tabele, no-op, plus un rollback
+  declanșat de o eroare de runtime reală (conversie NVARCHAR→FLOAT) — ACID confirmat live. Bug real
+  găsit și corectat în același pas: `findSaveMismatch()` din store nu normaliza `SCOPEKEY` la fel pe
+  partea "fresh" ca pe partea "sent" — un `''` real se serializează ca JSON `null` prin execSql,
+  ceea ce ar fi produs un fals mismatch la orice salvare reușită de parametru GLOBAL. Corectat.
+- Urmează **pasul 2** (§12.3 + §12.4 — sortare fără dublarea tie-break-ului, selectoare `.selected`)
+  cu agentul `Implement`. Serviciul rămâne complet neautentificat (`around: { all: [] }`) până la
+  pasul 6, a cărui decizie de proiectare este acum luată.
 
