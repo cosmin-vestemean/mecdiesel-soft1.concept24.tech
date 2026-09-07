@@ -361,10 +361,15 @@ nu blochează confirmarea rezultatelor de către beneficiar.
 
 ## 12. Soluții pentru constatările review-ului din 07.09.2026
 
-Cele nouă constatări de mai jos provin din review-ul pe intervalul de commit-uri al Fazei 5 și din
-simulări autentificate pe `RUNID = 5`. Primele patru sunt blocante pentru acceptanță. Implementarea
-remedierilor este un task multi-fișier *(model recomandat: Claude Sonnet 4.6)*, urmat de review pe
-diff și retestare live într-o sesiune nouă, cu context mic *(model recomandat: Opus)*.
+Constatările 12.1–12.9 provin din review-ul pe intervalul de commit-uri al Fazei 5 și din simulări
+autentificate pe `RUNID = 5`. Constatările 12.10–12.14 au fost adăugate de review-ul secundar pe
+cod (07.09.2026, sesiune nouă cu context mic), care a confirmat primele nouă și a corectat trei
+detalii de proiectare din soluțiile lor — vezi §12.2 (forma `UPDATE` acceptată de garda SQL), §12.4
+(binding pe proprietate, nu pe atribut) și §12.15 (write flag oprit înainte de repararea scrierii).
+
+12.1–12.4 rămân blocante pentru acceptanță. Implementarea remedierilor este un task multi-fișier
+*(model recomandat: Claude Sonnet 4.6)*, urmat de review pe diff și retestare live într-o sesiune
+nouă, cu context mic *(model recomandat: Opus)*.
 
 ### 12.1. Rollback-ul `saveParams` nu trebuie raportat ca succes — blocant
 
@@ -385,6 +390,12 @@ eșecul recitirii. Se adaugă și cazul `__ok = 1` pentru a fixa forma răspunsu
 
 ### 12.2. Salvarea trebuie să suporte matricea completă fără depășirea limitei de 20 — blocant
 
+**Amploarea reală:** limita nu se atinge la 20 de modificări, ci mult mai devreme, pentru că fiecare
+rând generează mai mulți parametri poziționali: un parametru global costă 9 (4 pentru `UPDATE` + 5
+pentru `INSERT`), o celulă COV costă 3, o filială costă 4. Salvarea se rupe deci de la **3 parametri
+globali**, **7 celule COV** sau **6 filiale** — praguri pe care un utilizator le atinge la prima
+sesiune reală de configurare.
+
 **Soluție:** nu se fragmentează salvarea în tranzacții succesive, deoarece asta ar pierde garanția
 all-or-nothing. Fiecare colecție se serializează server-side într-un singur parametru JSON, validat
 și limitat ca număr de rânduri înainte de SQL. Pe SQL Server 2016, compat level 130, `OPENJSON`
@@ -400,6 +411,14 @@ Payload-ul de parametri consumă maximum patru poziții (JSON-ul de parametri ap
 instrucțiuni, COV într-una și filiale într-una), indiferent dacă se modifică o celulă sau toate cele
 33. Garda SQL trebuie să recunoască în continuare explicit tabela țintă din fiecare `UPDATE`/
 `INSERT`; nu se relaxează whitelist-ul.
+
+**Constrângere obligatorie de formă SQL:** `referencedTable()` din `sql-guard.js` extrage tabela cu
+`UPDATE\s+([A-Za-z0-9_]+)`, deci forma idiomatică `UPDATE c SET ... FROM CCCMINMAXCOV c JOIN
+OPENJSON(:1)` ar returna **aliasul** `C` și ar fi respinsă de propria gardă. Se scrie deci
+obligatoriu cu tabela imediat după `UPDATE`:
+`UPDATE CCCMINMAXCOV SET COV = j.COV, UPDATEDAT = GETDATE() FROM CCCMINMAXCOV INNER JOIN OPENJSON(:1)
+WITH (...) j ON j.CLASA = CCCMINMAXCOV.CLASA AND j.MARIME = CCCMINMAXCOV.MARIME`. Nu se relaxează
+regex-ul gărzii pentru a accepta aliasuri: ar fi o slăbire a whitelist-ului, nu o adaptare.
 
 **Acceptanță:** test cu 24 parametri globali + 33 COV + 18 filiale în același save, cel mult patru
 parametri poziționali pe request, o singură tranzacție și rollback integral dacă ultimul statement
@@ -425,10 +444,15 @@ ori în `ORDER BY`.
 ### 12.4. Selectoarele trebuie să afișeze starea persistată — blocant
 
 **Soluție:** nu se mai setează `.value` pe `<select>` înainte ca opțiunile Lit să existe. Fiecare
-`<option>` primește binding explicit `?selected` comparat cu valoarea din store, atât pentru
-`MARIME`, cât și pentru page size în rezultate și group ABC. După randare, DOM-ul trebuie să fie o
-proiecție a store-ului; payload-ul de salvare se construiește în continuare din draft, niciodată
-citind selectoarele din DOM.
+`<option>` primește binding pe **proprietate** — `.selected="${...}"` — comparat cu valoarea din
+store, atât pentru `MARIME`, cât și pentru page size în rezultate și group ABC. Nu se folosește
+`?selected`: acela scrie *atributul*, adică `defaultSelected`, iar după prima interacțiune a
+utilizatorului elementul `<select>` devine „dirty" și ignoră schimbările de atribut, deci un
+re-render din store nu s-ar mai reflecta în DOM. Alternativa acceptabilă este păstrarea `.value`,
+dar mutată în `updated()`, după ce opțiunile au fost randate.
+
+După randare, DOM-ul trebuie să fie o proiecție a store-ului; payload-ul de salvare se construiește
+în continuare din draft, niciodată citind selectoarele din DOM.
 
 **Acceptanță:** test de componentă cu filiale `MARE/MEDIU/MIC` și page size 50/100/200/500, plus
 verificare live că toate cele 18 filiale afișează `MARIME` din `CCCMINMAXBRANCH`. Modificarea unui
@@ -528,14 +552,98 @@ la următoarea activare sau prin refresh.
 `minmax-engine`; prima activare produce exact setul planificat; revenirea în tab nu repetă apelurile;
 refresh-ul le repetă o singură dată.
 
-### 12.10. Ordinea implementării și poarta de acceptanță
+### 12.10. RUNID-ul rezolvat se cache-uiește pe aceeași cheie ca `COUNT(*)`
 
+**Constatare:** `results()` și `groupAbc()` apelează `_resolveRunId()` la **fiecare** invocare, deci
+o simplă schimbare de pagină costă trei apeluri S1: rezolvarea sesiunii, `COUNT(*)` și datele. La
+încărcarea inițială, containerul lansează `results()` și `groupAbc()` în paralel, deci sesiunea se
+rezolvă de două ori pentru același RUNID.
+
+**Soluție:** RUNID-ul rezolvat se memorează pe aceeași cheie de populație introdusă la §12.6, alături
+de total. Paginarea și sortarea îl refolosesc; schimbarea filtrelor, a sesiunii sau refresh-ul
+explicit îl invalidează. În modul „sesiunea curentă", refresh-ul rerulează `ESTE_CURENT` conform
+§12.6 — regula rămâne unică pentru ambele valori cache-uite.
+
+**Acceptanță:** test de store care numără apelurile: paginile 2/3 nu declanșează nici rezolvare, nici
+count; încărcarea inițială rezolvă sesiunea o singură dată, deși două fluxuri o cer.
+
+### 12.11. `groupAbc()` trebuie să întoarcă `total` sau să nu-l afișeze
+
+**Constatare:** serviciul nu calculează niciodată `total` pentru `CCCMINMAXGRP`, deci
+`state.groupAbc.total` rămâne `null` permanent: antetul „N rânduri" este mereu gol, iar butonul
+„Urmator" se bazează pe euristica `rows.length < pageSize`, care ascunde ultima pagină exact plină.
+
+**Soluție:** se extinde contractul `withTotal` din §12.6 și la `groupAbc()`, cu aceeași regulă de
+invalidare, iar `SET_GROUP_ABC_RESULTS` primește totalul. Paginarea folosește apoi `totalPages`, ca
+în tabela de rezultate. Dacă totalul nu se implementează, se elimină atât afișajul, cât și euristica.
+
+**Acceptanță:** antetul group ABC arată același număr ca un `COUNT(*)` rulat direct pe filtrele
+curente; „Urmator" este dezactivat pe ultima pagină chiar când aceasta are exact `pageSize` rânduri.
+
+### 12.12. `codeLike` trebuie să escapeze wildcard-urile `LIKE`
+
+**Constatare:** filtrul se compune ca `d.CODE LIKE :N` cu valoarea `input + '%'`. Valoarea este
+legată ca parametru, deci nu există injecție SQL, dar `%`, `_` și `[` introduse de utilizator sunt
+interpretate ca wildcard-uri: filtrul returnează rânduri care nu corespund prefixului cerut și poate
+forța un scan.
+
+**Soluție:** se escapează `%`, `_` și `[` în valoarea utilizatorului și se adaugă
+`ESCAPE '\'` la clauză. Prefixul `%` final rămâne adăugat de server, nu de client.
+
+**Acceptanță:** test unitar pentru un cod care conține `%` și unul care conține `_`; ambele trebuie
+tratate literal.
+
+### 12.13. `explain()` trebuie să valideze sesiunea, nu doar să o caste la întreg
+
+**Constatare:** `explain()` face `sqlInt(data.runId)` și interoghează direct, fără `_resolveRunId()`.
+Acceptă deci orice RUNID, inclusiv o sesiune `OPEN` sau `ERROR`, contrazicând regula din §5/§11 după
+care sesiunea se validează server-side.
+
+**Soluție:** `explain()` trece prin aceeași validare ca `results()`. Nu este blocant — calea este
+read-only — dar elimină o cale prin care UI-ul poate afișa numere dintr-o sesiune neîncheiată.
+
+**Acceptanță:** test care cere `explain` pe un RUNID cu `SESSION_STATUS <> 'DONE'` și primește
+`RUN_NOT_READY`.
+
+### 12.14. Testele trebuie să acopere interpretarea răspunsului, nu doar SQL-ul generat
+
+**Constatare:** cele 27 de teste existente validează aproape exclusiv **SQL-ul emis** (whitelist,
+`STRING_SPLIT`, plafoane, clamping). De aceea §12.1 a putut trece nedetectat: nu există niciun test
+pe *forma răspunsului*. Similar, testul „un singur batch atomic" pentru `saveParams` nu numără
+parametrii, ceea ce a lăsat §12.2 invizibil.
+
+**Soluție:** fiecare metodă a serviciului primește cel puțin un test pe răspuns (succes și eșec), iar
+testele de scriere afirmă explicit numărul de parametri poziționali, nu doar structura. Regula
+devine parte din poarta de acceptanță: o remediere nu se consideră terminată dacă testul ei verifică
+doar cererea.
+
+**Acceptanță:** suita conține, pentru fiecare metodă, o pereche răspuns-valid / răspuns-invalid; niciun
+test de scriere nouă nu trece fără o aserțiune pe numărul de parametri.
+
+### 12.15. Ordinea implementării și poarta de acceptanță
+
+0. **Kill-switch-ul de scriere (`MINMAX_ENGINE_WRITES_ENABLED=false`) intră primul**, separat de
+   restul §12.8. Motiv: pașii 1 și 2 fac scrierea să funcționeze corect și pe matricea completă, iar
+   serviciul este astăzi complet neautentificat (`around: { all: [] }`). A repara scrierea înaintea
+   opririi ei ar deschide o fereastră în care oricine poate salva parametri.
 1. Remedieri 12.1 + 12.2 împreună: contractul tranzacțional și payload-ul JSON nu se separă.
 2. Remedieri 12.3 + 12.4: defectele live care pot afișa eroare sau configurație falsă.
-3. Remedieri 12.5–12.7: completitudinea filtrelor, costul paginării și concurența din store.
-4. Remedierea 12.8: autorizarea; până la finalizarea ei, write flag rămâne oprit.
-5. Remedierea 12.9: lazy activation, apoi măsurarea sortărilor și a paginării.
+3. Remedieri 12.5, 12.12, 12.13: completitudinea și corectitudinea filtrelor și a drill-down-ului.
+4. Remedieri 12.6 + 12.10 + 12.11 împreună: costul paginării, cache-ul de populație și totalul
+   group ABC folosesc aceeași cheie de invalidare, deci se proiectează o singură dată.
+5. Remedierea 12.7: concurența din store.
+6. Remedierea 12.8 completă: autorizarea; write flag rămâne oprit până la finalizarea ei.
+7. Remedierea 12.9: lazy activation, apoi măsurarea sortărilor și a paginării.
+
+Regula din 12.14 se aplică transversal, la fiecare pas, nu ca etapă separată.
 
 Faza 5 poate fi declarată acceptată numai după: suită unit/component verde, retestarea live a
 sortărilor și selectoarelor, o salvare controlată urmată de read-back, o simulare de rollback și
 confirmarea că utilizatorul read-only primește 403 la `saveParams`.
+
+Aceste condiții sunt însă doar **precondiții tehnice**. Poarta reală către Faza 4 este validarea
+numerică a rezultatelor — invariante pe toată populația plus recalcul manual pe un eșantion
+stratificat și înghețat — urmată de confirmarea beneficiarului pe formule, nu doar pe cifre. Nu poate
+începe înainte de remedierile 12.3, 12.4, 12.5 și 12.13, pentru că fiecare dintre ele introduce bias
+sau împiedică navigarea sistematică prin date. Pașii concreți sunt în
+[FAZA5_REMEDIERI_PLAN.md](FAZA5_REMEDIERI_PLAN.md) §„Pasul 8".
