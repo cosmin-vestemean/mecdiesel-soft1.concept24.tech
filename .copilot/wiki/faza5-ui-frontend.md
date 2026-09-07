@@ -94,11 +94,26 @@ sesiune de testare — vezi [faza5-ui-backend.md](faza5-ui-backend.md).
 
 ## Stadiu (vs. `FAZA5_CONTRACT.md` §9/§10, pasul 8)
 
-**Complet și verificat live** (07.09.2026, autentificat, date reale, `RUNID=5`): toate cele 6
-componente din §9 construite, cablate în `minmax-engine-container.js`, și integrate în navigare
-(tab "MIN/MAX Engine" în app-ul `achizitii` — buton + content div în `index.html`, handler în
-`userInteractions.js`, înregistrare în `hierarchical-navigation.js`). Fluxul filtre → rezultate →
-click rând → explain drawer → group-abc → istoric confirmat funcțional în browser.
+Toate cele 6 componente din §9 sunt construite, cablate în `minmax-engine-container.js` și
+integrate în navigare. Fluxul filtre → rezultate → explain drawer → group ABC → istoric funcționează
+live pe `RUNID=5`, dar review-ul de acceptanță a găsit probleme care împiedică declararea Fazei 5
+drept finalizată. Soluțiile și testele sunt definite canonic în `new_min_max/FAZA5_CONTRACT.md` §12.
 
-Rămas netestat: `saveParams()` cu o salvare reală (params-panel) — tabelele `CCCMINMAXPARAMS`/
-`COV` erau goale la testare, deci fluxul de editare n-a fost exersat cu date.
+Confirmat live în frontend:
+
+- selectorul `MARIME` afișează `MARE` pentru 12 filiale persistate ca `MIC`, iar page size arată
+  50 deși store-ul folosește 100; opțiunile trebuie legate prin `?selected`, nu `.value` înainte de
+  randarea copiilor;
+- filtrul `CLASA` omite valorile reale `NOU` și `OD` (pe RUNID 5: 659, respectiv 680.918 rânduri);
+- sortarea „Filiala" afișează eroarea SQL 80040E14 generată în backend;
+- editarea a șapte celule COV este respinsă înainte de S1 cu `21 > 20`.
+
+Store-ul mai necesită request sequence separat pentru fiecare flux asincron, astfel încât un
+răspuns vechi să nu suprascrie pagina/drawer-ul nou, și control explicit `withTotal`: count numai la
+schimbarea populației, nu la fiecare pagină sau sortare. Încărcarea inițială devine lazy printr-un
+`activate()` idempotent apelat la prima deschidere a tabului; group ABC nu mai pornește propriul
+fetch din subscription.
+
+`saveParams()` nu se testează prin scriere reală înainte de remedierea §12.1 + §12.2 și instalarea
+autorizării §12.8. Sesiunea aplicației are durată absolută de 8 ore, fără refresh/sliding expiration,
+stă numai în memoria paginii, iar orice reload revine obligatoriu prin login.

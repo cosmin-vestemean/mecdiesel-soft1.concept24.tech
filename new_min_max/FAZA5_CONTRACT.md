@@ -358,3 +358,184 @@ nu blochează confirmarea rezultatelor de către beneficiar.
 - `explainRow` afișează valori persistate și nu reimplementează nicio formulă în stratul Node.
 - Sesiunea curentă este `ESTE_CURENT = 1` pe o sesiune `FULL` închisă cu faza solicitată `DONE`;
   niciun consumator nu deduce „ultima" prin `MAX(RUNID)`.
+
+## 12. Soluții pentru constatările review-ului din 07.09.2026
+
+Cele nouă constatări de mai jos provin din review-ul pe intervalul de commit-uri al Fazei 5 și din
+simulări autentificate pe `RUNID = 5`. Primele patru sunt blocante pentru acceptanță. Implementarea
+remedierilor este un task multi-fișier *(model recomandat: Claude Sonnet 4.6)*, urmat de review pe
+diff și retestare live într-o sesiune nouă, cu context mic *(model recomandat: Opus)*.
+
+### 12.1. Rollback-ul `saveParams` nu trebuie raportat ca succes — blocant
+
+**Soluție:** `_execStatements()` trebuie să interpreteze și rezultatul tranzacțional din
+`response.data`, nu doar `response.success`. Dacă rândul de stare are `__ok = 0`, metoda aruncă o
+eroare care include `failedStep`, `errNum` și `errMsg`; `saveParams()` nu mai poate întoarce
+`success: true` după `ROLLBACK`. Citirea câmpurilor trebuie să tolereze capitalizarea returnată de
+driver (`__ok`/`__OK`), dar nu absența unui rezultat valid.
+
+Store-ul golește drafturile numai după trei condiții îndeplinite: tranzacția a răspuns cu succes,
+`loadParams()` a reușit, iar valorile recitite coincid cu payload-ul normalizat trimis. Pentru acest
+flux, `loadParams()` trebuie să poată propaga eroarea către `saveParams()` în loc să o consume și să
+rezolve promisiunea. La eroare, drafturile rămân intacte și mesajul afișează pasul care a eșuat.
+
+**Acceptanță:** test HTTP mockat pentru `{success:true,data:[{__ok:0,...}]}` care trebuie să
+respingă promisiunea; test UI/store care confirmă că drafturile nu se golesc după rollback sau după
+eșecul recitirii. Se adaugă și cazul `__ok = 1` pentru a fixa forma răspunsului de succes.
+
+### 12.2. Salvarea trebuie să suporte matricea completă fără depășirea limitei de 20 — blocant
+
+**Soluție:** nu se fragmentează salvarea în tranzacții succesive, deoarece asta ar pierde garanția
+all-or-nothing. Fiecare colecție se serializează server-side într-un singur parametru JSON, validat
+și limitat ca număr de rânduri înainte de SQL. Pe SQL Server 2016, compat level 130, `OPENJSON`
+transformă payload-ul în rânduri folosind tipurile exacte din schema tabelei:
+
+- `paramsUpdates`: un `UPDATE ... FROM OPENJSON(:1)` și un
+   `INSERT ... SELECT ... FROM OPENJSON(:1) WHERE NOT EXISTS`, fără `MERGE`;
+- `covUpdates`: un singur `UPDATE CCCMINMAXCOV ... FROM OPENJSON(:1)`;
+- `branchUpdates`: un singur `UPDATE CCCMINMAXBRANCH ... FROM OPENJSON(:1)`.
+
+Toate instrucțiunile rămân în același apel `statements`, deci într-o singură tranzacție WSMCP.
+Payload-ul de parametri consumă maximum patru poziții (JSON-ul de parametri apare în două
+instrucțiuni, COV într-una și filiale într-una), indiferent dacă se modifică o celulă sau toate cele
+33. Garda SQL trebuie să recunoască în continuare explicit tabela țintă din fiecare `UPDATE`/
+`INSERT`; nu se relaxează whitelist-ul.
+
+**Acceptanță:** test cu 24 parametri globali + 33 COV + 18 filiale în același save, cel mult patru
+parametri poziționali pe request, o singură tranzacție și rollback integral dacă ultimul statement
+eșuează. Se verifică live `OPENJSON(:1)` prin canalul WSMCP înainte de activarea scrierii în UI.
+
+### 12.3. Sortarea nu trebuie să dubleze coloanele din tie-break — blocant
+
+**Soluție:** `buildOrderBy()` primește tie-break-ul ca listă de identificatori validați, nu ca text
+opac, și elimină din listă coloana deja aleasă pentru sortare. Exemplele obligatorii sunt:
+
+- sort `branch` → `ORDER BY d.BRANCH <dir>, d.MTRL`;
+- sort `mtrl` → `ORDER BY d.MTRL <dir>, d.BRANCH`;
+- sort `engMax` → `ORDER BY d.ENG_MAX <dir>, d.BRANCH, d.MTRL`;
+- în `groupAbc`, aceeași regulă pentru `BRANCH` și `MTRGROUP`.
+
+Direcția utilizatorului se aplică numai coloanei principale; tie-break-ul rămâne `ASC` pentru o
+paginare deterministă. Whitelist-ul de sortare rămâne unica sursă de identificatori SQL.
+
+**Acceptanță:** teste unitare pe SQL-ul exact pentru coliziunea cu fiecare coloană din tie-break,
+apoi click live pe toate antetele sortabile; nicio interogare nu conține aceeași expresie de două
+ori în `ORDER BY`.
+
+### 12.4. Selectoarele trebuie să afișeze starea persistată — blocant
+
+**Soluție:** nu se mai setează `.value` pe `<select>` înainte ca opțiunile Lit să existe. Fiecare
+`<option>` primește binding explicit `?selected` comparat cu valoarea din store, atât pentru
+`MARIME`, cât și pentru page size în rezultate și group ABC. După randare, DOM-ul trebuie să fie o
+proiecție a store-ului; payload-ul de salvare se construiește în continuare din draft, niciodată
+citind selectoarele din DOM.
+
+**Acceptanță:** test de componentă cu filiale `MARE/MEDIU/MIC` și page size 50/100/200/500, plus
+verificare live că toate cele 18 filiale afișează `MARIME` din `CCCMINMAXBRANCH`. Modificarea unui
+checkbox nu trebuie să schimbe implicit mărimea filialei.
+
+### 12.5. Filtrul `CLASA` trebuie să includă `NOU` și `OD`
+
+**Soluție:** mulțimea backend `CLASA_VALUES` și ambele liste UI `CLASA_OPTIONS` devin
+`AX, AY, AZ, BX, BY, BZ, CX, CY, CZ, NOU, OD`. Aceeași mulțime se definește într-un modul comun
+frontend pentru a evita divergența dintre rezultate și group ABC; backend-ul rămâne autoritatea de
+validare. Filtrul `lifecycle` rămâne separat — cele două câmpuri nu sunt sinonime chiar dacă
+override-urile actuale produc frecvent aceeași valoare.
+
+**Acceptanță:** teste backend pentru `clasa=['NOU','OD']`, teste UI pentru prezența opțiunilor și
+simulare live pe `RUNID = 5`. La review s-au măsurat 659 rânduri `CLASA=NOU` și 680.918 rânduri
+`CLASA=OD`; ambele populații trebuie să poată fi selectate direct.
+
+### 12.6. `COUNT(*)` se recalculează numai când se schimbă populația
+
+**Soluție:** `loadResults()` primește explicit opțiunea `withTotal`. Încărcarea inițială,
+schimbarea/resetarea filtrelor, schimbarea sesiunii și refresh-ul explicit trimit `withTotal:true`.
+Paginarea, sortarea și schimbarea page size trimit `withTotal:false`, iar reducer-ul păstrează
+totalul existent când răspunsul nu conține `total`. Store-ul memorează cheia populației
+`{resolvedRunId, filters}` pentru a invalida totalul; sortarea și pagina nu fac parte din cheie.
+
+Pentru modul „sesiunea curentă", refresh-ul explicit rezolvă din nou `ESTE_CURENT`; dacă RUNID-ul
+rezolvat diferă, totalul se invalidează și se recalculează chiar dacă filtrele sunt identice.
+
+**Acceptanță:** test de store care numără apelurile: paginile 2/3 și sortarea nu cer count;
+schimbarea unui filtru sau trecerea la alt RUNID cere exact un count. Se măsoară live latența unei
+paginări înainte și după remediere.
+
+### 12.7. Răspunsurile asincrone vechi nu trebuie să suprascrie starea nouă
+
+**Soluție:** store-ul menține câte un request sequence monoton pentru `results`, `groupAbc`,
+`explain`, `history` și `params`. Fiecare apel capturează ID-ul curent și poate face dispatch pentru
+date, eroare sau `loading=false` numai dacă este încă ultimul apel din fluxul respectiv. Închiderea
+drawer-ului incrementează secvența `explain`, invalidând răspunsul aflat în zbor. Salvarea are flux
+separat și dezactivează butonul până la tranzacție plus recitire.
+
+Se preferă această gardă față de `AbortController`: apelul Feathers/socket nu oferă anularea
+fiabilă a lucrului deja pornit în S1, dar răspunsul expirat poate fi ignorat determinist.
+
+**Acceptanță:** teste cu promisiuni controlate care rezolvă cererile în ordine inversă pentru
+pagina 2/3, două articole deschise rapid și două seturi group ABC. Numai ultima cerere modifică
+datele, eroarea și loading state-ul.
+
+### 12.8. Scrierea cere identitate și rol server-side, nu doar un token S1
+
+**Soluție imediată:** `saveParams` este dezactivat implicit prin
+`MINMAX_ENGINE_WRITES_ENABLED=false`; UI-ul afișează panoul read-only. Flag-ul devine `true` numai
+după instalarea autorizării de mai jos. Citirile pot rămâne disponibile utilizatorilor autentificați.
+
+**Soluție definitivă:** după succesul existentului `validateUserPwd(sessionToken, REFID,
+password)`, backend-ul emite un token de aplicație semnat, cu durată absolută de **8 ore**, care
+conține identitatea verificată (`sub = REFID`) și rolurile stabilite server-side. Expirarea nu este
+glisantă: activitatea utilizatorului nu prelungește sesiunea și nu există refresh token sau
+reînnoire transparentă. După 8 ore este obligatoriu un login complet nou.
+
+Token-ul de aplicație se păstrează numai în memoria paginii, nu în `localStorage`, `sessionStorage`
+sau alt mecanism restaurabil. Orice reload/reinițializare a paginii pierde sesiunea de aplicație și
+trece obligatoriu prin fluxul de login, chiar dacă intervalul de 8 ore nu a expirat încă și în
+`sessionStorage` mai există un token S1. Token-ul S1 nu este dovadă suficientă de autentificare sau
+autorizare în aplicație și nu poate restaura direct sesiunea MIN/MAX.
+
+Nu se acceptă un REFID sau rol trimis ulterior de browser ca dovadă. Serviciul MIN/MAX primește
+hook `authenticate` pe toate metodele, rol `minmax.read` pentru citiri și `minmax.edit` pentru
+`saveParams`; lista editorilor vine din configurație server-side sau dintr-o tabelă administrată,
+nu din JavaScript-ul public. Token-ul S1 rămâne separat și este folosit doar ca `clientID` pentru
+transportul WSMCP.
+
+Whitelist-ul celor patru tabele și cheia dedicată `ALLOW_WRITE=1` rămân obligatorii: autorizarea
+utilizatorului și limitarea capabilității SQL sunt controale independente. Se adaugă audit pentru
+save cu REFID, timestamp și cheile logice modificate, fără valori secrete.
+
+**Acceptanță:** socket anonim → 401; utilizator cu `minmax.read` → citiri permise și save → 403;
+utilizator cu `minmax.edit` → save permis; REFID falsificat în payload nu schimbă identitatea din
+token; flag-ul de producție oprește scrierea indiferent de rol. Un token emis acum este respins
+după exact 8 ore și nu își modifică expirarea prin activitate. Reload-ul paginii, inclusiv înainte
+de expirare, deschide login-ul și nu poate recupera sesiunea din token-ul S1 sau din browser
+storage; numai un login reușit emite o sesiune de aplicație nouă.
+
+### 12.9. Datele se încarcă la prima activare a tabului, nu la pornirea aplicației
+
+**Soluție:** `connectedCallback()` al containerului nu mai face fetch. Handler-ul tabului
+„MIN/MAX Engine" apelează o metodă idempotentă `activate()`, care la prima activare pornește
+`history`, `params`, `results` și `groupAbc`; apelurile ulterioare doar afișează starea existentă.
+Butonul „Reîncarcă"/refresh poate forța explicit o nouă încărcare. Componenta group ABC nu mai
+lansează independent fetch din `_subscribeToStore()`, pentru ca toate apelurile inițiale să aibă
+un singur proprietar.
+
+`activate()` păstrează aceeași promisiune cât timp inițializarea este în curs, astfel încât două
+click-uri rapide pe tab să nu dubleze request-urile. Dacă inițializarea eșuează, starea permite retry
+la următoarea activare sau prin refresh.
+
+**Acceptanță:** încărcarea aplicației fără deschiderea tabului produce zero apeluri
+`minmax-engine`; prima activare produce exact setul planificat; revenirea în tab nu repetă apelurile;
+refresh-ul le repetă o singură dată.
+
+### 12.10. Ordinea implementării și poarta de acceptanță
+
+1. Remedieri 12.1 + 12.2 împreună: contractul tranzacțional și payload-ul JSON nu se separă.
+2. Remedieri 12.3 + 12.4: defectele live care pot afișa eroare sau configurație falsă.
+3. Remedieri 12.5–12.7: completitudinea filtrelor, costul paginării și concurența din store.
+4. Remedierea 12.8: autorizarea; până la finalizarea ei, write flag rămâne oprit.
+5. Remedierea 12.9: lazy activation, apoi măsurarea sortărilor și a paginării.
+
+Faza 5 poate fi declarată acceptată numai după: suită unit/component verde, retestarea live a
+sortărilor și selectoarelor, o salvare controlată urmată de read-back, o simulare de rollback și
+confirmarea că utilizatorul read-only primește 403 la `saveParams`.

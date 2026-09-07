@@ -115,7 +115,29 @@ Pași 1-7 **făcuți**: sesiune `FULL` validată (`RUNID=5`), chei separate în 
 config environment, serviciul Feathers, compunerea SQL + whitelist coloane, `classifySql` + whitelist
 tabele, înregistrare `services/index.js`/`socketConfig.js`.
 
-Pasul 8 (**în lucru**): componentele UI + store (`public/components/minmax-engine/*`,
-`public/stores/minmax-engine-store.js`) — store, container și primul consumator
-(`minmax-run-panel.js`) există deja; vezi [faza5-ui-frontend.md](faza5-ui-frontend.md) pentru
-stadiul detaliat. Pașii 9-10 (măsurare sortări, review) rămân după el.
+Pasul 8 este construit și integrat, iar review-ul din pasul 10 a fost efectuat. Faza 5 nu este însă
+acceptată încă: review-ul și simulările live au identificat nouă remedieri, definite canonic în
+`new_min_max/FAZA5_CONTRACT.md` §12. Dintre ele, următoarele backend sunt blocante:
+
+- `_execStatements()` ignoră rândul tranzacțional `__ok=0`, deci un rollback poate fi raportat ca
+  succes și poate determina UI-ul să arunce drafturile;
+- `saveParams()` consumă 9 parametri per parametru global, 3 per COV și 4 per filială; șapte celule
+  COV au fost respinse live cu `21 > 20`;
+- sortarea după `BRANCH`/`MTRL` dublează coloana deja prezentă în tie-break; click-ul live pe
+  „Filiala" a produs eroarea SQL 80040E14;
+- serviciul nu are încă autentificare/autorizare Feathers pentru cheia cu `ALLOW_WRITE=1`.
+
+Decizia pentru salvare este un singur apel tranzacțional `statements`, cu colecțiile serializate în
+JSON și expandate prin `OPENJSON` (SQL Server 2016, compat 130): maximum patru parametri pentru
+întregul formular, fără fragmentarea atomicității. Rezultatul `__ok/failedStep/errNum/errMsg` se
+validează înainte de succes, apoi configurația se recitește și se compară cu payload-ul normalizat.
+
+Scrierea rămâne oprită implicit prin `MINMAX_ENGINE_WRITES_ENABLED=false` până la autorizare.
+Soluția decisă este o sesiune de aplicație semnată, cu expirare absolută la 8 ore, fără refresh sau
+sliding expiration, păstrată numai în memoria paginii; orice reload trece din nou prin login.
+Citirile cer rol `minmax.read`, iar `saveParams` cere `minmax.edit`; token-ul S1 rămâne separat și
+nu poate restaura sesiunea aplicației. Lista editorilor și auditul sunt server-side.
+
+Cele 41 de teste backend existente trec, dar nu acoperă rollback-ul structurat, payload-ul complet
+sau coliziunea sortării cu tie-break-ul. Următorul pas backend este implementarea împreună a
+remedierilor §12.1 + §12.2, cu testele de acceptanță descrise în contract.
