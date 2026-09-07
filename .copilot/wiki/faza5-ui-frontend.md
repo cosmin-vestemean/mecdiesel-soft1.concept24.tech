@@ -25,6 +25,14 @@
   dar **încă necablat** în container. `CCCMINMAXGRP` (ABC/XYZ per `MTRGROUP × BRANCH`, contract
   §8); fără sortare (backend-ul `groupAbc()` acceptă `sort`, dar `loadGroupAbc()` din store nu-l
   transmite încă). Vezi "Decizii de design" pentru tiparul de filtre tranzitorii.
+- `public/components/minmax-engine/minmax-explain-drawer.js` — al patrulea `ContextConsumer`,
+  construit dar **încă necablat** (nici în container, nici ca trigger din
+  `minmax-results-table.js`, care nu are încă niciun hook de row-click). Randează
+  `state.explain` (deja implementat integral în store: `openExplain`/`closeExplain`/
+  `SET_EXPLAIN_DATA`/`SET_EXPLAIN_ERROR`) ca un drawer fix pe partea dreaptă, vizibil doar când
+  `state.explain.open`. Afișează exact câmpurile din contract §6, în ordinea din contract
+  (`INPUT_FIELDS`, `CHAIN_FIELDS`), plus antetul `CCCMINMAXRUN`, `CCCMINMAXWINSOR` și seria
+  densă de 52 de săptămâni — nu recalculează nimic, doar formatează.
 
 ## Decizii de design
 
@@ -60,13 +68,17 @@
 
 ## Stadiu (vs. `FAZA5_CONTRACT.md` §9/§10, pasul 8)
 
-Construite: store, container (cablat cu `minmax-run-panel.js`/`minmax-results-table.js`), și
-`minmax-group-abc.js` (funcțional, dar încă necablat în container).
+Construite: store, container (cablat cu `minmax-run-panel.js`/`minmax-results-table.js`),
+`minmax-group-abc.js` și `minmax-explain-drawer.js` (ambele funcționale, dar încă necablate în
+container).
 
-Rămân, în ordine: `minmax-explain-drawer.js` (**următorul**), `minmax-params-panel.js`. Fiecare se
-conectează la `minmaxEngineStore` prin `ContextConsumer`, tipar din
-`public/components/data-table.js`/`query-panel.js` (plus componentele minmax-specifice deja
-funcționale în acest repo).
+Rămâne: `minmax-params-panel.js` (**următorul**, singura scriere — contract §7). Se conectează la
+`minmaxEngineStore` prin `ContextConsumer`, tipar din `public/components/data-table.js`/
+`query-panel.js` (plus componentele minmax-specifice deja funcționale în acest repo).
+
+Înainte de cablarea propriu-zisă în container, `minmax-explain-drawer.js` mai are nevoie de un
+trigger: `minmax-results-table.js` nu are încă niciun row-click care să apeleze
+`store.openExplain(branch, mtrl)`.
 
 Nu e cablat încă în `public/index.html`/`userInteractions.js` — niciun tab nou, nicio integrare de
 navigație; planificat abia când există ceva vizibil de arătat beneficiarului.
