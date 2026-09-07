@@ -23,7 +23,7 @@
 
 | Metodă | Sursă | Notă |
 |---|---|---|
-| `results` | `CCCMINMAXDET` | Contract complet §5: filtre, `STRING_SPLIT` pentru liste, intervale, tri-state, sortare cu whitelist + tie-break `(BRANCH,MTRL)`, paginare (plafon 500), total separat opțional (`withTotal`) |
+| `results` | `CCCMINMAXDET` | Contract complet §5: filtre, `STRING_SPLIT` pentru liste, intervale, tri-state, sortare cu whitelist + tie-break `(BRANCH,MTRL)`, paginare (plafon 500), total separat opțional (`withTotal`); `vz26s`/`d.VZ_26S` adăugat 07.09.2026 la intervale — lipsea, deși necesar pentru filtrul implicit al UI (vezi [faza5-ui-frontend.md](faza5-ui-frontend.md)) |
 | `history` | `CCCMINMAXRUN` | cele 29 de coloane ale antetului, cele mai recente primele |
 | `groupAbc` | `CCCMINMAXGRP` | ABC/XYZ per `MTRGROUP × BRANCH` |
 | `params` | `CCCMINMAXPARAMS`+`COV`+`BRANCH` | 3 interogări paralele |
@@ -88,6 +88,7 @@ Pași 1-7 **făcuți**: sesiune `FULL` validată (`RUNID=5`), chei separate în 
 config environment, serviciul Feathers, compunerea SQL + whitelist coloane, `classifySql` + whitelist
 tabele, înregistrare `services/index.js`/`socketConfig.js`.
 
-Pasul 8 (**următorul**): componentele UI + store (`public/components/minmax-engine/*`,
-`public/stores/minmax-engine-store.js`), tipar după `public/components/zero-minmax/` +
-`public/stores/replenishment-store.js`. Pașii 9-10 (măsurare sortări, review) rămân după el.
+Pasul 8 (**în lucru**): componentele UI + store (`public/components/minmax-engine/*`,
+`public/stores/minmax-engine-store.js`) — store, container și primul consumator
+(`minmax-run-panel.js`) există deja; vezi [faza5-ui-frontend.md](faza5-ui-frontend.md) pentru
+stadiul detaliat. Pașii 9-10 (măsurare sortări, review) rămân după el.

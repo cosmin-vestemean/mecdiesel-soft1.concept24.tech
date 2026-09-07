@@ -15,6 +15,7 @@ import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit
 import { ContextProvider } from 'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0/index.js';
 import { minmaxEngineStore, MinmaxEngineStoreContext } from '../stores/minmax-engine-store.js';
 import './minmax-run-panel.js';
+import './minmax-results-table.js';
 
 export class MinmaxEngineContainer extends LitElement {
   static get properties () {
@@ -90,17 +91,14 @@ export class MinmaxEngineContainer extends LitElement {
           : ''}
 
         <minmax-run-panel></minmax-run-panel>
+        <minmax-results-table></minmax-results-table>
 
         <!--
           FAZA5_CONTRACT.md §9 components, wired in once built:
-          <minmax-results-table></minmax-results-table>
           <minmax-group-abc></minmax-group-abc>
           <minmax-explain-drawer></minmax-explain-drawer>
           <minmax-params-panel></minmax-params-panel>
         -->
-        ${!this.loading && !this.error
-          ? html`<div class="text-muted">Sesiune curenta: RUNID ${this.resolvedRunId ?? '—'} · ${this.total ?? 0} randuri.</div>`
-          : ''}
       </div>
     `;
   }
