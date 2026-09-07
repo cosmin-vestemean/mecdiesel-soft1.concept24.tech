@@ -14,6 +14,7 @@
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
 import { ContextProvider } from 'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0/index.js';
 import { minmaxEngineStore, MinmaxEngineStoreContext } from '../stores/minmax-engine-store.js';
+import './minmax-run-panel.js';
 
 export class MinmaxEngineContainer extends LitElement {
   static get properties () {
@@ -88,9 +89,10 @@ export class MinmaxEngineContainer extends LitElement {
           ? html`<div class="text-muted"><i class="fas fa-spinner fa-spin"></i> Se incarca datele MIN/MAX...</div>`
           : ''}
 
+        <minmax-run-panel></minmax-run-panel>
+
         <!--
           FAZA5_CONTRACT.md §9 components, wired in once built:
-          <minmax-run-panel></minmax-run-panel>
           <minmax-results-table></minmax-results-table>
           <minmax-group-abc></minmax-group-abc>
           <minmax-explain-drawer></minmax-explain-drawer>

@@ -1,7 +1,7 @@
 # Current Focus
 
 ## Last Updated
-- 07.09.2026 (sesiunea 18 — store + container UI pentru Faza 5, `vz26s` adăugat în backend)
+- 07.09.2026 (sesiunea 19 — `minmax-run-panel.js` construit și cablat în container)
 
 ## Current Goal
 - Stratul backend al Fazei 5 (UI de confirmare) e complet, deployat local, **testat end-to-end
@@ -14,10 +14,11 @@
 
 ## Active Area
 - Se implementează Faza 5 (UI de confirmare, fără scriere în ERP) conform
-  `new_min_max/FAZA5_CONTRACT.md`. Backend-ul e gata; **store-ul și containerul UI există**
-  (`public/stores/minmax-engine-store.js`, `public/components/minmax-engine/minmax-engine-container.js`),
-  dar containerul randează doar un placeholder — **cele 5 componente de vizualizare nu sunt
-  începute** — asta e pasul curent.
+  `new_min_max/FAZA5_CONTRACT.md`. Backend-ul, store-ul și containerul există; **primul
+  consumator real (`minmax-run-panel.js`) e construit și cablat în container** — selecție sesiune
+  + istoric, fără lansare. Rămân 4 componente de vizualizare
+  (`minmax-results-table.js`, `minmax-group-abc.js`, `minmax-explain-drawer.js`,
+  `minmax-params-panel.js`) — asta e pasul curent.
 
 ## Relevant Files
 - `new_min_max/FAZA5_CONTRACT.md` — contractul UI complet (transport, filtre, securitate). Punctul
@@ -51,17 +52,20 @@
   cere `VZ_26S > 0` ca filtru implicit și coloana există real în `CCCMINMAXDET` — adăugat în
   `DET_COLUMNS`/`buildDetWhereClauses`. Store-ul aproximează „> 0” cu `min: 0.00000001` (serviciul
   suportă doar >=/<=).
+- **Sesiune (07.09.2026):** store-ul NU reface automat `loadResults()` când un consumator schimbă
+  `runId`/filtre/sortare/pagină — componenta care apelează `setRunId`/`setFilters`/etc. răspunde
+  și de a apela explicit `loadResults()` după. Vezi `minmax-run-panel.js` (`_selectRun`).
 
 ## Open Questions
 - Vezi [minmax-engine-open-items.md](../wiki/minmax-engine-open-items.md) pentru lista completă de
   decizii de business neconfirmate.
 
 ## Next Step
-- **Pasul 8 din `FAZA5_CONTRACT.md` §10 (continuare):** store + container există; rămân cele 5
-  componente de vizualizare, în ordinea din contract — `minmax-run-panel.js` (selecție sesiune +
-  istoric, fără lansare), `minmax-results-table.js` (filtrul implicit e deja în store), apoi
-  `minmax-group-abc.js`, `minmax-explain-drawer.js`, `minmax-params-panel.js`. Fiecare se conectează
-  la `minmaxEngineStore` prin `ContextConsumer`, tipar după `data-table.js`/`query-panel.js`.
-  Integrarea în `index.html`/`userInteractions.js` (tab nou) rămâne de făcut abia când există ceva
-  vizibil de arătat.
+- **Pasul 8 din `FAZA5_CONTRACT.md` §10 (continuare):** `minmax-run-panel.js` e gata; urmează
+  `minmax-results-table.js` (cel mai greu — filtre server-side complete, sortare, paginare,
+  filtrul implicit e deja în store), apoi `minmax-group-abc.js`, `minmax-explain-drawer.js`,
+  `minmax-params-panel.js`. Fiecare se conectează la `minmaxEngineStore` prin `ContextConsumer`,
+  tipar după `data-table.js`/`query-panel.js` (vezi și `minmax-run-panel.js` ca exemplu deja
+  functional în acest repo). Integrarea în `index.html`/`userInteractions.js` (tab nou) rămâne de
+  făcut abia când există ceva vizibil de arătat.
 
