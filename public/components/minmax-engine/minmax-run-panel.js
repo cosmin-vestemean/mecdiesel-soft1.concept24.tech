@@ -83,16 +83,19 @@ export class MinmaxRunPanel extends LitElement {
   }
 
   // --- Actions ---
+  // No early-return on "already following current": re-clicking is the
+  // explicit refresh from §12.6/§12.10 — it must re-resolve ESTE_CURENT even
+  // when the selector doesn't change, since the underlying session can drift.
   _selectCurrent () {
-    if (!this._store || this.runId === null) return;
+    if (!this._store) return;
     this._store.setRunId(null);
-    this._store.loadResults();
+    this._store.loadResults({ withTotal: true });
   }
 
   _selectRun (runId) {
     if (!this._store || this.runId === runId) return;
     this._store.setRunId(runId);
-    this._store.loadResults();
+    this._store.loadResults({ withTotal: true });
   }
 
   _refreshHistory () {

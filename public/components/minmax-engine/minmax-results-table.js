@@ -172,33 +172,33 @@ export class MinmaxResultsTable extends LitElement {
   _applyFilters () {
     if (!this._store) return;
     this._store.setFilters(this._draftFilters);
-    this._store.loadResults();
+    this._store.loadResults({ withTotal: true });
   }
 
   _resetFilters () {
     if (!this._store) return;
     this._store.resetFilters();
     this._draftFilters = { ...this._store.getState().filters };
-    this._store.loadResults();
+    this._store.loadResults({ withTotal: true });
   }
 
   _sortBy (field) {
     if (!this._store) return;
     const dir = (this.sort.field === field && this.sort.dir === 'ASC') ? 'DESC' : 'ASC';
     this._store.setSort(field, dir);
-    this._store.loadResults();
+    this._store.loadResults({ withTotal: false });
   }
 
   _goToPage (page) {
     if (!this._store || page < 1) return;
     this._store.setPage(page);
-    this._store.loadResults();
+    this._store.loadResults({ withTotal: false });
   }
 
   _changePageSize (size) {
     if (!this._store) return;
     this._store.setPageSize(Number(size));
-    this._store.loadResults();
+    this._store.loadResults({ withTotal: false });
   }
 
   _openExplain (row) {

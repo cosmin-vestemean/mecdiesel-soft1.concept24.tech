@@ -78,7 +78,7 @@ export class MinmaxEngineContainer extends LitElement {
     await Promise.all([
       minmaxEngineStore.loadHistory(),
       minmaxEngineStore.loadParams(),
-      minmaxEngineStore.loadResults()
+      minmaxEngineStore.loadResults({ withTotal: true })
     ]);
   }
 

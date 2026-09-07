@@ -216,6 +216,39 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
       assert.strictEqual(result.pageSize, 500)
       assert.ok(capturedBody.sqlQuery.includes('FETCH NEXT'))
     })
+
+    it('omits total when withTotal is falsy (§12.6)', async () => {
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXDET'))
+        .reply(200, reply([]))
+
+      const service = makeService()
+      const result = await service.results({ runId: 5, token: 'tok' })
+
+      assert.strictEqual(result.total, undefined)
+    })
+
+    it('returns a count query result when withTotal is true (§12.6)', async () => {
+      let countSql
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXDET') && !body.sqlQuery.startsWith('SELECT COUNT'))
+        .reply(200, reply([{ BRANCH: 1000, MTRL: 1, RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT COUNT(*)'))
+        .reply(200, (uri, body) => {
+          countSql = body.sqlQuery
+          return reply([{ TOTAL: 137 }])
+        })
+
+      const service = makeService()
+      const result = await service.results({ runId: 5, token: 'tok', withTotal: true })
+
+      assert.strictEqual(result.total, 137)
+      assert.ok(countSql.includes('SELECT COUNT(*) AS TOTAL FROM CCCMINMAXDET d WHERE'))
+    })
   })
 
   describe('sorting tie-break dedup (§12.3)', () => {
@@ -314,6 +347,39 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
 
       assert.strictEqual(result.runId, 5)
       assert.deepStrictEqual(result.rows, [{ ABC: 'A', MTRGROUP: 1 }])
+    })
+
+    it('omits total when withTotal is falsy (§12.11)', async () => {
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXGRP'))
+        .reply(200, reply([]))
+
+      const service = makeService()
+      const result = await service.groupAbc({ runId: 5, token: 'tok' })
+
+      assert.strictEqual(result.total, undefined)
+    })
+
+    it('returns a count query result when withTotal is true (§12.11)', async () => {
+      let countSql
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXGRP') && !body.sqlQuery.startsWith('SELECT COUNT'))
+        .reply(200, reply([{ ABC: 'A', MTRGROUP: 1 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT COUNT(*)'))
+        .reply(200, (uri, body) => {
+          countSql = body.sqlQuery
+          return reply([{ TOTAL: 42 }])
+        })
+
+      const service = makeService()
+      const result = await service.groupAbc({ runId: 5, token: 'tok', withTotal: true })
+
+      assert.strictEqual(result.total, 42)
+      assert.ok(countSql.includes('SELECT COUNT(*) AS TOTAL FROM CCCMINMAXGRP g WHERE'))
     })
   })
 

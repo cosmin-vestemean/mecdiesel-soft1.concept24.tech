@@ -89,18 +89,25 @@ tratate literal; `explain` pe o sesiune neîncheiată → `RUN_NOT_READY`.
 Se proiectează o singură dată: total, RUNID rezolvat și totalul group ABC folosesc **aceeași** cheie
 de invalidare `{resolvedRunId, filters}`. Sortarea și pagina nu fac parte din cheie.
 
-- [ ] `loadResults()` primește `withTotal` explicit: `true` la încărcare inițială, schimbare/reset de
+- [x] `loadResults()` primește `withTotal` explicit: `true` la încărcare inițială, schimbare/reset de
       filtre, schimbare de sesiune și refresh; `false` la paginare, sortare și page size.
-- [ ] Reducer-ul păstrează totalul existent când răspunsul nu conține `total`.
-- [ ] RUNID-ul rezolvat se cache-uiește pe aceeași cheie; refresh-ul în modul „sesiunea curentă"
+- [x] Reducer-ul păstrează totalul existent când răspunsul nu conține `total`.
+- [x] RUNID-ul rezolvat se cache-uiește pe aceeași cheie; refresh-ul în modul „sesiunea curentă"
       rerulează `ESTE_CURENT` și invalidează ambele valori dacă RUNID-ul diferă.
-- [ ] `groupAbc()` întoarce `total` sub același contract; paginarea group ABC folosește `totalPages`
+- [x] `groupAbc()` întoarce `total` sub același contract; paginarea group ABC folosește `totalPages`
       în locul euristicii `rows.length < pageSize`.
 
 **Teste:** paginile 2/3 și sortarea nu produc nici count, nici rezolvare de sesiune; schimbarea unui
 filtru produce exact un count; încărcarea inițială rezolvă sesiunea o singură dată deși două fluxuri
 o cer; „Urmator" e dezactivat pe ultima pagină plină exact.
 **Măsurare:** latența unei paginări înainte și după.
+
+> **Notă de scop (implementare 07.09.2026):** cache-ul pe cheie de populație rezolvă „paginile 2/3
+> nu cer rezolvare/count" și „schimbarea unui filtru cere exact un count" — verificat prin teste de
+> store. Clauza „încărcarea inițială rezolvă sesiunea o singură dată deși două fluxuri o cer" rămâne
+> **doar parțial acoperită**: `results()` și `groupAbc()` au cache-uri separate (filtre diferite) și
+> nu împrumută rezolvarea una de la alta la primul apel — asta cere un proprietar unic al apelurilor
+> inițiale, care e exact scopul Pasului 7 (§12.9, `activate()`). Verificare live încă nefăcută.
 
 ## Pasul 5 — §12.7: concurență în store *(model: Sonnet)*
 

@@ -107,6 +107,23 @@ function buildResultsFilterPayload (filters) {
   return out;
 }
 
+// Population key for the results()/groupAbc() total+resolvedRunId caches
+// (§12.6+§12.10): a canonical (sorted-key) JSON signature of the runId
+// selector plus the filters actually sent to the service. Sort and page are
+// deliberately excluded — they never change which rows exist, only their
+// order/slice.
+function canonicalJSON (value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJSON).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${canonicalJSON(value[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(value === undefined ? null : value);
+}
+
+function populationKey (runId, filters) {
+  return canonicalJSON({ filters, runId: runId === undefined ? null : runId });
+}
+
 // Read-back verification for saveParams() (§12.1): compares what params()
 // returns AFTER the save against the normalized payload that was sent, using
 // the same row identities the service uses server-side. Returns a short
@@ -153,6 +170,15 @@ export class MinmaxEngineStore {
     this._listeners = new Set();
     this._state = this._getInitialState();
     this._service = null;
+
+    // Per-population caches for results()/groupAbc() (§12.6+§12.10): each
+    // remembers the last population's resolvedRunId, so a same-population
+    // paginate/sort can pin to it instead of asking the service to
+    // (re-)resolve "current". Separate slots because results() filters
+    // (persisted store state) and groupAbc() filters (transient, caller-
+    // supplied) are different populations even when runId matches.
+    this._resultsCache = { key: null, resolvedRunId: null };
+    this._groupAbcCache = { key: null, resolvedRunId: null };
 
     this.subscribe = this.subscribe.bind(this);
     this.unsubscribe = this.unsubscribe.bind(this);
@@ -368,6 +394,8 @@ export class MinmaxEngineStore {
 
       case 'RESET_ALL':
         this._state = this._getInitialState();
+        this._resultsCache = { key: null, resolvedRunId: null };
+        this._groupAbcCache = { key: null, resolvedRunId: null };
         this._notifyListeners(action, previousState, this._state);
         return;
 
@@ -416,20 +444,39 @@ export class MinmaxEngineStore {
   }
 
   // --- Async Orchestration: results() — contract §5 ---
-  async loadResults () {
+  // `withTotal` is explicit (§12.6), passed by the caller: true for initial
+  // load, filter change/reset, session change and explicit refresh; false
+  // for paging, sorting and page-size changes. A population change (runId
+  // selector or filters different from the last successful load) always
+  // forces withTotal regardless of what was asked — a total cached for a
+  // different population would silently be wrong. When the population is
+  // unchanged and withTotal is false, the previously resolved RUNID is
+  // pinned explicitly instead of re-asking the service to resolve "current"
+  // (§12.10) — this also means a "current session" refresh (withTotal:true)
+  // always re-resolves ESTE_CURENT for real, never reuses a stale pin.
+  async loadResults (options = {}) {
     const state = this._state;
+    const requestedWithTotal = options.withTotal !== undefined ? Boolean(options.withTotal) : true;
+    const filterPayload = buildResultsFilterPayload(state.filters);
+    const key = populationKey(state.runId, filterPayload);
+    const sameCachedPopulation = key === this._resultsCache.key;
+    const withTotal = requestedWithTotal || !sameCachedPopulation;
+    const pinnedRunId = (!requestedWithTotal && sameCachedPopulation) ? this._resultsCache.resolvedRunId : null;
+    const requestRunId = pinnedRunId !== null ? pinnedRunId : (state.runId === null ? undefined : state.runId);
+
     this.setLoading(true);
     this.setError('');
     try {
       const response = await this._getService().results({
-        filters: buildResultsFilterPayload(state.filters),
+        filters: filterPayload,
         page: state.page,
         pageSize: state.pageSize,
-        runId: state.runId === null ? undefined : state.runId,
+        runId: requestRunId,
         sort: state.sort.field ? state.sort : undefined,
         token: this._token(),
-        withTotal: true
+        withTotal
       });
+      this._resultsCache = { key, resolvedRunId: response.runId };
       this.dispatch({ type: 'SET_RESULTS', payload: response });
     } catch (err) {
       console.error('minmax-engine-store: loadResults failed', err);
@@ -456,9 +503,19 @@ export class MinmaxEngineStore {
 
   // --- Async Orchestration: groupAbc() — CCCMINMAXGRP, contract §8 ---
   // `filters` here is transient (branches/mtrgroup/esteHq/lifecycle/abc/xyz/clasa),
-  // supplied by the caller rather than persisted on this store.
-  async loadGroupAbc (filters = {}) {
+  // supplied by the caller rather than persisted on this store. `withTotal`
+  // follows the same explicit contract and same-population pin as
+  // loadResults() (§12.6+§12.10+§12.11), in its own cache slot since this
+  // filter shape is independent of results()'s.
+  async loadGroupAbc (filters = {}, options = {}) {
     const state = this._state;
+    const requestedWithTotal = options.withTotal !== undefined ? Boolean(options.withTotal) : true;
+    const key = populationKey(state.runId, filters);
+    const sameCachedPopulation = key === this._groupAbcCache.key;
+    const withTotal = requestedWithTotal || !sameCachedPopulation;
+    const pinnedRunId = (!requestedWithTotal && sameCachedPopulation) ? this._groupAbcCache.resolvedRunId : null;
+    const requestRunId = pinnedRunId !== null ? pinnedRunId : (state.runId === null ? undefined : state.runId);
+
     this.dispatch({ type: 'SET_GROUP_ABC_LOADING', payload: true });
     this.dispatch({ type: 'SET_GROUP_ABC_ERROR', payload: '' });
     try {
@@ -466,9 +523,11 @@ export class MinmaxEngineStore {
         filters,
         page: state.groupAbc.page,
         pageSize: state.groupAbc.pageSize,
-        runId: state.runId === null ? undefined : state.runId,
-        token: this._token()
+        runId: requestRunId,
+        token: this._token(),
+        withTotal
       });
+      this._groupAbcCache = { key, resolvedRunId: response.runId };
       this.dispatch({ type: 'SET_GROUP_ABC_RESULTS', payload: response });
     } catch (err) {
       console.error('minmax-engine-store: loadGroupAbc failed', err);

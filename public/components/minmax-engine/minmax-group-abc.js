@@ -109,7 +109,7 @@ export class MinmaxGroupAbc extends LitElement {
 
     if (!this._loaded) {
       this._loaded = true;
-      this._store.loadGroupAbc(this._filters);
+      this._store.loadGroupAbc(this._filters, { withTotal: true });
     }
   }
 
@@ -127,26 +127,26 @@ export class MinmaxGroupAbc extends LitElement {
   _applyFilters () {
     if (!this._store) return;
     this._store.setGroupAbcPage(1);
-    this._store.loadGroupAbc(this._filters);
+    this._store.loadGroupAbc(this._filters, { withTotal: true });
   }
 
   _resetFilters () {
     if (!this._store) return;
     this._filters = getDefaultFilters();
     this._store.setGroupAbcPage(1);
-    this._store.loadGroupAbc(this._filters);
+    this._store.loadGroupAbc(this._filters, { withTotal: true });
   }
 
   _goToPage (page) {
     if (!this._store || page < 1) return;
     this._store.setGroupAbcPage(page);
-    this._store.loadGroupAbc(this._filters);
+    this._store.loadGroupAbc(this._filters, { withTotal: false });
   }
 
   _changePageSize (size) {
     if (!this._store) return;
     this._store.setGroupAbcPageSize(Number(size));
-    this._store.loadGroupAbc(this._filters);
+    this._store.loadGroupAbc(this._filters, { withTotal: false });
   }
 
   // --- Local filter helpers (transient — no store dispatch) ---
@@ -249,6 +249,8 @@ export class MinmaxGroupAbc extends LitElement {
   }
 
   render () {
+    const totalPages = this.total ? Math.max(1, Math.ceil(this.total / this.pageSize)) : null;
+
     return html`
       <div class="minmax-group-abc card mb-3">
         <div class="card-header d-flex align-items-center justify-content-between">
@@ -306,7 +308,7 @@ export class MinmaxGroupAbc extends LitElement {
 
           <div class="d-flex align-items-center justify-content-between mt-2">
             <div class="d-flex align-items-center gap-2">
-              <span class="small text-muted">Pagina ${this.page}</span>
+              <span class="small text-muted">Pagina ${this.page}${totalPages ? ` / ${totalPages}` : ''}</span>
               <select class="form-select form-select-sm" style="width: auto;" aria-label="Marime pagina"
                       @change="${(e) => this._changePageSize(e.target.value)}">
                 ${PAGE_SIZE_OPTIONS.map((size) => html`<option value="${size}" .selected="${size === this.pageSize}">${size}/pagina</option>`)}
@@ -317,7 +319,7 @@ export class MinmaxGroupAbc extends LitElement {
                       @click="${() => this._goToPage(this.page - 1)}">
                 <i class="fas fa-chevron-left"></i> Anterior
               </button>
-              <button class="btn btn-outline-secondary" ?disabled="${this.loading || this.rows.length < this.pageSize}"
+              <button class="btn btn-outline-secondary" ?disabled="${this.loading || (totalPages !== null && this.page >= totalPages)}"
                       @click="${() => this._goToPage(this.page + 1)}">
                 Urmator <i class="fas fa-chevron-right"></i>
               </button>

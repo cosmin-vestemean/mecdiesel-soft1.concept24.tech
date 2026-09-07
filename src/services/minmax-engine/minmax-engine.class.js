@@ -484,13 +484,22 @@ export class MinmaxEngineService {
     addEnumListFilter(clauses, params, f.xyz, 'g.XYZ', XYZ_VALUES, 'xyz')
     addEnumListFilter(clauses, params, f.clasa, 'g.CLASA', CLASA_VALUES, 'clasa')
 
+    const whereSql = clauses.join(' AND ')
     const orderBy = buildOrderBy(data.sort, GRP_COLUMNS, ['branch', 'mtrgroup'])
     const paging = buildPaging(data.page, data.pageSize)
 
-    const sql = `SELECT g.* FROM CCCMINMAXGRP g WHERE ${clauses.join(' AND ')} ` +
-      `ORDER BY ${orderBy} ${paging.sql}`
+    const sql = `SELECT g.* FROM CCCMINMAXGRP g WHERE ${whereSql} ORDER BY ${orderBy} ${paging.sql}`
     const response = await this._execSql(sql, params, token)
-    return { page: paging.page, pageSize: paging.pageSize, rows: extractRows(response), runId }
+
+    let total
+    if (data.withTotal) {
+      const countSql = `SELECT COUNT(*) AS TOTAL FROM CCCMINMAXGRP g WHERE ${whereSql}`
+      const countResponse = await this._execSql(countSql, params, token)
+      const countRows = extractRows(countResponse)
+      total = countRows.length ? Number(countRows[0].TOTAL) : 0
+    }
+
+    return { page: paging.page, pageSize: paging.pageSize, rows: extractRows(response), runId, total }
   }
 
   /** CCCMINMAXPARAMS + CCCMINMAXCOV + CCCMINMAXBRANCH — current config. */
