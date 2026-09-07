@@ -20,7 +20,9 @@
     }
   },
   "minmaxEngine": {
-    "writesEnabled": false
+    "writesEnabled": false,
+    "readers": "*",
+    "editors": []
   },
   "mssql": {
     "client": "mssql",

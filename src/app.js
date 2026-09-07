@@ -23,6 +23,7 @@ import { authentication } from "./authentication.js";
 import { configurationValidator } from "./configuration.js";
 import { logError } from "./hooks/log-error.js";
 import { mssql } from "./mssql.js";
+import { resolveRoles } from "./services/minmax-engine/roles.js";
 
 import { services } from "./services/index.js";
 import { channels } from "./channels.js";
@@ -42,6 +43,10 @@ class s1Service {
     // options must contain the knexClient
     // (simply pass it when initializing the service)
     this.options = options || {};
+  }
+
+  async setup(app) {
+    this.app = app
   }
 
   async ping(data, params) {
@@ -427,11 +432,26 @@ class s1Service {
       // IMPORTANT: Return the potentially refreshed clientID from the auth step
       // along with the validation result.
       // Assuming validationResponse contains its own 'success' and 'error' fields.
-      return {
+      const result = {
         ...validationResponse, // Spread the original validation response
         success: validationResponse.success, // Explicitly ensure success field is from validationResponse
         clientID: authResult.clientID // Override clientID with the one from the auth step
       };
+
+      // Token de aplicatie (§12.8), separat de sesiunea S1 (clientID de mai sus): sub=REFID,
+      // expirare absoluta din authentication.jwtOptions (8h), fara refresh/sliding expiration.
+      if (result.success) {
+        try {
+          const refid = String(clientID)
+          const roles = await resolveRoles(this.app, refid)
+          result.appToken = await this.app.service('authentication').createAccessToken({ sub: refid, roles })
+        } catch (tokenError) {
+          console.error('Error minting application token:', tokenError)
+          return { success: false, error: 'Failed to issue application session token.' }
+        }
+      }
+
+      return result;
 
     } catch (validationError) {
       console.error("Error during password validation step:", validationError);
@@ -1568,4 +1588,4 @@ app.hooks({
   teardown: [],
 });
 
-export { app };
+export { app, s1Service };

@@ -1,7 +1,7 @@
 # Current Focus
 
 ## Last Updated
-- 07.09.2026 (sesiunea 34 — bootstrap JWT pentru Pasul 6 implementat și testat)
+- 07.09.2026 (sesiunea 36 — Pasul 6 §12.8: Socket.IO JWT reparat)
 
 ## Current Goal
 - Faza 5 este cablată și fluxul read-only funcționează live; acceptanța urmează planul din
@@ -10,47 +10,48 @@
 - Poarta către Faza 4 rămâne pasul 8: invariante pe populație, eșantion numeric înghețat și confirmarea beneficiarului pe formule.
 
 ## Active Area
-- Bootstrap-ul de autentificare pentru Pasul 6 (§12.8) este FĂCUT: `authentication` complet în
-  `config/default.json` (`entity: null`, `authStrategies: ['jwt']`, expirare JWT absolută `8h`),
-  `src/authentication.js` înregistrează `AuthenticationService` + `JWTStrategy`, iar `app.js`
-  apelează `app.configure(authentication)` imediat după încărcarea configurației. Validatorul local
-  acceptă explicit `authentication.entity: null` (schema implicită Feathers cere doar string, deși
-  serviciul îl suportă). `PORT=3031 npx mocha test/app.test.js --exit`: 2 verzi; portul 3030 e
-  ocupat de PM2. `resolveRoles`, hook-urile de autorizare și auditul rămân neimplementate.
-- Pasul 5 (§12.7) este FĂCUT (cod + teste, 16 verzi în `test/stores/minmax-engine-store.test.js`):
-  secvență monotonă per flux (`results`/`groupAbc`/`explain`/`history`/`params`) în
-  `minmax-engine-store.js`, prin `_beginRequest(flow)`/`_isCurrent(flow, seq)`; dispatch de date/eroare/
-  `loading=false` gardat de secvență; `closeExplain()` incrementează secvența `explain`; `_fetchParams()`
-  nu mai dispatch-uiește direct (decuplat de `loadParams()` ca `saveParams()` să rămână flux separat,
-  negardat de secvența `params`). Verificat cu promisiuni controlate rezolvate în ordine inversă
-  (pagina 2/3, două articole, două seturi group ABC, history, params). Verificare live NEFĂCUTĂ.
-- GAP DE SCOP moștenit din Pasul 4, neschimbat: `results()`/`groupAbc()` încă rezolvă „current”
-  independent la primul apel (fără împrumut între cache-uri) — coalescarea completă e scopul
-  Pasului 7 (§12.9 `activate()`).
-- Urmează pasul 6 (§12.8): autorizare completă (decizie deja luată 07.09.2026 — roluri din configurație
-  server-side, token semnat 8h absolute, `resolveRoles(refid)` unic).
+- Pasul 6 (§12.8) are autentificarea complet cablată: token emis la `validateUserPwd`, roluri server-side,
+  hook-uri pe `minmax-engine`, și autentificare JWT a conexiunii Socket.IO după login/reconnect. Vezi
+  [faza5-ui-backend.md](../wiki/faza5-ui-backend.md#autorizare-128--cablaj-complet).
+- **Comportament live neschimbat**: `MINMAX_ENGINE_WRITES_ENABLED` rămâne `false`; nimic nu s-a
+  deblocat pentru utilizatori reali.
+- Mai rămân auditul save și flip-ul deliberat al flagului. Pasul 7 va coalesca rezoluția inițială de
+  sesiune pentru `results()`/`groupAbc()`.
 
 ## Relevant Files
 - [FAZA5_REMEDIERI_PLAN.md](../../new_min_max/FAZA5_REMEDIERI_PLAN.md) — ordine și teste pentru remedieri.
 - [faza5-ui-backend.md](../wiki/faza5-ui-backend.md) / [faza5-ui-frontend.md](../wiki/faza5-ui-frontend.md) — implementare și verificări live.
 - [minmax-engine-model.md](../wiki/minmax-engine-model.md) / [minmax-engine-formulas.md](../wiki/minmax-engine-formulas.md) — domeniu și formule.
 - [minmax-engine-open-items.md](../wiki/minmax-engine-open-items.md) / [open-threads.md](open-threads.md) — întrebări și fire tangențiale.
+- Autorizare: `src/services/minmax-engine/{roles,authorize}.js`, `src/authentication.js`, `src/app.js`,
+  `public/stores/app-auth.js`, `public/socketConfig.js`, `public/login/login.js`, `minmax-engine-store.js`.
+- Teste: `test/services/minmax-engine/{roles,authorize}.test.js`,
+  `test/services/s1-validate-user-pwd.test.js`, `test/stores/app-auth.test.js`.
 - [FAZA4_CONTRACT.md](../../new_min_max/FAZA4_CONTRACT.md) — `applyToErp`, amânat după Faza 5.
 
 ## Confirmed Decisions
+- Rolurile vin din configurație server-side (`minmaxEngine.readers`/`editors`), nu tabelă ACL —
+  motivul e în [FAZA5_CONTRACT.md](../../new_min_max/FAZA5_CONTRACT.md) §12.8.
+- Convenție unificată: orice pereche cheie-config/variabilă-env pentru minmax-engine — env-ul
+  câștigă când e definit, chiar și cu valoare goală explicită.
+- Tokenul de aplicație se emite direct (`createAccessToken`), nu prin `authentication.create()`;
+  clientul folosește apoi `authentication.create()` exclusiv pentru a-l atașa conexiunii Socket.IO.
+  Apelurile server-side fără `params.provider` ocolesc autorizarea, deliberat.
 - `saveParams` rămâne atomic cu payload JSON + `OPENJSON`, maximum 4 parametri și verificare `__ok` plus read-back.
-- Scrierea rămâne oprită până la autorizare; rolurile vin din configurație server-side, cu `editors: []` implicit.
-- Sesiunea aplicației va avea 8 ore absolute, fără refresh/sliding expiration, doar în memoria paginii.
+- Scrierea rămâne oprită până la audit + flip deliberat al flagului (ultimele 2 bife ale Pasului 6).
+- Sesiunea aplicației are 8 ore absolute, fără refresh/sliding expiration, doar în memoria paginii;
+  reconectarea Socket.IO cere reautentificare cu același token neexpirat.
 - Rezoluția sesiunii curente folosește `ESTE_CURENT` și statusurile DONE, niciodată `MAX(RUNID)`.
 - CLASA are 11 valori posibile (9 combinații ABC×XYZ + NOU + OD), nu 9 — definite o singură dată
   per parte (backend `CLASA_VALUES`, UI `minmax-engine-constants.js`).
 
 ## Open Questions
-- Pașii 6-8 din §12 rămân de implementat înaintea validării numerice.
+- Restul Pasului 6: audit la save, apoi flip deliberat `MINMAX_ENGINE_WRITES_ENABLED=true`.
+- Garda fail-fast pentru `FEATHERS_SECRET` placeholder este în [open-threads.md](open-threads.md).
+- Pașii 7-8 din §12 rămân de implementat înaintea validării numerice.
 - Întrebările de business și firele tangențiale sunt în [minmax-engine-open-items.md](../wiki/minmax-engine-open-items.md) și [open-threads.md](open-threads.md).
 
 ## Next Step
-- Implementarea pasului 6 (§12.8): `resolveRoles(refid)`, token de aplicație semnat 8h absolute,
-  hook `authenticate`, audit la save — abia apoi se comută `MINMAX_ENGINE_WRITES_ENABLED` pe `true`.
-- Menține Node.js 20.20.2 pentru acest proiect; celelalte site-uri rămân pe Node-ul de sistem 18.12.1.
-
+- Audit la `saveParams`: REFID, timestamp, cheile logice modificate — fără valori secrete. Abia apoi
+  flip-ul flagului de scriere. Folosește Node.js 20.20.2; pentru suita completă cu PM2 activ:
+  `PORT=3999 npx mocha test/ --recursive` (121 verzi, un eșec preexistent).

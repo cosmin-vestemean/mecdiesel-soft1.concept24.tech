@@ -1,5 +1,6 @@
 import { createContext } from 'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0/index.js';
 import { client } from '../socketConfig.js';
+import { ensureConnectionAuth } from './app-auth.js';
 
 /**
  * MIN/MAX Engine Store (Faza 5 — UI de confirmare)
@@ -463,6 +464,13 @@ export class MinmaxEngineStore {
     return this._service;
   }
 
+  // Serviciul e gata de folosit abia dupa ce conexiunea socket poarta tokenul
+  // de aplicatie (§12.8); altfel hook-ul `authenticate` de pe server da 401.
+  async _authenticatedService () {
+    await ensureConnectionAuth();
+    return this._getService();
+  }
+
   _token () {
     // window.token is never set anywhere in this app; sessionStorage's s1Token
     // (set by login.js) is the actual source of truth (see top-abc-container.js).
@@ -498,7 +506,8 @@ export class MinmaxEngineStore {
     this.setLoading(true);
     this.setError('');
     try {
-      const response = await this._getService().results({
+      const service = await this._authenticatedService();
+      const response = await service.results({
         filters: filterPayload,
         page: state.page,
         pageSize: state.pageSize,
@@ -525,7 +534,8 @@ export class MinmaxEngineStore {
     this.dispatch({ type: 'SET_LOADING_HISTORY', payload: true });
     this.dispatch({ type: 'SET_HISTORY_ERROR', payload: '' });
     try {
-      const response = await this._getService().history({ limit, token: this._token() });
+      const service = await this._authenticatedService();
+      const response = await service.history({ limit, token: this._token() });
       if (!this._isCurrent('history', seq)) return;
       this.dispatch({ type: 'SET_RUN_HISTORY', payload: response.rows });
     } catch (err) {
@@ -556,7 +566,8 @@ export class MinmaxEngineStore {
     this.dispatch({ type: 'SET_GROUP_ABC_LOADING', payload: true });
     this.dispatch({ type: 'SET_GROUP_ABC_ERROR', payload: '' });
     try {
-      const response = await this._getService().groupAbc({
+      const service = await this._authenticatedService();
+      const response = await service.groupAbc({
         filters,
         page: state.groupAbc.page,
         pageSize: state.groupAbc.pageSize,
@@ -601,7 +612,8 @@ export class MinmaxEngineStore {
   // the rejection to propagate (§12.1) instead of being swallowed the way
   // the public loadParams() does.
   async _fetchParams () {
-    return this._getService().params({ token: this._token() });
+    const service = await this._authenticatedService();
+    return service.params({ token: this._token() });
   }
 
   // --- Async Orchestration: saveParams() — the ONLY write path, contract §7 ---
@@ -614,7 +626,8 @@ export class MinmaxEngineStore {
     this.dispatch({ type: 'SET_PARAMS_SAVING', payload: true });
     this.dispatch({ type: 'SET_PARAMS_SAVE_ERROR', payload: '' });
     try {
-      await this._getService().saveParams({
+      const service = await this._authenticatedService();
+      await service.saveParams({
         branchUpdates,
         covUpdates,
         paramsUpdates,
@@ -655,7 +668,8 @@ export class MinmaxEngineStore {
     }
 
     try {
-      const response = await this._getService().explain({ branch, mtrl, runId, token: this._token() });
+      const service = await this._authenticatedService();
+      const response = await service.explain({ branch, mtrl, runId, token: this._token() });
       if (!this._isCurrent('explain', seq)) return; // superseded by a newer openExplain()/closeExplain()
       this.dispatch({ type: 'SET_EXPLAIN_DATA', payload: response });
     } catch (err) {

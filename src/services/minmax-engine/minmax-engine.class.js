@@ -300,9 +300,12 @@ export class MinmaxEngineService {
     }
   }
 
+  // Variabila de mediu, cand e definita, are prioritate peste config/default.json:
+  // altfel cheia din fisier ar face override-ul de deploy imposibil (vezi roles.js).
   _writesEnabled () {
     const cfg = (this.app && this.app.get('minmaxEngine')) || {}
-    const flagStr = cfg.writesEnabled !== undefined ? cfg.writesEnabled : process.env.MINMAX_ENGINE_WRITES_ENABLED
+    const fromEnv = process.env.MINMAX_ENGINE_WRITES_ENABLED
+    const flagStr = fromEnv !== undefined ? fromEnv : cfg.writesEnabled
     return flagStr === true || flagStr === 'true'
   }
 

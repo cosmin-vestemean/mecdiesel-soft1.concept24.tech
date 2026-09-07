@@ -1,4 +1,5 @@
 import { client } from '../socketConfig.js';
+import { setAppToken, ensureConnectionAuth } from '../stores/app-auth.js';
 
 $(document).ready(() => {
     const $loginForm = $('#loginForm');
@@ -162,6 +163,14 @@ $(document).ready(() => {
                 sessionStorage.setItem('s1Token', validationResult.clientID); 
                 // Remove the temporary session token used only for validation setup
                 sessionStorage.removeItem('s1SessionToken');
+                // App-level JWT (§12.8): page memory only, never sessionStorage/localStorage
+                setAppToken(validationResult.appToken);
+                // Autentifica CONEXIUNEA socket; params.authentication per apel nu ajunge la server.
+                try {
+                    await ensureConnectionAuth();
+                } catch (appAuthError) {
+                    console.error('Application session token rejected by the server:', appAuthError);
+                }
 
                 // Trigger the main application initialization
                 if (window.initializeApp) {

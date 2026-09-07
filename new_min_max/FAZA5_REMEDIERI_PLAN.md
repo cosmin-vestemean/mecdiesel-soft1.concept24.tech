@@ -127,16 +127,16 @@ Forma: `minmaxEngine.readers` / `minmaxEngine.editors` în `config/default.json`
 `MINMAX_ENGINE_READERS` / `MINMAX_ENGINE_EDITORS` (CSV de REFID); implicit `editors: []`,
 `readers: "*"`; `minmax.edit` include `minmax.read`; comparația REFID se face ca `String`.
 
-- [ ] Tot lookup-ul de roluri într-un singur `resolveRoles(refid)` (`src/services/minmax-engine/roles.js`),
+- [x] Tot lookup-ul de roluri într-un singur `resolveRoles(refid)` (`src/services/minmax-engine/roles.js`),
       singurul loc care știe de unde vine lista.
-- [ ] Token de aplicație semnat după `validateUserPwd`, `sub = REFID`, **durată absolută 8 ore**, fără
+- [x] Token de aplicație semnat după `validateUserPwd`, `sub = REFID`, **durată absolută 8 ore**, fără
       refresh și fără sliding expiration. Semnare cu `authentication.secret` (`FEATHERS_SECRET`, deja
       mapat setat în `.env` — a fost generat înainte de implementare), prin
       `@feathersjs/authentication` cu `entity: null` + `JWTStrategy`, ca să nu fie nevoie de un
       serviciu `users` local.
-- [ ] Token păstrat **doar în memoria paginii**; orice reload trece prin login. Token-ul S1 nu poate
+- [x] Token păstrat **doar în memoria paginii**; orice reload trece prin login. Token-ul S1 nu poate
       restaura sesiunea de aplicație.
-- [ ] Hook `authenticate` pe toate metodele; `minmax.read` la citiri, `minmax.edit` la `saveParams`.
+- [x] Hook `authenticate` pe toate metodele; `minmax.read` la citiri, `minmax.edit` la `saveParams`.
 - [ ] Audit pentru save: REFID, timestamp, cheile logice modificate — fără valori secrete.
 - [ ] Abia acum poate fi comutat `MINMAX_ENGINE_WRITES_ENABLED` pe `true`, deliberat.
 

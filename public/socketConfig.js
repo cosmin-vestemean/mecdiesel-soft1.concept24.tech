@@ -112,4 +112,9 @@ client.use("minmax-engine", socketClient.service("minmax-engine"), {
   ],
 });
 
-export { client };
+// Autentificarea se face pe CONEXIUNE, nu per apel (§12.8) - vezi stores/app-auth.js.
+client.use("authentication", socketClient.service("authentication"), {
+  methods: ["create", "remove"],
+});
+
+export { client, socket };

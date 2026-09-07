@@ -93,4 +93,25 @@ Firele **pe obiectiv** rămân în `current-focus.md`.
     De verificat daca butoanele lor de initialize/branches/etc. chiar functioneaza
     in productie (poate niciodata testate cu sesiune noua de login), si daca nu,
     de aplicat acelasi fix (sessionStorage.getItem('s1Token') in loc de window.token).
+
+- id: feathers-secret-placeholder-fara-garda
+  opened: 2026-09-07
+  status: open
+  area: config/default.json, src/authentication.js
+  summary: >
+    `authentication.secret` are in config/default.json valoarea commitata
+    "replace-with-FEATHERS_SECRET", suprascrisa de FEATHERS_SECRET prin
+    custom-environment-variables.json. Azi variabila e setata in .env (64 de
+    caractere), deci nu se manifesta. Daca la un deploy lipseste sau e scrisa
+    gresit, aplicatia porneste linistita si semneaza token-uri de aplicatie cu
+    un secret public din git - adica oricine poate emite un token cu rolul
+    minmax.edit. Nu exista nicio verificare la boot.
+  why_tangential: >
+    Descoperit la review-ul Pasului 6 din FAZA5_REMEDIERI_PLAN.md, dar e o garda
+    de deploy pentru intreaga aplicatie, nu o remediere din lista §12.
+  next_step: >
+    Garda fail-fast la pornire: refuza boot-ul daca `authentication.secret`
+    lipseste sau e egal cu placeholder-ul. De decis unde sta - in
+    src/authentication.js (langa AuthenticationService) sau ca verificare de
+    configuratie in src/configuration.js.
 ```

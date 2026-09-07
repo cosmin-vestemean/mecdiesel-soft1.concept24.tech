@@ -13,7 +13,40 @@
   WSMCP restricționează doar verbe, nu tabele, deci această listă e singura barieră reală.
 - `src/services/minmax-engine/minmax-engine.js` / `.shared.js` — înregistrare, tipar după
   `src/services/zero-minmax/`.
+- `src/services/minmax-engine/roles.js` — singurul loc care rezolvă rolurile (§12.8): `resolveRoles(app, refid)`
+  citește `minmaxEngine.readers`/`editors` din `config/default.json`, implicit `readers: "*"` și
+  `editors: []` (fail-closed); `minmax.edit` include mereu `minmax.read`; comparație REFID ca `String`.
+- `src/services/minmax-engine/authorize.js` — `requireRole(role)`, hook `around` (trebuie să apeleze
+  `next()` — omisiunea asta a rupt tăcut rezultatul serviciului, fără nicio eroare, la implementare).
+  Citește exclusiv `context.params.authentication.payload.roles`, niciodată `data`; apelurile fără
+  `provider` (server-side, de încredere) trec direct, la fel ca `authenticate` însuși.
 - Înregistrat în `src/services/index.js` și `public/socketConfig.js`.
+
+## Autorizare (§12.8) — cablaj complet
+
+Emiterea tokenului **nu** trece prin `authentication.create()` (care ar cere o strategie ce
+validează credențiale brute — redundant, `validateUserPwd` deja face asta contra S1). În schimb,
+`s1Service.validateUserPwd()` (`src/app.js`), după ce validarea parolei reușește, apelează direct
+`app.service('authentication').createAccessToken({ sub: String(REFID), roles })` — `roles` din
+`resolveRoles`. `s1Service` are acum `setup(app)` (lipsea) ca să poată ajunge la `app.service(...)`.
+Eșecul semnării întoarce `success:false`, nu succes fără token.
+
+Verificarea trece prin lanțul standard `around` de pe serviciul `minmax-engine`:
+`all: [authenticate('jwt'), requireRole(ROLE_READ)]`, `saveParams: [requireRole(ROLE_EDIT)]` — ambele
+rulează pentru `saveParams` (all + specific), deci un editor trece prin ambele verificări din același
+token. Apelurile fără `params.provider` (server-side) ocolesc autorizarea, ca și `authenticate` însuși.
+
+Frontend: `public/stores/app-auth.js` ține `appToken` **doar în memoria paginii** (variabilă de
+modul, niciodată storage). Autorizarea Socket.IO se face pe **conexiune**, nu ca al doilea argument
+la apelurile de serviciu: clientul Feathers trimite din `params` numai `params.query`, deci
+`params.authentication` s-ar pierde. După login, `ensureConnectionAuth()` emite
+`authentication.create({ strategy: 'jwt', accessToken })`; `JWTStrategy.handleConnection()` reține
+tokenul în `connection.authentication` și deconectează exact la expirare. Aceeași funcție este
+apelată înaintea fiecăreia dintre cele șase metode MIN/MAX și din `socket.on('connect')`, deoarece o
+reconectare creează o conexiune nouă fără autentificarea celei anterioare. Promisiunea de autentificare
+este partajată până la schimbarea tokenului; după eșec se resetează pentru reîncercare. Serviciul
+`authentication` este înregistrat explicit în `public/socketConfig.js`. Reload-ul golește tokenul
+automat (pagina se reîncarcă), fără cod explicit de curățare.
 - `src/load-env.js` — încarcă `.env` din root în `process.env` înainte de `@feathersjs/configuration`
   (nu exista niciun mecanism de `.env` pe partea Feathers înainte de Faza 5; `dotenv` nu e
   dependință a proiectului principal, doar a `mcp-server/`). Importat din `src/app.js` și
@@ -138,6 +171,24 @@ sliding expiration, păstrată numai în memoria paginii; orice reload trece din
 Citirile cer rol `minmax.read`, iar `saveParams` cere `minmax.edit`; token-ul S1 rămâne separat și
 nu poate restaura sesiunea aplicației. Lista editorilor și auditul sunt server-side.
 
+**Convenție de precedență (07.09.2026):** peste tot unde o cheie de config poate fi suprascrisă
+printr-o variabilă de mediu (`writesEnabled`/`MINMAX_ENGINE_WRITES_ENABLED`, `readers`/`editors` din
+`roles.js`), **variabila de mediu câștigă când e definită** — inclusiv un string gol, care înseamnă
+"dezactivat"/"listă goală" explicit, nu "override absent". Config-ul e doar valoarea implicită de
+deploy. `_writesEnabled()` a fost corectat 07.09.2026 să respecte asta (înainte, config-ul câștiga,
+deci `MINMAX_ENGINE_WRITES_ENABLED=true` nu putea porni scrierea dacă `config/default.json` avea
+`false` — exact ultima bifă a Pasului 6).
+
 Cele 41 de teste backend existente trec, dar nu acoperă rollback-ul structurat, payload-ul complet
 sau coliziunea sortării cu tie-break-ul. Următorul pas backend este implementarea împreună a
 remedierilor §12.1 + §12.2, cu testele de acceptanță descrise în contract.
+
+## Verificare autorizare frontend (07.09.2026)
+
+`test/stores/app-auth.test.js` acoperă lipsa tokenului, autentificarea o singură dată cu strategia
+JWT, curățarea tokenului și reîncercarea după eșec. `test/services/minmax-engine/authorize.test.js`
+acoperă separat lanțul server-side (401 anonim, 403 pentru read-only la save, editor permis și
+payload REFID/rol falsificat ignorat). Rularea completă pe un port liber:
+`PORT=3999 npx mocha test/ --recursive` are 121 teste verzi; rămâne numai eșecul preexistent al
+serviciului lipsă `mec-item-producer-relation`. Portul implicit 3030 este ocupat de PM2 și produce
+un `EADDRINUSE` în `test/app.test.js`, fără legătură cu autorizarea.

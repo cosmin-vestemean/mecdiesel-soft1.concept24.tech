@@ -25,12 +25,19 @@ function reply (data) {
 }
 
 describe('minmax-engine service (unit, HTTP mocked)', () => {
+  // Flagul de mediu bate configuratia, deci trebuie scos ca testele pe config sa fie deterministe.
+  let savedWritesEnv
+
   before(() => {
     nock.disableNetConnect()
+    savedWritesEnv = process.env.MINMAX_ENGINE_WRITES_ENABLED
+    delete process.env.MINMAX_ENGINE_WRITES_ENABLED
   })
 
   after(() => {
     nock.enableNetConnect()
+    if (savedWritesEnv === undefined) delete process.env.MINMAX_ENGINE_WRITES_ENABLED
+    else process.env.MINMAX_ENGINE_WRITES_ENABLED = savedWritesEnv
   })
 
   afterEach(() => {
@@ -417,6 +424,23 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
       const result = await service.params({ token: 'tok' })
 
       assert.strictEqual(result.writesEnabled, true)
+    })
+
+    it('lasa variabila de mediu sa suprascrie configuratia, in ambele sensuri', async () => {
+      const enabledByConfig = makeService({ writesEnabled: true })
+      const disabledByConfig = makeService({ writesEnabled: false })
+
+      process.env.MINMAX_ENGINE_WRITES_ENABLED = 'false'
+      assert.strictEqual(enabledByConfig._writesEnabled(), false)
+
+      process.env.MINMAX_ENGINE_WRITES_ENABLED = 'true'
+      assert.strictEqual(disabledByConfig._writesEnabled(), true)
+
+      process.env.MINMAX_ENGINE_WRITES_ENABLED = ''
+      assert.strictEqual(enabledByConfig._writesEnabled(), false)
+
+      delete process.env.MINMAX_ENGINE_WRITES_ENABLED
+      assert.strictEqual(enabledByConfig._writesEnabled(), true)
     })
   })
 

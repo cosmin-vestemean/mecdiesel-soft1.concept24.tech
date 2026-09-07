@@ -1,7 +1,10 @@
 // For more information about this file see https://dove.feathersjs.com/guides/cli/service.html
 
+import { authenticate } from '@feathersjs/authentication'
 import { MinmaxEngineService, getOptions } from './minmax-engine.class.js'
 import { minmaxEnginePath, minmaxEngineMethods } from './minmax-engine.shared.js'
+import { requireRole } from './authorize.js'
+import { ROLE_READ, ROLE_EDIT } from './roles.js'
 
 export * from './minmax-engine.class.js'
 export * from './minmax-engine.shared.js'
@@ -19,7 +22,10 @@ export const minmaxEngine = (app) => {
 
   service.hooks({
     around: {
-      all: []
+      // §12.8: fiecare metoda cere un JWT valid + rol minmax.read; saveParams
+      // cere in plus minmax.edit (verificat DUPA minmax.read, din acelasi token).
+      all: [authenticate('jwt'), requireRole(ROLE_READ)],
+      saveParams: [requireRole(ROLE_EDIT)]
     }
   })
 }
