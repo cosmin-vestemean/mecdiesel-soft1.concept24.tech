@@ -41,13 +41,27 @@ Granița **nu este o preferință**, ci consecința gărzii din [../mcp-server/s
 
 ### Rămân AJS (execută proceduri sau DDL)
 
-| Endpoint | Motiv |
-|---|---|
-| `setup` | DDL; există deja, neatins |
-| `runEngine` | `EXEC sp_MinMaxEngine_Prepare / Classify / ClassifyGroup / Compute` |
-| `explainRow` | `EXEC sp_MinMaxEngine_Explain` |
-| `saveParams` | scriere în `CCCMINMAXPARAMS`; oricum blocată de `ALLOW_WRITE = 0` |
-| `applyToErp`, `revertApply` | Faza 4 — tranzacții |
+| Endpoint | Stare | Motiv |
+|---|---|---|
+| `setup` | **există** | DDL; neatins |
+| `runEngine` | **NU există** | ar cere `EXEC StartRun / Classify / ClassifyGroup / Compute / FinishRun` |
+| `applyToErp`, `revertApply` | **NU există** | Faza 4 — tranzacții și scrieri în `MTRBRNLIMITS`/`MTRL` |
+
+`applyToErp` rămâne în AJS **chiar și după** `ALLOW_WRITE = 1`: sunt singurele scrieri în tabele ERP
+reale, cer tranzacție și audit, și sunt exact ce exclude lista albă de tabele din serviciu.
+
+`explainRow` **nu** apare în acest tabel, deși planul îl pusese în AJS. Vezi §6: nu are nevoie de
+procedură, deci nu are nevoie de `EXEC`.
+
+### Decupaj — ce intră în prima iterație
+
+`S1-MEC/AJS/NewMinMax.js` are astăzi **un singur endpoint**, `setup`. Deci `runEngine` nu este „de
+cablat", ci de scris de la zero, cu deploy AJS și commit în submodul — exact lanțul lent pe care
+această fază îl evită.
+
+**Iterația 1 nu include `runEngine`.** Obiectivul declarat este ca beneficiarul să *confirme ce
+calculăm deja*, nu să lanseze rulări. Sesiunile se deschid și se închid în continuare manual în S1,
+ca azi. Consecință pentru UI: fără buton „Rulează" în prima livrare.
 
 ### Merg prin `execSql` (`SELECT` curat pe tabele de rezultate)
 
@@ -57,33 +71,98 @@ Granița **nu este o preferință**, ci consecința gărzii din [../mcp-server/s
 | `getRunHistory` | `CCCMINMAXRUN` |
 | `getGroupAbc` | `CCCMINMAXGRP` |
 | `getParams` | `CCCMINMAXPARAMS`, `CCCMINMAXCOV`, `CCCMINMAXBRANCH` |
+| `explainRow` | `CCCMINMAXDET` + `CCCMINMAXRUN` + `CCCMINMAXWINSOR` + `CCCMINMAXWEEK` |
+| `saveParams` | `INSERT`/`UPDATE` pe `CCCMINMAXPARAMS`, `CCCMINMAXCOV`, `CCCMINMAXBRANCH`, `CCCMINMAXTEMPLATE` |
 
 Consecință practică: ecranul de confirmare se poate construi **fără niciun deploy AJS**, iterând
 doar în Feathers și UI.
 
 ### Transportul Feathers → `execSql`
 
-Serviciul Feathers reproduce exact transportul folosit de `s1-api MCP`, nu inventează un client
-S1 separat:
+Forma de mai jos este citită din AJS-ul **deployat în producție** (`CSTINFO`, `CSTTYPE = 16`,
+`CSTNAME = 'WSMCP'`), nu dedusă din client:
 
 ```js
 POST ${S1_BASE_URL}/JS/WSMCP/execSql
 {
-   appId: S1_APP_ID,
-   clientID: token,
-   authKey: S1_WS_SHARED_SECRET,
-   SQL: sql,
-   PARAMS: params,
-   sql,
-   params,
-   sqlParams: params,
-   sqlQuery: sql
+  appId:     S1_APP_ID,
+  clientID:  token,              // token-ul S1 primit de la UI
+  authKey:   S1_WS_SHARED_SECRET, // exclusiv server-side
+  sqlQuery:  sql,                // string, o singură instrucțiune
+  sqlParams: params,             // array pozițional pentru :1, :2, ...
+  returnMode: 'dataset'          // implicit
 }
 ```
 
-`token` vine din apelul UI și devine `clientID`; serviciul nu autentifică din nou utilizatorul.
-`authKey` rămâne exclusiv pe server. Aliasurile duplicate sunt obligatorii: endpoint-urile AJS
-custom nu sunt standardizate, iar `WSMCP/execSql` citește forma sa proprie.
+**Cheile sunt `sqlQuery` și `sqlParams`.** Clientul MCP trimite și variantele `SQL`/`PARAMS`/`sql`/
+`params` doar pentru că este generic peste mai multe proiecte; `WSMCP/execSql` le **ignoră**. Serviciul
+nostru trimite exact forma de mai sus.
+
+**Plafon dur: 20 de parametri poziționali.** `WSMCP_applyGETSQLDATASET` enumeră cazurile de la 1 la
+20 și aruncă `Too many SQL parameters` peste. Este constrângerea care modelează compunerea SQL (§5).
+
+**Tranzacții — `obj.statements`.** Alternativ, `statements: [{sql, params}, ...]` este împachetat
+server-side în `BEGIN TRAN ... COMMIT`, cu urmărire pe `@step`, `ROLLBACK` la eroare și rând de
+eroare structurat (`__ok`, `failedStep`, `errNum`, `errMsg`). Aceeași limită de 20 de parametri, pe
+toată tranzacția. Este calea corectă pentru `saveParams`, care trebuie să fie atomic.
+
+**Eșec de autentificare** → `{ success: false, error: 'Access denied', code: 401 }`.
+
+Există și `/JS/WSMCP/queryDataset`, strict o singură instrucțiune read-only; `execSql` îl acoperă,
+deci serviciul folosește un singur endpoint.
+
+`authKey` nu este un secret verificat doar de client. Este validat în S1 față de o tabelă dedicată,
+citită pe producție (07.09.2026):
+
+| Coloană | Tip | Observație |
+|---|---|---|
+| `AUTHKEY` | `varchar(128)` | cheie primară, deci sunt permise **mai multe** chei distincte |
+| `ISACTIVE` | `bit`, default `1` | întrerupător: revocă o cheie fără să o șteargă |
+| `ALLOW_WRITE` | `bit`, default `0` | permite scrierile prin acest canal |
+| `INSDATE` | `datetime`, default `getdate()` | fără expirare automată |
+
+Starea de azi: **o singură cheie**, de 128 de caractere, `ISACTIVE = 1`, `ALLOW_WRITE = 0`. Aceasta
+din urmă este motivul pentru care deploy-ul AJS din agent a fost refuzat server-side.
+
+Rezultă o apărare pe **trei** niveluri, nu două, toate verificate în sursa deployată:
+
+1. `classifySql` în procesul Node — whitelist de verbe, înainte de apel;
+2. `WSMCP_classifyStatement` **server-side** — același set blocat
+   (`DROP|ALTER|CREATE|TRUNCATE|EXEC|EXECUTE|GRANT|REVOKE|DBCC|BACKUP|RESTORE|SHUTDOWN|MERGE`, plus
+   prefixele `SP_`/`XP_`), aplicat după ce comentariile și literalii sunt îndepărtați, deci un cuvânt
+   ascuns într-un șir nu poate păcăli verificarea;
+3. `ALLOW_WRITE` pe cheie — evaluat **per instrucțiune**, prin `isWrite`.
+
+Al doilea strat este cel care contează cu adevărat: chiar dacă stratul Node ar fi ocolit sau
+compromis, S1 refuză singur DDL și `EXEC`.
+
+**Decizie (07.09.2026): cheia aplicației primește `ALLOW_WRITE = 1`.** Motivul este panoul de
+parametri: editarea `CCCMINMAXPARAMS` / `CCCMINMAXCOV` / `CCCMINMAXBRANCH` / `CCCMINMAXTEMPLATE`
+este CRUD pe tabele de configurare, iar trecerea lui prin `execSql` păstrează același ciclu rapid de
+iterație ca la citiri, fără deploy AJS la fiecare modificare de formular.
+
+Ce **nu** se deblochează: `EXEC`, `EXECUTE`, `CREATE`, `ALTER` rămân în `ALWAYS_BLOCKED_VERBS`,
+indiferent de flag. `runEngine`, `explainRow` și `applyToErp` rămân obligatoriu în AJS.
+
+Ce se deblochează: `INSERT` / `UPDATE` / `DELETE` — **pe orice tabelă**. Verificat în sursă:
+`WSMCP_classifyStatement` nu are nicio listă de tabele, deci un `UPDATE` valid sintactic poate atinge
+`MTRL`, `MTRBRNLIMITS` sau `FINDOC` la fel de ușor ca `CCCMINMAXPARAMS`. Până acum o eroare de
+compunere scurgea date; de acum poate corupe ERP-ul.
+
+**Control compensatoriu obligatoriu — listă albă de tabele în serviciul Feathers.** Scrierile se
+acceptă exclusiv către `CCCMINMAXPARAMS`, `CCCMINMAXCOV`, `CCCMINMAXBRANCH` și `CCCMINMAXTEMPLATE`.
+Nu poate fi implementat în WSMCP, al cărui cod nu se află în acest repo, deci stă lângă
+`classifySql`: verb whitelist **și** table whitelist, ambele verificate înainte de apel.
+
+**Cheie separată pentru aplicație.** Cum `AUTHKEY` este cheie primară, aplicația primește rândul ei,
+distinct de cel al MCP-ului de dezvoltare. Separarea rămâne necesară și după această decizie:
+domeniile de acces diferă, iar rotația uneia nu o afectează pe cealaltă.
+
+Două limite de reținut, fără soluție în schema actuală, ambele mai grele odată cu scrierile: nu
+există tabelă de audit server-side (`CCC_WSMCP_AUTH` este singura `CCC_WSMCP*`, iar jurnalul din
+`mcp-server/src/audit-log.ts` este local procesului), deci mutațiile prin acest canal rămân
+neatribuibile; și nu există expirare. Rotația se face fără întrerupere prin `ISACTIVE`: se inserează
+cheia nouă, se comută variabila de mediu, apoi se dezactivează cea veche.
 
 ## 4. Securitate
 
@@ -112,7 +191,7 @@ modelul de amenințare se schimbă, deci:
 
 | Grup | Câmpuri |
 |---|---|
-| Scope | `runId` (int, opțional), `branches` (int[], max 50), `esteHq` (tri-state) |
+| Scope | `runId` (int, opțional), `branches` (int[], max 14), `esteHq` (tri-state) |
 | Articol | `codeLike` (prefix), `mtrl` (int[]), `mtrgroup` (int[]) |
 | Clasificare | `lifecycle`, `abc`, `xyz`, `clasa` (string[], validate față de mulțimea posibilă) |
 | Indicatori | `flagTxt` (`OK`/`UP`/`DOWN`/`MAJOR_UP`/`SUPRASTOC`/`FARA_REFERINTA`), `statusTrend` (`ACTIVE`/`STABLE`/`TREND_DOWN`/`DECLINE`) |
@@ -147,19 +226,81 @@ Filtrul implicit al UI este `flagTxt` în `DOWN`, `OK`, `UP`, `MAJOR_UP`, `SUPRA
 3. **Sortarea implicită este `BRANCH, MTRL`** — coincide cu ordinea clustered, deci gratuită. Orice
    altă sortare pe un `runId` fără filtru de filială înseamnă sortarea a ~713.818 rânduri; de
    măsurat înainte de a fi expusă, nu de presupus.
-4. **Listele `IN` se leagă, nu se interpolează** — câte un placeholder per valoare (`IN (:3, :4, :5)`),
-   chiar și după validarea că sunt întregi.
+4. **Listele `IN` trec printr-un singur parametru CSV**, nu prin câte un placeholder per valoare.
+   Plafonul server-side este de **20 de parametri poziționali** pe apel, iar un filtru cu 14 filiale
+   plus clase l-ar depăși imediat. Forma corectă:
+   `INNER JOIN STRING_SPLIT(:1, ',') s ON s.value = CONVERT(VARCHAR(20), d.BRANCH)`. `STRING_SPLIT`
+   există pe SQL Server 2016 la compat 130. Bugetul de parametri se ține explicit sub 20.
 5. **Numărul total de rânduri se calculează separat**, nu cu `COUNT(*) OVER ()`, și doar când se
    schimbă filtrul — altfel fiecare pagină plătește scanarea întregului set.
 
-## 6. Precondiție — persistența `ClassifyGroup`
+## 6. Contract `explainRow`
+
+Este mecanismul prin care beneficiarul **verifică** o cifră, nu doar o vede. Face parte din
+iterația 1: fără el, ecranul cere încredere în loc să o producă.
+
+**Nu are nevoie de procedură stocată.** Citește exclusiv stare persistată, deci este `SELECT` curat
+și trece prin `execSql` ca orice altă citire. Planul îl așezase în AJS presupunând un
+`sp_MinMaxEngine_Explain`; presupunerea era inutilă.
+
+**Lanțul este deja pe rând.** `SAFETY`, `LT_STOCK`, `SLTS`, `BUF`, `CYCLE`, `MAX_RAW`, `MAX_INF`,
+`CAP6`, `VZ26_CAP`, `SUM_BR_MAX`, `ENG_MIN`, `ENG_MAX`, `BUY_RAW`, `BUY_QTY`, `HQ_CAP_APLICAT`,
+`PODEA_APLICATA`, împreună cu intrările `SIGMA_WK`, `SSF`, `LT_ZILE`, `SL`, `ad`, `AVG`, `COV_TGT`,
+`FRECVENTA_ZILE`, `N_PACK`, `STOC_QTY`, `ORD_FURN` — toate sunt coloane în `CCCMINMAXDET`. Drawer-ul
+**nu recalculează nimic**; afișează ce s-a persistat și etichetează pașii.
+
+Trei interogări suplimentare, toate punctuale:
+
+| Ce | De unde |
+|---|---|
+| antetul sesiunii + `PARAMSJSON` / `COMPUTE_PARAMSJSON` | `CCCMINMAXRUN` unde `RUNID` |
+| statisticile de winsorizare ale articolului | `CCCMINMAXWINSOR` unde `(RUNID, MTRL)` |
+| seria de 52 de săptămâni, reconstruită dens | CTE de 52 de rânduri `LEFT JOIN CCCMINMAXWEEK` pe `(RUNID, BRANCH, MTRL)` |
+
+Seria se reconstruiește dens la afișare pentru că `CCCMINMAXWEEK` este rară prin definiție: absența
+unei săptămâni **înseamnă** zero. Utilizatorul trebuie să vadă cele 52 de săptămâni, inclusiv golurile.
+
+**Regula dură, nenegociabilă:** `explainRow` nu atinge `MTRTRN`, `FINDOC` sau `MTRL`. `AZI` vine din
+date vii și populația crește în cursul zilei, deci o explicație care reinteroghează ERP-ul ar afișa
+alte cifre decât rularea pe care pretinde că o explică.
+
+### Ce **nu** este `explainRow`
+
+Planul §4.1 folosește același nume pentru două lucruri diferite. Drawer-ul de mai sus **citește**
+valori persistate. Separat, planul cere un **oracol de corectitudine** — o reimplementare densă,
+naivă, care recalculează de la zero și verifică calea rapidă (§9 din plan, harness-ul sparse vs dens).
+
+Acela este instrument de dezvoltare, nu de interfață, și rămâne în afara Fazei 5. Confundarea lor ar
+introduce formule duplicate în stratul Node, cu risc de divergență față de motor.
+
+## 7. Contract `saveParams`
+
+Singura cale de scriere din interfață. Merge prin `statements`, deci toată salvarea este atomică:
+ori se aplică tot setul, ori niciunul.
+
+| Tabelă | Cheie de identitate | Semantică |
+|---|---|---|
+| `CCCMINMAXPARAMS` | `(PARAMKEY, SCOPE, SCOPEKEY)` | upsert; `SCOPE='GLOBAL'`, `SCOPEKEY=''` în iterația 1 |
+| `CCCMINMAXCOV` | `(CLASA, MARIME)` | doar `UPDATE` — matricea are 33 de rânduri fixe |
+| `CCCMINMAXBRANCH` | `BRANCH` | doar `UPDATE` pe `MARIME`, `INCLUS`, `ESTE_PODEA` |
+| `CCCMINMAXTEMPLATE` | `(FURNIZOR, BRANCH, PREFIX)` | **în afara iterației 1** — vezi Open Questions din handoff |
+
+Upsert-ul se scrie ca `UPDATE` urmat de `INSERT ... WHERE NOT EXISTS`, nu `MERGE`: `MERGE` este în
+`ALWAYS_BLOCKED_VERBS`, atât în `classifySql` cât și în `WSMCP_classifyStatement`.
+
+Bugetul de parametri rămâne sub 20 pe apel; un set mare de parametri se salvează în mai multe
+tranzacții succesive, nu într-una singură.
+
+`ESTE_HQ` nu este editabil din interfață: definește stratul de companie, nu o preferință.
+
+## 8. Precondiție — persistența `ClassifyGroup`
 
 `getGroupAbc` citește `CCCMINMAXGRP`. Persistența este implementată local: tabelul are cheia
 `(RUNID, BRANCH, MTRGROUP)`, iar `ClassifyGroup` persistă pe o sesiune `OPEN`. Înainte de UI,
 această modificare trebuie deployată și validată pe o sesiune `FULL` nouă, închisă prin
 `sp_MinMaxEngine_FinishRun` cu `GROUP_STATUS = 'DONE'`.
 
-## 7. Straturi și fișiere
+## 9. Straturi și fișiere
 
 | Strat | Locație | Tipar de urmat |
 |---|---|---|
@@ -177,34 +318,43 @@ acolo trăiesc `necesar-achizitii`, `top-abc` și `batch-queue`, care au dus fi�
 |---|---|
 | `minmax-engine-container.js` | container, provider de store |
 | `minmax-results-table.js` | rezultate, filtre server-side pe contractul §5 |
-| `minmax-run-panel.js` | selecția rulării + istoric |
+| `minmax-run-panel.js` | selecția sesiunii + istoric (**doar selecție**, fără lansare) |
 | `minmax-group-abc.js` | ABC-XYZ per grupă |
-| `minmax-params-panel.js` | parametri, read-only în prima iterație |
+| `minmax-explain-drawer.js` | drill-down pe un rând — lanțul de calcul și seria de 52 de săptămâni |
+| `minmax-params-panel.js` | parametri, matrice COV, filiale, șabloane — **singura scriere** |
 
 Tabelul refolosește configurarea pe coloane din
 [../public/config/table-column-config.js](../public/config/table-column-config.js).
 
-## 8. Todo list, cu model recomandat
+## 10. Todo list, cu model recomandat
 
 - [ ] 1. Deploy + validare sesiune `FULL` nouă pentru `CCCMINMAXGRP` și modelul imutabil *(utilizator)*
-- [ ] 2. Configurare server-side prin environment pentru transportul `execSql` *(Claude Sonnet 4.6)*
-- [ ] 3. Serviciu Feathers `src/services/minmax-engine/` cu clientul `execSql` *(Claude Sonnet 4.6)*
-- [ ] 4. Compunerea SQL din contractul de filtre + whitelist de coloane *(Claude Sonnet 4.6)*
-- [ ] 5. Portarea `classifySql` în serviciu *(model de bază)*
-- [ ] 6. Înregistrare în `services/index.js` și `socketConfig.js` *(model de bază)*
-- [ ] 7. Componentele UI + store *(Claude Sonnet 4.6)*
-- [ ] 8. Măsurarea sortărilor non-implicite pe prima sesiune curentă *(Claude Sonnet 4.6)*
-- [ ] 9. Review pe diff, sesiune nouă context mic *(Opus)*
+- [ ] 2. Cheie dedicată aplicației în `CCC_WSMCP_AUTH`, cu `ALLOW_WRITE = 0` *(utilizator)*
+- [ ] 3. Configurare server-side prin environment pentru transportul `execSql` *(Claude Sonnet 4.6)*
+- [ ] 4. Serviciu Feathers `src/services/minmax-engine/` cu clientul `execSql` *(Claude Sonnet 4.6)*
+- [ ] 5. Compunerea SQL din contractul de filtre + whitelist de coloane *(Claude Sonnet 4.6)*
+- [ ] 6. Portarea `classifySql` în serviciu *(model de bază)*
+- [ ] 7. Înregistrare în `services/index.js` și `socketConfig.js` *(model de bază)*
+- [ ] 8. Componentele UI + store, inclusiv drawer-ul `explainRow` *(Claude Sonnet 4.6)*
+- [ ] 9. Măsurarea sortărilor non-implicite pe prima sesiune curentă *(Claude Sonnet 4.6)*
+- [ ] 10. Review pe diff, sesiune nouă context mic *(Opus)*
 
-## 9. Constrângeri de respectat
+**În afara iterației 1**, fiecare pentru că cere AJS nou plus deploy: `runEngine` (lansarea unei
+sesiuni din UI), CRUD-ul de șabloane, și oracolul dens de validare (§6, distinct de drawer). Niciunul
+nu blochează confirmarea rezultatelor de către beneficiar.
+
+## 11. Constrângeri de respectat
 
 - Faza 5 nu scrie nimic în ERP. Orice buton de aplicare aparține Fazei 4.
 - `authKey` rămâne server-side; browserul trimite filtre tipate, niciodată SQL.
 - `execSql` primește transportul MCP complet (`SQL`/`PARAMS` și aliasurile lor), cu token-ul
-   utilizatorului drept `clientID`.
+  utilizatorului drept `clientID`.
+- Aplicația folosește o cheie proprie din `CCC_WSMCP_AUTH`, distinctă de cea a MCP-ului de
+  dezvoltare și menținută permanent cu `ALLOW_WRITE = 0`.
 - Fără metode generice de interogare în `socketConfig.js`.
 - Identificatorii SQL vin exclusiv din whitelist; valorile, exclusiv din parametri legați.
 - Endpoint-urile care fac `EXEC` sau DDL rămân în AJS — garda le respinge prin construcție.
 - Ecranul citește starea persistată a rulării; nu recalculează și nu interoghează `MTRTRN`/`FINDOC`.
+- `explainRow` afișează valori persistate și nu reimplementează nicio formulă în stratul Node.
 - Sesiunea curentă este `ESTE_CURENT = 1` pe o sesiune `FULL` închisă cu faza solicitată `DONE`;
-   niciun consumator nu deduce „ultima" prin `MAX(RUNID)`.
+  niciun consumator nu deduce „ultima" prin `MAX(RUNID)`.
