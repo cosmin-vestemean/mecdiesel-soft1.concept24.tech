@@ -21,6 +21,10 @@
   store) și paginare (plafon 500). Filtrele se editează într-un draft local; se trimit la store
   (`setFilters`/`resetFilters` + `loadResults()` explicit) doar la "Aplica filtre"/"Reseteaza",
   consistent cu regula "store nu re-declanșează automat".
+- `public/components/minmax-engine/minmax-group-abc.js` — al treilea `ContextConsumer`, construit
+  dar **încă necablat** în container. `CCCMINMAXGRP` (ABC/XYZ per `MTRGROUP × BRANCH`, contract
+  §8); fără sortare (backend-ul `groupAbc()` acceptă `sort`, dar `loadGroupAbc()` din store nu-l
+  transmite încă). Vezi "Decizii de design" pentru tiparul de filtre tranzitorii.
 
 ## Decizii de design
 
@@ -44,16 +48,25 @@
   din `cdn.jsdelivr.net`. `public/` nu are build step (fără Vite/webpack/import maps), deci un
   bare specifier de tip `import ... from '@lit/context'` nu s-ar rezolva în browser — nu instala
   aceste pachete via npm pentru acest strat.
+- **Filtre tranzitorii pentru `groupAbc()`** (`minmax-group-abc.js`): spre deosebire de
+  `results()`, filtrele nu trec prin `store.setFilters()`/`state.filters` — trăiesc doar ca stare
+  locală a componentei și se transmit direct la `store.loadGroupAbc(filters)` la fiecare apel
+  (apply/reset/paginare). Motiv: `loadGroupAbc(filters)` primește filtrele ca parametru explicit
+  (nu le citește din store), deci nu există alt consumator care să aibă nevoie de ele partajate.
+  Doar `page`/`pageSize` (`state.groupAbc`) rămân pe store, prin `setGroupAbcPage`/
+  `setGroupAbcPageSize`. Componenta își declanșează și propriul fetch inițial la montare (spre
+  deosebire de `results()`, care e încărcat de container) — `groupAbc()` nu face parte din
+  `_loadInitialData()` al containerului.
 
 ## Stadiu (vs. `FAZA5_CONTRACT.md` §9/§10, pasul 8)
 
-Construite: store, container (cablat cu ambele componente de mai jos), `minmax-run-panel.js` și
-`minmax-results-table.js` — ambele funcționale.
+Construite: store, container (cablat cu `minmax-run-panel.js`/`minmax-results-table.js`), și
+`minmax-group-abc.js` (funcțional, dar încă necablat în container).
 
-Rămân, în ordine: `minmax-group-abc.js` (**următorul**), `minmax-explain-drawer.js`,
-`minmax-params-panel.js`. Fiecare se conectează la `minmaxEngineStore` prin `ContextConsumer`,
-tipar din `public/components/data-table.js`/`query-panel.js` (plus `minmax-run-panel.js`/
-`minmax-results-table.js`, deja funcționale în acest repo, ca exemple minmax-specifice).
+Rămân, în ordine: `minmax-explain-drawer.js` (**următorul**), `minmax-params-panel.js`. Fiecare se
+conectează la `minmaxEngineStore` prin `ContextConsumer`, tipar din
+`public/components/data-table.js`/`query-panel.js` (plus componentele minmax-specifice deja
+funcționale în acest repo).
 
 Nu e cablat încă în `public/index.html`/`userInteractions.js` — niciun tab nou, nicio integrare de
 navigație; planificat abia când există ceva vizibil de arătat beneficiarului.
