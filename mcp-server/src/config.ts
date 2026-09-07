@@ -61,7 +61,7 @@ export function getDefaultConfig(): S1RuntimeConfig {
         sqlEndpointPath: process.env.S1_SQL_ENDPOINT_PATH || '/JS/Utile/getSQLDataSet',
         testUrl,
         username: process.env.S1_WS_USR,
-        wsSharedSecret: process.env.S1_WS_SHARED_SECRET,
+        wsSharedSecret: process.env.S1_MCP_SHARED_SECRET || process.env.S1_WS_SHARED_SECRET,
         writeMode: readWriteMode()
     };
 }

@@ -5,6 +5,7 @@ site_product_frequent_changes (stoc) -> is_processed -> 0 <=> modificare availab
 
 is_processed -> 0 always 0, 1, 2 este intern
 */
+import './load-env.js'
 import { feathers } from "@feathersjs/feathers";
 import configuration from "@feathersjs/configuration";
 import {

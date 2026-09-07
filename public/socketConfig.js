@@ -101,4 +101,15 @@ client.use("export-minmax", socketClient.service("export-minmax"), {
   ],
 });
 
+client.use("minmax-engine", socketClient.service("minmax-engine"), {
+  methods: [
+    "results",
+    "history",
+    "groupAbc",
+    "params",
+    "explain",
+    "saveParams"
+  ],
+});
+
 export { client };

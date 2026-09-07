@@ -328,13 +328,13 @@ Tabelul refolosește configurarea pe coloane din
 
 ## 10. Todo list, cu model recomandat
 
-- [ ] 1. Deploy + validare sesiune `FULL` nouă pentru `CCCMINMAXGRP` și modelul imutabil *(utilizator)*
-- [ ] 2. Cheie dedicată aplicației în `CCC_WSMCP_AUTH`, cu `ALLOW_WRITE = 0` *(utilizator)*
-- [ ] 3. Configurare server-side prin environment pentru transportul `execSql` *(Claude Sonnet 4.6)*
-- [ ] 4. Serviciu Feathers `src/services/minmax-engine/` cu clientul `execSql` *(Claude Sonnet 4.6)*
-- [ ] 5. Compunerea SQL din contractul de filtre + whitelist de coloane *(Claude Sonnet 4.6)*
-- [ ] 6. Portarea `classifySql` în serviciu *(model de bază)*
-- [ ] 7. Înregistrare în `services/index.js` și `socketConfig.js` *(model de bază)*
+- [x] 1. Deploy + validare sesiune `FULL` nouă pentru `CCCMINMAXGRP` și modelul imutabil *(utilizator — validat pe RUNID=5)*
+- [x] 2. Cheie dedicată aplicației în `CCC_WSMCP_AUTH`, cu `ALLOW_WRITE = 1` *(utilizator — inserat 07.09.2026)*
+- [x] 3. Configurare server-side prin environment pentru transportul `execSql` *(Claude Sonnet 4.6 — custom-environment-variables.json)*
+- [x] 4. Serviciu Feathers `src/services/minmax-engine/` cu clientul `execSql` *(Claude Sonnet 4.6)*
+- [x] 5. Compunerea SQL din contractul de filtre + whitelist de coloane *(Claude Sonnet 4.6)*
+- [x] 6. Portarea `classifySql` în serviciu *(model de bază — adăugat și table whitelist)*
+- [x] 7. Înregistrare în `services/index.js` și `socketConfig.js` *(model de bază)*
 - [ ] 8. Componentele UI + store, inclusiv drawer-ul `explainRow` *(Claude Sonnet 4.6)*
 - [ ] 9. Măsurarea sortărilor non-implicite pe prima sesiune curentă *(Claude Sonnet 4.6)*
 - [ ] 10. Review pe diff, sesiune nouă context mic *(Opus)*

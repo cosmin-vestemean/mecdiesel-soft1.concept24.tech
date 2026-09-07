@@ -1,0 +1,105 @@
+# MIN/MAX Engine v5 — Model de domeniu
+
+> Fapte durabile despre arhitectura motorului MIN/MAX. Nu se editează cu un log datat per sesiune —
+> secțiunile se rescriu in-place când o înțelegere se schimbă. Pentru starea sesiunii curente, vezi
+> `.copilot/context/current-focus.md`.
+
+## Cadență și sesiuni
+
+- **Rularea este LUNARĂ** (confirmat client 03.09.2026), acoperă fiecare filială + agregatul HQ.
+  Câțiva parametri se ajustează per rulare, apoi rezultatul se îngheață până luna următoare. Nu
+  există tiparul „reclasifici rar / recalculezi zilnic" — performanța per sesiune (~2 min) e
+  irelevantă, iar storage-ul pentru ~20 de sesiuni păstrate nu e o problemă.
+- **`RUNID` = sesiune de calcul imutabilă.** `sp_MinMaxEngine_StartRun` o deschide
+  (`SESSION_STATUS='OPEN'`, `SCOPE` ∈ `FULL`/`SKU`/`GROUP`); fazele scriu doar în sesiuni `OPEN`;
+  `sp_MinMaxEngine_FinishRun` o închide și mută `ESTE_CURENT` — doar pe sesiuni `FULL` complete.
+  **Recalcularea înseamnă sesiune nouă, nu rescriere** — ramurile de re-rulare au fost eliminate din
+  `Classify`/`ClassifyGroup`, zero `DELETE` pe tabele persistate. Fără scenarii what-if (decizie de
+  business). Risc real: coerența parametrilor *în interiorul* unei sesiuni — de-asta `runEngine`
+  execută `StartRun → Classify → ClassifyGroup → Compute → FinishRun` într-un singur apel.
+- **Rezoluția „sesiune curentă" e mereu `ESTE_CURENT=1 AND SCOPE='FULL' AND SESSION_STATUS='DONE'
+  AND COMPUTE_STATUS='DONE'`, niciodată `MAX(RUNID)`.** Precedent de evitat: `#LatestAbcData` din
+  `reumplere/sp_GetMtrlsDat.sql` ia `MAX(DATACALCUL)` per rând și compune un colaj din rulări
+  diferite.
+- **`sp_MinMaxEngine_Prepare` NU e o fază de pipeline** — propriul antet spune „același pipeline ca
+  Classify, oprit înainte de clasificare"; n-are `@Persist`, nu scrie în niciun `CCC*`, nimic n-o
+  consumă. E doar oracolul de validare din Faza 1b; cei ~180s ai ei nu intră în costul unei sesiuni.
+- **Codurile `THROW` alocate:** `50004/50007/50008` Classify sesiune, `50005/50006/50015`
+  ClassifyGroup, `50017` Compute sesiune, `50030-50032` StartRun, `50033-50038` FinishRun,
+  `50020-50024` rezervate pentru Faza 4 (`applyToErp`).
+- **`AZI` rămâne pe rândurile copil**, antetul rulării nu stochează un `AZI` autoritar (Opțiunea A,
+  confirmată). Fereastra de analiză vine din `MAX(TRNDATE)` pe date vii, deci populația poate crește
+  în aceeași zi — **numărul de rânduri nu e criteriu de acceptanță**; se verifică invariantele
+  (`TOTAL_ROWS = DISTINCT_ITEMS × DISTINCT_BRANCHES`, `DISTINCT_BRANCHES = 14`, `HQ_ROWS =
+  DISTINCT_ITEMS`, controale la zero).
+
+## „HQ" și filialele
+
+- **Branch 1000 = stratul de companie, NU o locație fizică.** Persistat în `MTRL`
+  (`REMAINLIMMIN`/`REMAINLIMMAX`, `CCCMINAUTOCOMP`/`CCCMAXAUTOCOMP`). Materializarea fizică e
+  **București 2200** (50% din stocul național, 26,5% din valoarea vânzărilor 52S). Compania 1001 e
+  `Demo S.R.L.` (`ISACTIVE=0`, 0 articole) — nu e depozitul real al HQ. `ESTE_HQ` rămâne pe branch
+  1000; mutarea pe 2200 ar elimina din calcul propriile vânzări ale Bucureștiului.
+  - **Bug latent corectat (03.09.2026):** eligibilitatea HQ depindea de `WHOUSE` din compania demo
+    1001 în `#ActiveBranches` din toate cele trei proceduri (`Classify`/`Prepare`/`ClassifyGroup`).
+    Fix deployat live pe toate trei, fără schimbare de rezultat funcțional.
+- **Branch list, sursă de adevăr: `WHOUSE.ISACTIVE=1 AND CCCBRANCH IS NOT NULL`** (13 filiale fizice
+  + HQ), NU `BRANCH.ISACTIVE` (18, din care 4 sunt moarte: ARAD 2300, VOLUNTARI 2400, MIHAILESTI
+  2600, RM VALCEA 2900 — depozite închise, `INCLUS=0` de facto).
+- **Filialele închise pierd cerere reală:** 2300/2400/2600/2900 au 7,25 mil RON (5,7% din valoarea
+  52S) atribuiți `CLIENT`, dar `#IncludedLines` face `INNER JOIN #ActiveBranches` → dispar din
+  ambele agregate. Deschis: reatribuire către filiala care servește azi, sau măcar includere în
+  agregatul de companie.
+
+## Performanță / serie săptămânală
+
+- **Seria săptămânală nu se materializează dens.** `#WeeklySeries` ar fi `#Items × 14 filiale × 52`
+  ≈ 37M rânduri, din care doar 0,5% observații reale (măsurat). Decizie: agregatele se calculează
+  din serie rară; `SIGMA_WK`/`SIGMA_MTH` din momentele de ordin 1-2 cu `n` constant (52/12) —
+  rezultat identic cu `STDEV()` pe seria densă (validat la 8 zecimale pe RUNID 3).
+  `CCCMINMAXWEEK` (rar, ~350k rânduri/rulare) + `CCCMINMAXWINSOR` (~52,7k) sunt substratul de audit,
+  citit de `explainRow`/`sp_MinMaxEngine_Explain`.
+- `MTRL.ISACTIVE` nu e un filtru util: doar 12 din 52.700 articole cu vânzări 52S au `ISACTIVE=0`.
+
+## Sursele D1-D3 (Compute)
+
+- **`STOC_QTY`** = `MTRFINDATA.QTY1`, identic cu soldul `MTRBALSHEET` la 8 zecimale.
+- **`ORD_FURN`** = `MTRLINES`, `SOSOURCE=1251`, `PENDING=1`, `RESTCATEG=1`, document neanulat,
+  cantitate `QTY1-QTY1COV-QTY1CANC`, filială din `WHOUSE.CCCBRANCH`. Coincide cu
+  `FNSOGETLINEPEND` pe toate liniile verificate. 25 linii pe depozitul 8002 „BONURI VALORICE" nu au
+  `CCCBRANCH` — incluse azi doar în rândul HQ, excluse de pe filiale (deschis: de exclus complet?).
+- **`LAST_RECEIPT`** = `MAX(MTRTRN.TRNDATE)` per companie/SKU, `SOSOURCE=1251`, `TPRMS.FLG01=1`;
+  lipsă rămâne `NULL`, la fel `DISC_FLAG`.
+- Stock per warehouse: `MTRBALSHEET` (`FISCPRD`, `PERIOD`, `IMPQTY1-EXPQTY1`); `MTRSTATS`/
+  `MTRWHSTOCK` nu există.
+
+## Versionare AJS
+
+- `S1-MEC/AJS/NewMinMax.js` **nu** e urmărit de repo-ul principal — hardlink către
+  `external/MEC/SyncItalia/S1/AJS/NewMinMax.js`, urmărit de submodul. Hardlink-ul propagă conținutul,
+  nu commit-ul: orice modificare AJS cere commit în submodul **și** commit de pointer în repo.
+- CCC* tables trăiesc în baza S1, create via AJS `setup()` + `X.RUNSQL` (`IF NOT EXISTS ...
+  sysobjects`), NU via knex migrations (acelea țintesc baza aplicației Feathers). DDL fiind `IF NOT
+  EXISTS`, modificările de coloană merg prin secțiunea ghidată de `INFORMATION_SCHEMA` din
+  `00b_persist.sql`.
+
+## Istoric livrare (fazele 0-3, toate deployate și validate live)
+
+- **Faza 0** (`00_params.sql`): `CCCMINMAXPARAMS`/`COV`/`BRANCH`/`TEMPLATE` + seed idempotent.
+- **Faza 1a** (`ufn_MinMaxSalesLines`): atribuire linii de vânzare pe filială, mod `CLIENT`.
+- **Faza 1b** (`sp_MinMaxEngine_Prepare`): oracol de validare, nu fază de pipeline (vezi mai sus).
+- **Faza 2** (`sp_MinMaxEngine_Classify`, per SKU): clasificare ABC-XYZ, `COV_TGT`, `SL`, `SSF`,
+  `AVG` ponderat, Pareto. Smoke test pe MTRL 1360919 × 14 filiale — toate valorile teoretice
+  confirmate.
+- **Faza 2b** (`sp_MinMaxEngine_ClassifyGroup`): același pipeline, agregat pe `MTRGROUP × BRANCH`.
+- **Faza 3** (`sp_MinMaxEngine_Compute`): D1-D3 (stoc/comenzi/ultima recepție) → `SAFETY`/`BUF`/
+  `CYCLE`/`CAP6`/`ENG_MIN`/`ENG_MAX`/`BUY_QTY` → indicatori (`FLAG_RATIO`, `TREND_PCT`). Smoke test
+  pe MTRL 1360919 corect pe toate valorile verificabile manual.
+- **Sesiuni persistate** (`RUNID`, `CCCMINMAXRUN`/`DET`/`GRP`/`WEEK`/`WINSOR`): stratul de
+  persistență + modelul de sesiune imutabilă (`StartRun`/`FinishRun`) — vezi secțiunea „Cadență și
+  sesiuni" mai sus. **`RUNID=5` este sesiunea curentă validată** (07.09.2026): `StartRun → Classify
+  → ClassifyGroup → Compute → FinishRun`, toate `DONE`, `706.734 = 50.481 × 14` rânduri,
+  `MIN_GT_MAX=0`, `ESTE_CURENT=1`. `RUNID≤4` sunt legacy (`SESSION_STATUS` NULL, înghețate prin
+  construcție).
+- **Instrumente de sincronizare:** `new_min_max/tools/sync-check.cjs` verifică SQL-ul embedat în AJS
+  linie cu linie față de `new_min_max/sql/*.sql` — de rulat după fiecare editare de SQL.
