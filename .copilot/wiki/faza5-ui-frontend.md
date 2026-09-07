@@ -10,8 +10,9 @@
 - `public/stores/minmax-engine-store.js` — stare + orchestrare Feathers într-un singur loc (vezi
   „Decizii de design" mai jos pentru motiv).
 - `public/components/minmax-engine/minmax-engine-container.js` — `ContextProvider`, încărcare
-  inițială (`loadHistory`/`loadParams`/`loadResults` în paralel), randează un placeholder cât timp
-  nu există componente montate.
+  inițială (`loadHistory`/`loadParams`/`loadResults` în paralel), montează acum toate cele 6
+  componente din contract în ordine (run-panel, results-table, group-abc, explain-drawer,
+  params-panel).
 - `public/components/minmax-engine/minmax-run-panel.js` — primul `ContextConsumer` real, cablat în
   container. Selecție sesiune + istoric (`CCCMINMAXRUN`), **fără buton de lansare** — `runEngine`
   e exclus din iterația 1 (contract §3).
@@ -20,28 +21,29 @@
   `mtrl`/`mtrgroup` ca liste text), sortare (whitelist + click pe antet, tie-break implicit din
   store) și paginare (plafon 500). Filtrele se editează într-un draft local; se trimit la store
   (`setFilters`/`resetFilters` + `loadResults()` explicit) doar la "Aplica filtre"/"Reseteaza",
-  consistent cu regula "store nu re-declanșează automat".
-- `public/components/minmax-engine/minmax-group-abc.js` — al treilea `ContextConsumer`, construit
-  dar **încă necablat** în container. `CCCMINMAXGRP` (ABC/XYZ per `MTRGROUP × BRANCH`, contract
-  §8); fără sortare (backend-ul `groupAbc()` acceptă `sort`, dar `loadGroupAbc()` din store nu-l
-  transmite încă). Vezi "Decizii de design" pentru tiparul de filtre tranzitorii.
+  consistent cu regula "store nu re-declanșează automat". Row-click →
+  `store.openExplain(row.BRANCH, row.MTRL)`.
+- `public/components/minmax-engine/minmax-group-abc.js` — al treilea `ContextConsumer`, cablat în
+  container. `CCCMINMAXGRP` (ABC/XYZ per `MTRGROUP × BRANCH`, contract §8); fără sortare
+  (backend-ul `groupAbc()` acceptă `sort`, dar `loadGroupAbc()` din store nu-l transmite încă).
+  Vezi "Decizii de design" pentru tiparul de filtre tranzitorii.
 - `public/components/minmax-engine/minmax-explain-drawer.js` — al patrulea `ContextConsumer`,
-  construit dar **încă necablat** (nici în container, nici ca trigger din
-  `minmax-results-table.js`, care nu are încă niciun hook de row-click). Randează
-  `state.explain` (deja implementat integral în store: `openExplain`/`closeExplain`/
-  `SET_EXPLAIN_DATA`/`SET_EXPLAIN_ERROR`) ca un drawer fix pe partea dreaptă, vizibil doar când
-  `state.explain.open`. Afișează exact câmpurile din contract §6, în ordinea din contract
-  (`INPUT_FIELDS`, `CHAIN_FIELDS`), plus antetul `CCCMINMAXRUN`, `CCCMINMAXWINSOR` și seria
-  densă de 52 de săptămâni — nu recalculează nimic, doar formatează.
-- `public/components/minmax-engine/minmax-params-panel.js` — al cincilea `ContextConsumer`,
-  construit dar **încă necablat**. Singura scriere din interfață (contract §7): parametri globali
+  cablat în container și declanșat prin row-click din `minmax-results-table.js`. Randează
+  `state.explain` (`openExplain`/`closeExplain`/`SET_EXPLAIN_DATA`/`SET_EXPLAIN_ERROR`) ca un
+  drawer fix pe partea dreaptă, vizibil doar când `state.explain.open` (randează `html\`\`` gol
+  altfel, deci montarea permanentă nu afectează layout-ul). Afișează exact câmpurile din contract
+  §6, în ordinea din contract (`INPUT_FIELDS`, `CHAIN_FIELDS`), plus antetul `CCCMINMAXRUN`,
+  `CCCMINMAXWINSOR` și seria densă de 52 de săptămâni — nu recalculează nimic, doar formatează.
+- `public/components/minmax-engine/minmax-params-panel.js` — al cincilea `ContextConsumer`, cablat
+  în container. Singura scriere din interfață (contract §7): parametri globali
   (`CCCMINMAXPARAMS`), matricea COV_TGT (`CCCMINMAXCOV`, grid `CLASA_ORDER × MARIME_ORDER`, 11×3=33
   celule fixe) și configurarea filialelor (`CCCMINMAXBRANCH` — `MARIME`/`INCLUS`/`ESTE_PODEA`
   editabile, `ESTE_HQ` doar afișat). `CCCMINMAXTEMPLATE` rămâne în afara iterației 1. Editările stau
   în drafturi locale sparse (map cheiat pe identitatea din contract per tabelă) până la "Salveaza";
   `store.saveParams()` reîncarcă `params()` la succes, moment în care componenta detectează
   tranziția `saving: true → false` fără `saveError` și golește drafturile (nu există alt semnal de
-  "succes" explicit din store).
+  "succes" explicit din store). **Netestat live cu o salvare reală** —
+  `CCCMINMAXPARAMS`/`COV` erau goale la testarea din 07.09.2026 (`Niciun parametru.`).
 
 ## Decizii de design
 
@@ -75,15 +77,28 @@
   deosebire de `results()`, care e încărcat de container) — `groupAbc()` nu face parte din
   `_loadInitialData()` al containerului.
 
+## Bug-uri găsite și corectate la testarea live (07.09.2026)
+
+- **Import path greșit** în `minmax-engine-container.js`: importa store-ul din `'../stores/...'`
+  în loc de `'../../stores/...'` (același nivel de adâncime ca celelalte componente din
+  `components/minmax-engine/`) — căuta `public/components/stores/` în loc de `public/stores/`,
+  404 care bloca randarea întregului container.
+- **`window.token` nu e setat nicăieri în `public/`** (verificat exhaustiv) — `_token()` din
+  `minmax-engine-store.js` încă îl citea. Fixat să folosească
+  `sessionStorage.getItem('s1Token')`, tiparul funcțional din `top-abc-container.js`.
+  `zero-minmax-panel.js`/`export-minmax-panel.js` au același bug latent, netratat în această
+  sesiune (vezi `.copilot/context/open-threads.md`).
+
+Bug-uri de backend (OFFSET/FETCH bindăți, răspunsuri gzip nedecomprimate) găsite în aceeași
+sesiune de testare — vezi [faza5-ui-backend.md](faza5-ui-backend.md).
+
 ## Stadiu (vs. `FAZA5_CONTRACT.md` §9/§10, pasul 8)
 
-Construite: store, container (cablat cu `minmax-run-panel.js`/`minmax-results-table.js`),
-`minmax-group-abc.js`, `minmax-explain-drawer.js` și `minmax-params-panel.js` — toate cele 6
-componente din §9 există acum, ultimele trei funcționale dar încă necablate în container.
+**Complet și verificat live** (07.09.2026, autentificat, date reale, `RUNID=5`): toate cele 6
+componente din §9 construite, cablate în `minmax-engine-container.js`, și integrate în navigare
+(tab "MIN/MAX Engine" în app-ul `achizitii` — buton + content div în `index.html`, handler în
+`userInteractions.js`, înregistrare în `hierarchical-navigation.js`). Fluxul filtre → rezultate →
+click rând → explain drawer → group-abc → istoric confirmat funcțional în browser.
 
-Rămâne: cablarea propriu-zisă — un row-click în `minmax-results-table.js` care apeleze
-`store.openExplain(branch, mtrl)`, apoi montarea celor trei componente necablate în
-`minmax-engine-container.js` (dezlocuind comentariul placeholder existent).
-
-Nu e cablat încă în `public/index.html`/`userInteractions.js` — niciun tab nou, nicio integrare de
-navigație; planificat abia când există ceva vizibil de arătat beneficiarului.
+Rămas netestat: `saveParams()` cu o salvare reală (params-panel) — tabelele `CCCMINMAXPARAMS`/
+`COV` erau goale la testare, deci fluxul de editare n-a fost exersat cu date.

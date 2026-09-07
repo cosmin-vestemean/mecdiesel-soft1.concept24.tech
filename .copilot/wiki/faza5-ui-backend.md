@@ -53,13 +53,37 @@ Mapate în `config/custom-environment-variables.json` → `minmaxEngine.{s1BaseU
 ## Verificat live pe producție (07.09.2026)
 
 - Forma răspunsului `execSql` confirmată: `{success:true, data:[...], total:N}` pentru `SELECT`;
-  scrierea întoarce `data:[{affected:N}]`. `extractRows()` din `minmax-engine.class.js` e corectă,
-  nu mai e o presupunere.
+  scrierea întoarce `data:[{affected:N}]`. **Corecție ulterioară aceeași zi:** asta e adevărat doar
+  pentru răspunsuri mici (ex. `COUNT(*)`) — vezi bug-ul gzip mai jos, găsit la testarea live a UI.
 - Cheia MCP: `SELECT` OK; `UPDATE` respins server-side (`ALLOW_WRITE=0 in CCC_WSMCP_AUTH`).
 - Cheia aplicație: `SELECT` OK; `UPDATE` pe `CCCMINMAXCOV` OK (`{"affected":1}`); `EXEC` respins
   server-side indiferent de `ALLOW_WRITE` (`WSMCP_classifyStatement` blochează verbul, nu doar
   scrierile).
 - PM2 (`pm2 restart 0 --update-env`) repornit cu variabilele noi.
+
+## Bug-uri găsite și corectate la testarea live a UI (07.09.2026)
+
+Descoperite abia când UI-ul complet (store + toate cele 6 componente + navigare) a fost testat
+autentificat, cu date reale, în browser — vezi [faza5-ui-frontend.md](faza5-ui-frontend.md) pentru
+contextul complet al sesiunii de testare.
+
+1. **OFFSET/FETCH/TOP cu parametri bindăți nu merg peste `/JS/WSMCP/execSql`.** Eroare OLE
+   confirmată direct (nu doar dedusă): "row count parameter must be an integer". `buildPaging()`
+   (folosit de `results()`/`groupAbc()`) și `TOP (${limitPh})` din `history()` legau offset/fetch/
+   limit ca parametri poziționali `:N`; acum sunt interpolați ca literali (deja validați prin
+   `sqlInt()`/`Math.min`/`Math.max`, deci sigur, nu e input brut).
+2. **Răspunsurile mari de la `/JS/WSMCP/execSql` vin gzip; `request-promise` nu le decomprima**
+   fără `gzip: true` în opțiunile `rp({...})`. `COUNT(*)` (răspuns mic) mergea normal, dar
+   `SELECT d.*` paginat (răspuns mare, multe coloane) venea ca octeți gzip bruți — `extractRows()`
+   nu găsea niciun array valid și returna `[]` în tăcere, fără nicio eroare. Simptom: `total`
+   corect, `rows: []` — exact ce s-a observat în `results()` și `history()` live (24360+ rânduri
+   raportate, tabel gol). Fixat adăugând `gzip: true` în ambele apeluri `rp()` din
+   `_execSql`/`_execStatements`.
+
+Ambele confirmate prin apel direct al serviciului Feathers din sesiunea autentificată de browser
+(`page.evaluate(() => import('/socketConfig.js')...)`), nu doar din citirea codului — o sesiune S1
+separată (alt login) poate avea alt scope de companie/filială și nu e un substitut fiabil pentru
+reproducere.
 
 ## Teste (unit, HTTP mocat)
 
@@ -80,7 +104,10 @@ Mapate în `config/custom-environment-variables.json` → `minmaxEngine.{s1BaseU
 
 Rulare izolată: `NODE_ENV=test npx mocha test/services/minmax-engine --recursive --exit`.
 `nock@14` a fost adăugat ca devDependency; cere Node ≥18.20, repo-ul are `engines` pe 18.12.1 —
-`npm install` dă un warning `EBADENGINE`, dar pachetul funcționează normal la runtime.
+`npm install` dă un warning `EBADENGINE`, dar pachetul funcționează normal la runtime. Testul
+`history() clamps the limit` a fost actualizat 07.09.2026 pentru a reflecta fix-ul de mai sus
+(limit-ul nu mai apare în `sqlParams`, ci interpolat literal în `sqlQuery`); toate cele 41 de teste
+trec după ambele fix-uri de mai sus.
 
 ## Stadiu (vs. todo-ul din `FAZA5_CONTRACT.md` §10)
 

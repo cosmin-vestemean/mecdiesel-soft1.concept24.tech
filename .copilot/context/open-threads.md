@@ -76,4 +76,21 @@ Firele **pe obiectiv** rămân în `current-focus.md`.
   next_step: >
     De corectat propozitia din §7.4 la urmatoarea atingere a handoff-ului, sau
     la generarea wiki-ului (Faza 5), care ia formulele din aceeasi sursa.
+
+- id: window-token-latent-bug-zero-export-minmax
+  opened: 2026-09-07
+  status: open
+  area: public/components/zero-minmax/zero-minmax-panel.js, public/components/export-minmax/export-minmax-panel.js
+  summary: >
+    Ambele componente citesc `window.token`, care nu e setat nicaieri in public/
+    (verificat exhaustiv). minmax-engine-store.js avea acelasi bug, descoperit
+    si reparat live 07.09.2026 (vezi memoria de repo, conventions.md §6) prin
+    inlocuire cu sessionStorage.getItem('s1Token') (tiparul functional din
+    top-abc-container.js). zero-minmax/export-minmax nu au fost atinse.
+  why_tangential: >
+    Module diferite de motorul MIN/MAX Faza 5; nu blocheaza Faza 5.
+  next_step: >
+    De verificat daca butoanele lor de initialize/branches/etc. chiar functioneaza
+    in productie (poate niciodata testate cu sesiune noua de login), si daca nu,
+    de aplicat acelasi fix (sessionStorage.getItem('s1Token') in loc de window.token).
 ```

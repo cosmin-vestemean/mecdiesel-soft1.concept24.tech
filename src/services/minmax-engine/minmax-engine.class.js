@@ -221,13 +221,15 @@ function buildOrderBy (sort, columns, tieBreakSql) {
   return `${column} ${dir}, ${tieBreakSql}`
 }
 
-function buildPaging (page, pageSize, params) {
+function buildPaging (page, pageSize) {
   const p = Math.max(1, sqlInt(page || 1, 'page'))
   const size = Math.min(MAX_PAGE_SIZE, Math.max(1, sqlInt(pageSize || DEFAULT_PAGE_SIZE, 'pageSize')))
   const offset = (p - 1) * size
-  const offsetPh = bind(params, offset)
-  const fetchPh = bind(params, size)
-  return { page: p, pageSize: size, sql: `OFFSET ${offsetPh} ROWS FETCH NEXT ${fetchPh} ROWS ONLY` }
+  // OFFSET/FETCH row counts must be literals, not bound params: SQL Server
+  // rejects a bound param there over this WSMCP execSql channel (confirmed
+  // live 07.09.2026 — "row count parameter must be an integer"). Safe to
+  // inline since offset/size are already validated integers above.
+  return { page: p, pageSize: size, sql: `OFFSET ${offset} ROWS FETCH NEXT ${size} ROWS ONLY` }
 }
 
 // Reads rows off an execSql 'dataset' response: {success, data: [...], total}.
@@ -282,6 +284,7 @@ export class MinmaxEngineService {
         sqlParams: sqlParams || [],
         sqlQuery: sql
       },
+      gzip: true,
       json: true,
       method: 'POST',
       uri: `${baseUrl}/JS/WSMCP/execSql`
@@ -307,6 +310,7 @@ export class MinmaxEngineService {
     const { baseUrl, appId, authKey } = this._config()
     const response = await rp({
       body: { appId, authKey, clientID: token, returnMode: 'dataset', statements },
+      gzip: true,
       json: true,
       method: 'POST',
       uri: `${baseUrl}/JS/WSMCP/execSql`
@@ -363,7 +367,7 @@ export class MinmaxEngineService {
     const orderBy = buildOrderBy(data.sort, DET_COLUMNS, 'd.BRANCH, d.MTRL')
 
     const pageParams = filterParams.slice()
-    const paging = buildPaging(data.page, data.pageSize, pageParams)
+    const paging = buildPaging(data.page, data.pageSize)
 
     const sql = `SELECT d.* FROM CCCMINMAXDET d WHERE ${whereSql} ORDER BY ${orderBy} ${paging.sql}`
     const response = await this._execSql(sql, pageParams, token)
@@ -384,8 +388,8 @@ export class MinmaxEngineService {
     const token = requireToken(data)
     const limit = Math.min(MAX_HISTORY_LIMIT, Math.max(1, sqlInt(data.limit || DEFAULT_HISTORY_LIMIT, 'limit')))
     const params = [COMPANY]
-    const limitPh = bind(params, limit)
-    const sql = `SELECT TOP (${limitPh}) ${RUN_HEADER_COLUMNS.join(', ')} FROM CCCMINMAXRUN ` +
+    // TOP (N) also rejects a bound param here (same OFFSET/FETCH restriction); limit is already a validated integer.
+    const sql = `SELECT TOP (${limit}) ${RUN_HEADER_COLUMNS.join(', ')} FROM CCCMINMAXRUN ` +
       'WHERE COMPANY = :1 ORDER BY RUNID DESC'
     const response = await this._execSql(sql, params, token)
     return { rows: extractRows(response) }
@@ -408,7 +412,7 @@ export class MinmaxEngineService {
     addEnumListFilter(clauses, params, f.clasa, 'g.CLASA', CLASA_VALUES, 'clasa')
 
     const orderBy = buildOrderBy(data.sort, GRP_COLUMNS, 'g.BRANCH, g.MTRGROUP')
-    const paging = buildPaging(data.page, data.pageSize, params)
+    const paging = buildPaging(data.page, data.pageSize)
 
     const sql = `SELECT g.* FROM CCCMINMAXGRP g WHERE ${clauses.join(' AND ')} ` +
       `ORDER BY ${orderBy} ${paging.sql}`

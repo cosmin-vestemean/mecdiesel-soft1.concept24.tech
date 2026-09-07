@@ -193,7 +193,8 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
 
       assert.deepStrictEqual(result, { rows: [] })
       assert.ok(capturedBody.sqlQuery.includes('ORDER BY RUNID DESC'))
-      assert.strictEqual(capturedBody.sqlParams[1], 50)
+      assert.ok(capturedBody.sqlQuery.includes('TOP (50)'))
+      assert.strictEqual(capturedBody.sqlParams.length, 1)
     })
   })
 

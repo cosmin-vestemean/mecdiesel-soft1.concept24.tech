@@ -364,9 +364,11 @@ export class MinmaxEngineStore {
   }
 
   _token () {
-    const token = window.token;
+    // window.token is never set anywhere in this app; sessionStorage's s1Token
+    // (set by login.js) is the actual source of truth (see top-abc-container.js).
+    const token = sessionStorage.getItem('s1Token');
     if (typeof token !== 'string' || !token) {
-      throw new Error('Missing S1 session token (window.token).');
+      throw new Error('Missing S1 session token (sessionStorage.s1Token).');
     }
     return token;
   }

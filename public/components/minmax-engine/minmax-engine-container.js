@@ -13,7 +13,7 @@
 
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
 import { ContextProvider } from 'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0/index.js';
-import { minmaxEngineStore, MinmaxEngineStoreContext } from '../stores/minmax-engine-store.js';
+import { minmaxEngineStore, MinmaxEngineStoreContext } from '../../stores/minmax-engine-store.js';
 import './minmax-run-panel.js';
 import './minmax-results-table.js';
 import './minmax-group-abc.js';
