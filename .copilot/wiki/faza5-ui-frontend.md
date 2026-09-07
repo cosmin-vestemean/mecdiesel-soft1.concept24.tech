@@ -33,6 +33,15 @@
   `state.explain.open`. Afișează exact câmpurile din contract §6, în ordinea din contract
   (`INPUT_FIELDS`, `CHAIN_FIELDS`), plus antetul `CCCMINMAXRUN`, `CCCMINMAXWINSOR` și seria
   densă de 52 de săptămâni — nu recalculează nimic, doar formatează.
+- `public/components/minmax-engine/minmax-params-panel.js` — al cincilea `ContextConsumer`,
+  construit dar **încă necablat**. Singura scriere din interfață (contract §7): parametri globali
+  (`CCCMINMAXPARAMS`), matricea COV_TGT (`CCCMINMAXCOV`, grid `CLASA_ORDER × MARIME_ORDER`, 11×3=33
+  celule fixe) și configurarea filialelor (`CCCMINMAXBRANCH` — `MARIME`/`INCLUS`/`ESTE_PODEA`
+  editabile, `ESTE_HQ` doar afișat). `CCCMINMAXTEMPLATE` rămâne în afara iterației 1. Editările stau
+  în drafturi locale sparse (map cheiat pe identitatea din contract per tabelă) până la "Salveaza";
+  `store.saveParams()` reîncarcă `params()` la succes, moment în care componenta detectează
+  tranziția `saving: true → false` fără `saveError` și golește drafturile (nu există alt semnal de
+  "succes" explicit din store).
 
 ## Decizii de design
 
@@ -69,16 +78,12 @@
 ## Stadiu (vs. `FAZA5_CONTRACT.md` §9/§10, pasul 8)
 
 Construite: store, container (cablat cu `minmax-run-panel.js`/`minmax-results-table.js`),
-`minmax-group-abc.js` și `minmax-explain-drawer.js` (ambele funcționale, dar încă necablate în
-container).
+`minmax-group-abc.js`, `minmax-explain-drawer.js` și `minmax-params-panel.js` — toate cele 6
+componente din §9 există acum, ultimele trei funcționale dar încă necablate în container.
 
-Rămâne: `minmax-params-panel.js` (**următorul**, singura scriere — contract §7). Se conectează la
-`minmaxEngineStore` prin `ContextConsumer`, tipar din `public/components/data-table.js`/
-`query-panel.js` (plus componentele minmax-specifice deja funcționale în acest repo).
-
-Înainte de cablarea propriu-zisă în container, `minmax-explain-drawer.js` mai are nevoie de un
-trigger: `minmax-results-table.js` nu are încă niciun row-click care să apeleze
-`store.openExplain(branch, mtrl)`.
+Rămâne: cablarea propriu-zisă — un row-click în `minmax-results-table.js` care apeleze
+`store.openExplain(branch, mtrl)`, apoi montarea celor trei componente necablate în
+`minmax-engine-container.js` (dezlocuind comentariul placeholder existent).
 
 Nu e cablat încă în `public/index.html`/`userInteractions.js` — niciun tab nou, nicio integrare de
 navigație; planificat abia când există ceva vizibil de arătat beneficiarului.

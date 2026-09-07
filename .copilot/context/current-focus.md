@@ -1,7 +1,7 @@
 # Current Focus
 
 ## Last Updated
-- 07.09.2026 (sesiunea 22 — `minmax-explain-drawer.js` construit, încă necablat)
+- 07.09.2026 (sesiunea 23 — `minmax-params-panel.js` construit, ultima componentă din §9)
 
 ## Current Goal
 - Faza 5 (UI de confirmare, fără scriere în ERP): backend complet, deployat și testat — vezi
@@ -13,10 +13,10 @@
   [minmax-engine-model.md](../wiki/minmax-engine-model.md).
 
 ## Active Area
-- Construim componentele de vizualizare din `FAZA5_CONTRACT.md` §9, în ordine: run-panel (gata),
-  results-table (gata), group-abc (gata, necablat), explain-drawer (gata, necablat),
-  **params-panel (următorul)**. Nimic cablat încă în `index.html`/`userInteractions.js` (niciun
-  tab nou); `minmax-results-table.js` nu are încă un row-click spre `openExplain`.
+- Toate cele 6 componente din `FAZA5_CONTRACT.md` §9 sunt construite: run-panel, results-table
+  (ambele cablate în container), group-abc, explain-drawer, **params-panel** (toate trei gata, dar
+  încă necablate). Nimic cablat încă în `index.html`/`userInteractions.js` (niciun tab nou);
+  `minmax-results-table.js` nu are încă un row-click spre `openExplain`.
 
 ## Relevant Files
 - `new_min_max/FAZA5_CONTRACT.md` — contractul UI complet; punctul de intrare pentru orice sesiune.
@@ -40,7 +40,8 @@
   business neconfirmate.
 
 ## Next Step
-- `minmax-params-panel.js`: parametri, matrice COV, filiale, șabloane — singura scriere din
-  interfață, prin `store.saveParams()` (deja implementat, atomic via `statements` — contract §7).
-  Ultima componentă din §9 înainte de cablarea propriu-zisă în container/`index.html`.
+- Cablare: adaugă un row-click în `minmax-results-table.js` care apeleze `store.openExplain(branch,
+  mtrl)`, apoi montează `minmax-group-abc.js`/`minmax-explain-drawer.js`/`minmax-params-panel.js`
+  în `minmax-engine-container.js` (dezlocuind comentariul placeholder). Abia după, integrarea în
+  `index.html`/`userInteractions.js` (tab nou), când există ceva vizibil de arătat beneficiarului.
 
