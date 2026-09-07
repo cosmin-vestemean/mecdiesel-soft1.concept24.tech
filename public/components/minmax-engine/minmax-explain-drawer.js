@@ -80,6 +80,12 @@ export class MinmaxExplainDrawer extends LitElement {
     this.loading = false;
     this.mtrl = null;
     this.open = false;
+    this._handleKeydown = (event) => {
+      if (event.key === 'Escape' && this.open) {
+        event.preventDefault();
+        this._close();
+      }
+    };
 
     this._storeConsumer = new ContextConsumer(this, {
       callback: (store) => {
@@ -95,7 +101,13 @@ export class MinmaxExplainDrawer extends LitElement {
     return this;
   }
 
+  connectedCallback () {
+    super.connectedCallback();
+    document.addEventListener('keydown', this._handleKeydown);
+  }
+
   disconnectedCallback () {
+    document.removeEventListener('keydown', this._handleKeydown);
     super.disconnectedCallback();
     if (this._unsubscribeFromStore) {
       this._unsubscribeFromStore();
@@ -211,7 +223,7 @@ GROUP_PARAMSJSON: ${this._formatJson(run.GROUP_PARAMSJSON)}</pre>
     return html`
       <div class="mb-3">
         <h6 class="text-muted">Serie saptamanala (52 saptamani, densa)</h6>
-        <div class="table-responsive" style="max-height: 320px;">
+        <div class="table-responsive">
           <table class="table table-sm table-bordered mb-0">
             <thead class="sticky-top bg-white">
               <tr>
