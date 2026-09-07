@@ -61,6 +61,27 @@ Mapate în `config/custom-environment-variables.json` → `minmaxEngine.{s1BaseU
   scrierile).
 - PM2 (`pm2 restart 0 --update-env`) repornit cu variabilele noi.
 
+## Teste (unit, HTTP mocat)
+
+`test/services/minmax-engine/` — 41 teste mocha, fără DB și fără S1 real:
+
+- `sql-guard.test.js` — matricea completă `classifySql`: verbe read/write/mereu-blocate, whitelist
+  de tabele pentru scriere, string/comment stripping, input malformat.
+- `minmax-engine.class.test.js` — clasa serviciului instanțiată direct (fără `app` Feathers), cu
+  apelul `POST /JS/WSMCP/execSql` interceptat prin `nock` (`nock.disableNetConnect()` cât rulează
+  suita, deci un apel real ar eșua zgomotos, nu ar trece neobservat). Acoperă: token/auth key
+  lipsă, rezoluția `ESTE_CURENT=1` vs. `runId` explicit (`NO_CURRENT_RUN`/`RUN_NOT_READY`), filtru
+  enum invalid, sortare în afara whitelist-ului, codarea unei liste ca un singur parametru CSV
+  (`STRING_SPLIT`), plafonul de 20 de parametri, paginare, `history`/`groupAbc`/`params`/`explain`,
+  și `saveParams` — fiecare instrucțiune generată e re-verificată cu `classifySql`.
+- `minmax-engine.test.js` — smoke test de înregistrare (`app.service('minmax-engine')`), tiparul
+  existent din restul suitei (`test/services/mec_item/` etc.); import-ul `src/app.js` nu deschide
+  conexiune DB, deci rulează fără o bază reală.
+
+Rulare izolată: `NODE_ENV=test npx mocha test/services/minmax-engine --recursive --exit`.
+`nock@14` a fost adăugat ca devDependency; cere Node ≥18.20, repo-ul are `engines` pe 18.12.1 —
+`npm install` dă un warning `EBADENGINE`, dar pachetul funcționează normal la runtime.
+
 ## Stadiu (vs. todo-ul din `FAZA5_CONTRACT.md` §10)
 
 Pași 1-7 **făcuți**: sesiune `FULL` validată (`RUNID=5`), chei separate în `CCC_WSMCP_AUTH`,

@@ -54,6 +54,7 @@ const DET_COLUMNS = {
   cv: 'd.CV',
   avg: 'd.[AVG]',
   vz52s: 'd.VZ_52S',
+  vz26s: 'd.VZ_26S',
   val52s: 'd.VAL_52S'
 }
 
@@ -206,6 +207,7 @@ function buildDetWhereClauses (filters, params) {
   addInterval(clauses, params, f.cv, 'd.CV', 'cv')
   addInterval(clauses, params, f.avg, 'd.[AVG]', 'avg')
   addInterval(clauses, params, f.vz52s, 'd.VZ_52S', 'vz52s')
+  addInterval(clauses, params, f.vz26s, 'd.VZ_26S', 'vz26s')
   addInterval(clauses, params, f.val52s, 'd.VAL_52S', 'val52s')
 
   return clauses
