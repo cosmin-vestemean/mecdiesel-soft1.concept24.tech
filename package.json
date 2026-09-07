@@ -14,7 +14,7 @@
   "contributors": [],
   "bugs": {},
   "engines": {
-    "node": ">= 18.12.1"
+    "node": ">= 20.12.1"
   },
   "feathers": {
     "language": "js",
@@ -71,8 +71,11 @@
   "devDependencies": {
     "@feathersjs/cli": "^5.0.2",
     "@feathersjs/rest-client": "^5.0.1",
+    "@lit/context": "^1.1.0",
     "axios": "^1.3.4",
     "cross-env": "^7.0.3",
+    "jsdom": "^29.1.1",
+    "lit": "^3.3.3",
     "mocha": "^10.2.0",
     "nock": "^14.0.17",
     "nodemon": "^2.0.22",

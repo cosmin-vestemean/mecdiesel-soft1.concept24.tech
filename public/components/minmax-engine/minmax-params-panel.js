@@ -286,10 +286,9 @@ export class MinmaxParamsPanel extends LitElement {
                 <tr class="${dirty ? 'table-warning' : ''}">
                   <td>${row.BRANCH}</td>
                   <td>
-                    <select class="form-select form-select-sm" style="width: 110px;"
-                            .value="${draft.marime}"
+                    <select class="form-select form-select-sm" style="width: 110px;" aria-label="Marime filiala"
                             @change="${(e) => this._setBranchField(row, 'marime', e.target.value)}">
-                      ${MARIME_ORDER.map((m) => html`<option value="${m}">${m}</option>`)}
+                      ${MARIME_ORDER.map((m) => html`<option value="${m}" .selected="${m === draft.marime}">${m}</option>`)}
                     </select>
                   </td>
                   <td>

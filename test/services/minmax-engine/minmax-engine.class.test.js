@@ -178,6 +178,69 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
     })
   })
 
+  describe('sorting tie-break dedup (§12.3)', () => {
+    async function capturedResultsOrderBy (sort) {
+      let capturedBody
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXDET'))
+        .reply(200, (uri, body) => {
+          capturedBody = body
+          return reply([])
+        })
+
+      const service = makeService()
+      await service.results({ runId: 5, sort, token: 'tok' })
+      return capturedBody.sqlQuery
+    }
+
+    async function capturedGroupAbcOrderBy (sort) {
+      let capturedBody
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXGRP'))
+        .reply(200, (uri, body) => {
+          capturedBody = body
+          return reply([])
+        })
+
+      const service = makeService()
+      await service.groupAbc({ runId: 5, sort, token: 'tok' })
+      return capturedBody.sqlQuery
+    }
+
+    it('drops BRANCH from the DET tie-break when sorting by branch (no duplicate expression)', async () => {
+      const sql = await capturedResultsOrderBy({ field: 'branch', dir: 'DESC' })
+      assert.ok(sql.includes('ORDER BY d.BRANCH DESC, d.MTRL ASC'))
+      assert.strictEqual(sql.match(/d\.BRANCH/g).length, 1)
+    })
+
+    it('drops MTRL from the DET tie-break when sorting by mtrl', async () => {
+      const sql = await capturedResultsOrderBy({ field: 'mtrl', dir: 'ASC' })
+      assert.ok(sql.includes('ORDER BY d.MTRL ASC, d.BRANCH ASC'))
+      assert.strictEqual(sql.match(/d\.MTRL/g).length, 1)
+    })
+
+    it('keeps the full DET tie-break when sorting by a column outside it', async () => {
+      const sql = await capturedResultsOrderBy({ field: 'engMax', dir: 'DESC' })
+      assert.ok(sql.includes('ORDER BY d.ENG_MAX DESC, d.BRANCH ASC, d.MTRL ASC'))
+    })
+
+    it('drops BRANCH from the GRP tie-break when sorting by branch', async () => {
+      const sql = await capturedGroupAbcOrderBy({ field: 'branch', dir: 'ASC' })
+      assert.ok(sql.includes('ORDER BY g.BRANCH ASC, g.MTRGROUP ASC'))
+      assert.strictEqual(sql.match(/g\.BRANCH/g).length, 1)
+    })
+
+    it('drops MTRGROUP from the GRP tie-break when sorting by mtrgroup', async () => {
+      const sql = await capturedGroupAbcOrderBy({ field: 'mtrgroup', dir: 'DESC' })
+      assert.ok(sql.includes('ORDER BY g.MTRGROUP DESC, g.BRANCH ASC'))
+      assert.strictEqual(sql.match(/g\.MTRGROUP/g).length, 1)
+    })
+  })
+
   describe('history()', () => {
     it('clamps the limit to the hard cap of 50', async () => {
       let capturedBody

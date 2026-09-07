@@ -1,8 +1,9 @@
 # Current Focus
 
 ## Last Updated
-- 07.09.2026 (sesiunea 29 — pasul 1 din planul de remediere implementat: contract
-  tranzacțional `__ok`/`__OK` + payload `OPENJSON` pentru `saveParams`)
+- 07.09.2026 (sesiunea 29 — pasul 2 din planul de remediere implementat: sortare fara
+  dublarea tie-break-ului + `.selected` pe cele 3 selecturi, cu teste de componenta LitElement/jsdom;
+  in plus, proiectul a fost migrat pe Node.js 20.20.2 via nvm, izolat de celelalte site-uri de pe server)
 
 ## Current Goal
 - Faza 5: implementarea backend/frontend este cablată și fluxul read-only funcționează live, dar
@@ -47,6 +48,13 @@
   `.copilot/context/open-threads.md` pentru firele de business/tangențiale existente.
 
 ## Next Step
+- **Node.js 20.20.2 via `nvm`** (07.09.2026): doar acest proiect a fost migrat (pm2 recreat cu
+  interpreter explicit spre binarul `nvm`), Node-ul de sistem (18.12.1, folosit de celelalte 4
+  site-uri Forge) a rămas neatins. A permis adăugarea `jsdom`/`lit`/`@lit/context` ca devDependencies
+  și prima infrastructură de test pentru componente LitElement din acest repo
+  (`test/helpers/browser-env.mjs` + `cdn-module-loader.mjs`, detalii în memoria de repo). Deploy
+  script-ul Forge (nevăzut ca fișier) poate încă rula `npm install` sub Node 18 dacă nu sursează
+  `nvm` — inofensiv (zero dependințe native), dar de aliniat quando se atinge.
 - **Pasul 0 este făcut** (07.09.2026): `MINMAX_ENGINE_WRITES_ENABLED` implicit `false`, `saveParams`
   aruncă `Forbidden` ca primă instrucțiune, `params()` expune `writesEnabled` către store și
   `minmax-params-panel` afișează read-only. 44 teste minmax-engine verzi.
@@ -61,7 +69,13 @@
   găsit și corectat în același pas: `findSaveMismatch()` din store nu normaliza `SCOPEKEY` la fel pe
   partea "fresh" ca pe partea "sent" — un `''` real se serializează ca JSON `null` prin execSql,
   ceea ce ar fi produs un fals mismatch la orice salvare reușită de parametru GLOBAL. Corectat.
-- Urmează **pasul 2** (§12.3 + §12.4 — sortare fără dublarea tie-break-ului, selectoare `.selected`)
+- **Pasul 2 este făcut** (07.09.2026, §12.3+§12.4): `buildOrderBy()` primește tie-break-ul ca listă
+  de field-uri și elimină coloana deja folosită ca sort principal (tie-break rămâne `ASC`); cele 3
+  selecturi fixe (`params-panel` MARIME, page size în results-table/group-abc) folosesc `.selected`
+  per `<option>`, nu `.value`/`?selected`. 68 teste verzi (63 backend + 5 componentă, noi). Rămâne
+  **verificarea live** din plan (click pe toate anteturile sortabile; toate cele 18 filiale afișează
+  `MARIME`) — nefăcută încă, nu blochează pasul 3.
+  Urmează **pasul 3** (§12.5 + §12.12 + §12.13 — corectitudinea filtrelor CLASA/`codeLike`/`explain`)
   cu agentul `Implement`. Serviciul rămâne complet neautentificat (`around: { all: [] }`) până la
   pasul 6, a cărui decizie de proiectare este acum luată.
 

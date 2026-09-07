@@ -33,10 +33,10 @@ indicat — vezi `.github/instructions/model-policy.instructions.md`.
 
 ## Pasul 0 — kill-switch de scriere *(model: bază / Haiku — agentul `Mechanical`)*
 
-- [ ] Adaugă flag-ul `minmaxEngine.writesEnabled` (env `MINMAX_ENGINE_WRITES_ENABLED`), **implicit
+- [x] Adaugă flag-ul `minmaxEngine.writesEnabled` (env `MINMAX_ENGINE_WRITES_ENABLED`), **implicit
       `false`**, în configurația serviciului.
-- [ ] `saveParams()` aruncă `Forbidden` când flag-ul e oprit, **înainte** de orice validare de payload.
-- [ ] `params-panel` afișează starea read-only și dezactivează „Salveaza" pe baza flag-ului expus de
+- [x] `saveParams()` aruncă `Forbidden` când flag-ul e oprit, **înainte** de orice validare de payload.
+- [x] `params-panel` afișează starea read-only și dezactivează „Salveaza" pe baza flag-ului expus de
       serviciu, nu a unei constante din browser.
 
 **Test:** cu flag-ul oprit, `saveParams` respinge chiar și un payload perfect valid.
@@ -44,16 +44,16 @@ indicat — vezi `.github/instructions/model-policy.instructions.md`.
 
 ## Pasul 1 — §12.1 + §12.2: contract tranzacțional + payload JSON *(model: Sonnet)*
 
-- [ ] `_execStatements()` interpretează rândul de stare din `response.data`: dacă `__ok`/`__OK` este
+- [x] `_execStatements()` interpretează rândul de stare din `response.data`: dacă `__ok`/`__OK` este
       `0`, aruncă o eroare cu `failedStep`, `errNum`, `errMsg`. Absența unui rezultat valid este
       eroare, nu succes.
-- [ ] `saveParams()` nu mai întoarce `success: true` necondiționat.
-- [ ] Rescrie cele trei colecții pe `OPENJSON(:1)`, cu tabela **imediat după `UPDATE`** (fără alias —
+- [x] `saveParams()` nu mai întoarce `success: true` necondiționat.
+- [x] Rescrie cele trei colecții pe `OPENJSON(:1)`, cu tabela **imediat după `UPDATE`** (fără alias —
       vezi §12.2, altfel `referencedTable()` extrage aliasul și blochează statement-ul).
-- [ ] Validează și limitează numărul de rânduri din fiecare colecție **înainte** de a compune SQL.
-- [ ] `loadParams()` capătă un mod care propagă eroarea; store-ul golește drafturile doar după
+- [x] Validează și limitează numărul de rânduri din fiecare colecție **înainte** de a compune SQL.
+- [x] `loadParams()` capătă un mod care propagă eroarea; store-ul golește drafturile doar după
       tranzacție reușită **și** read-back care coincide cu payload-ul normalizat.
-- [ ] `params-panel` nu mai șterge drafturile pe tranziția `saving → false`, ci pe confirmarea
+- [x] `params-panel` nu mai șterge drafturile pe tranziția `saving → false`, ci pe confirmarea
       explicită întoarsă de store.
 
 **Teste:** `{success:true,data:[{__ok:0,...}]}` respinge promisiunea; `__ok:1` fixează forma de
@@ -63,9 +63,9 @@ poziționali** și o singură tranzacție; drafturile supraviețuiesc rollback-u
 
 ## Pasul 2 — §12.3 + §12.4: sortare și selectoare *(model: Sonnet)*
 
-- [ ] `buildOrderBy()` primește tie-break-ul ca listă de identificatori validați și elimină coloana
+- [x] `buildOrderBy()` primește tie-break-ul ca listă de identificatori validați și elimină coloana
       deja aleasă. Direcția se aplică doar coloanei principale; tie-break-ul rămâne `ASC`.
-- [ ] Înlocuiește `.value` pe `<select>` cu binding pe proprietate `.selected` per `<option>`
+- [x] Înlocuiește `.value` pe `<select>` cu binding pe proprietate `.selected` per `<option>`
       (params-panel `MARIME`, page size în results-table și group-abc). **Nu** `?selected` — scrie
       atributul și se rupe după prima interacțiune (§12.4).
 

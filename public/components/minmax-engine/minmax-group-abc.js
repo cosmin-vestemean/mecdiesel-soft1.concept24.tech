@@ -307,10 +307,9 @@ export class MinmaxGroupAbc extends LitElement {
           <div class="d-flex align-items-center justify-content-between mt-2">
             <div class="d-flex align-items-center gap-2">
               <span class="small text-muted">Pagina ${this.page}</span>
-              <select class="form-select form-select-sm" style="width: auto;"
-                      .value="${String(this.pageSize)}"
+              <select class="form-select form-select-sm" style="width: auto;" aria-label="Marime pagina"
                       @change="${(e) => this._changePageSize(e.target.value)}">
-                ${PAGE_SIZE_OPTIONS.map((size) => html`<option value="${size}">${size}/pagina</option>`)}
+                ${PAGE_SIZE_OPTIONS.map((size) => html`<option value="${size}" .selected="${size === this.pageSize}">${size}/pagina</option>`)}
               </select>
             </div>
             <div class="btn-group btn-group-sm">

@@ -225,12 +225,24 @@ function buildDetWhereClauses (filters, params) {
   return clauses
 }
 
-function buildOrderBy (sort, columns, tieBreakSql) {
+// tieBreakFields is a list of field identifiers (keys into `columns`), never raw SQL —
+// the column already used as the primary sort is dropped so it never repeats in ORDER BY (§12.3).
+function buildOrderBy (sort, columns, tieBreakFields) {
+  const tieBreakSql = tieBreakFields
+    .filter((field) => !sort || !sort.field || field !== sort.field)
+    .map((field) => {
+      const column = columns[field]
+      if (!column) throw new Error(`Unknown tie-break field: ${field}`)
+      return `${column} ASC`
+    })
+    .join(', ')
+
   if (!sort || !sort.field) return tieBreakSql
   const column = columns[sort.field]
   if (!column) throw new Error(`Unknown sort field: ${sort.field}`)
   const dir = sort.dir === 'DESC' ? 'DESC' : 'ASC'
-  return `${column} ${dir}, ${tieBreakSql}`
+  const primary = `${column} ${dir}`
+  return tieBreakSql ? `${primary}, ${tieBreakSql}` : primary
 }
 
 function buildPaging (page, pageSize) {
@@ -415,7 +427,7 @@ export class MinmaxEngineService {
     const filterParams = [runId]
     const whereClauses = ['d.RUNID = :1', ...buildDetWhereClauses(data.filters, filterParams)]
     const whereSql = whereClauses.join(' AND ')
-    const orderBy = buildOrderBy(data.sort, DET_COLUMNS, 'd.BRANCH, d.MTRL')
+    const orderBy = buildOrderBy(data.sort, DET_COLUMNS, ['branch', 'mtrl'])
 
     const pageParams = filterParams.slice()
     const paging = buildPaging(data.page, data.pageSize)
@@ -462,7 +474,7 @@ export class MinmaxEngineService {
     addEnumListFilter(clauses, params, f.xyz, 'g.XYZ', XYZ_VALUES, 'xyz')
     addEnumListFilter(clauses, params, f.clasa, 'g.CLASA', CLASA_VALUES, 'clasa')
 
-    const orderBy = buildOrderBy(data.sort, GRP_COLUMNS, 'g.BRANCH, g.MTRGROUP')
+    const orderBy = buildOrderBy(data.sort, GRP_COLUMNS, ['branch', 'mtrgroup'])
     const paging = buildPaging(data.page, data.pageSize)
 
     const sql = `SELECT g.* FROM CCCMINMAXGRP g WHERE ${clauses.join(' AND ')} ` +
