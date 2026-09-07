@@ -126,6 +126,7 @@ export function initializeUserInteractions() {
     "topAbcContent",
     "zeroMinMaxContent",
     "exportMinMaxContent",
+    "minmaxEngineContent",
   ];
 
   function hideAllButArray(arr) {
@@ -309,6 +310,12 @@ export function initializeUserInteractions() {
   $("#exportMinMaxButton").click(() => {
     hideAllButArray(["exportMinMaxContent"]);
     paginationManager.setActiveTab("exportMinMaxButton");
+  });
+
+  // MIN/MAX Engine tab (Faza 5 — UI de confirmare)
+  $("#minmaxEngineButton").click(() => {
+    hideAllButArray(["minmaxEngineContent"]);
+    paginationManager.setActiveTab("minmaxEngineButton");
   });
 
   // Update items button handler to work with hierarchical navigation

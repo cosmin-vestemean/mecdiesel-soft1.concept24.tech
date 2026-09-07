@@ -201,6 +201,11 @@ export class MinmaxResultsTable extends LitElement {
     this._store.loadResults();
   }
 
+  _openExplain (row) {
+    if (!this._store) return;
+    this._store.openExplain(row.BRANCH, row.MTRL);
+  }
+
   // --- Draft filter helpers (local edits, not yet sent to the store) ---
   _toggleListValue (key, value) {
     const current = Array.isArray(this._draftFilters[key]) ? this._draftFilters[key] : [];
@@ -410,7 +415,8 @@ export class MinmaxResultsTable extends LitElement {
                   ? html`<tr><td colspan="${RESULT_COLUMNS.length}" class="text-center text-muted py-3">Niciun rezultat pentru filtrele curente.</td></tr>`
                   : ''}
                 ${this.rows.map((row) => html`
-                  <tr>
+                  <tr style="cursor:pointer;" title="Vezi explicatia calculului"
+                      @click="${() => this._openExplain(row)}">
                     ${RESULT_COLUMNS.map((col) => html`<td>${this._formatCell(row, col)}</td>`)}
                   </tr>
                 `)}

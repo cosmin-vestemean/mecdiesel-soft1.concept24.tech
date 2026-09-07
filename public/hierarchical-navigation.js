@@ -31,7 +31,7 @@ class HierarchicalNavigation {
       'achizitii': {
         name: 'Achizitii',
         defaultTab: 'branchReplenishButton',
-        tabs: ['branchReplenishButton', 'necesarAchizitiiButton', 'topAbcButton', 'zeroMinMaxButton', 'exportMinMaxButton']
+        tabs: ['branchReplenishButton', 'necesarAchizitiiButton', 'topAbcButton', 'zeroMinMaxButton', 'exportMinMaxButton', 'minmaxEngineButton']
       }
     };
     

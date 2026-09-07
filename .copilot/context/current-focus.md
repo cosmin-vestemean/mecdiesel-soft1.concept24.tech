@@ -1,7 +1,8 @@
 # Current Focus
 
 ## Last Updated
-- 07.09.2026 (sesiunea 23 — `minmax-params-panel.js` construit, ultima componentă din §9)
+- 07.09.2026 (sesiunea 25 — tab nou "MIN/MAX Engine" cablat în navigarea ierarhică;
+  `<minmax-engine-container>` e acum accesibil din UI, sub app-ul `achizitii`)
 
 ## Current Goal
 - Faza 5 (UI de confirmare, fără scriere în ERP): backend complet, deployat și testat — vezi
@@ -13,10 +14,11 @@
   [minmax-engine-model.md](../wiki/minmax-engine-model.md).
 
 ## Active Area
-- Toate cele 6 componente din `FAZA5_CONTRACT.md` §9 sunt construite: run-panel, results-table
-  (ambele cablate în container), group-abc, explain-drawer, **params-panel** (toate trei gata, dar
-  încă necablate). Nimic cablat încă în `index.html`/`userInteractions.js` (niciun tab nou);
-  `minmax-results-table.js` nu are încă un row-click spre `openExplain`.
+- Toate cele 6 componente din `FAZA5_CONTRACT.md` §9 sunt construite, cablate în
+  `minmax-engine-container.js` ȘI integrate în navigare: buton `minmaxEngineButton` +
+  div `minmaxEngineContent` (`index.html`), handler `hideAllButArray`/`setActiveTab`
+  (`userInteractions.js`), tab înregistrat în `appConfigs.achizitii.tabs`
+  (`hierarchical-navigation.js`). Niciun test manual în browser încă pe fluxul complet.
 
 ## Relevant Files
 - `new_min_max/FAZA5_CONTRACT.md` — contractul UI complet; punctul de intrare pentru orice sesiune.
@@ -40,8 +42,7 @@
   business neconfirmate.
 
 ## Next Step
-- Cablare: adaugă un row-click în `minmax-results-table.js` care apeleze `store.openExplain(branch,
-  mtrl)`, apoi montează `minmax-group-abc.js`/`minmax-explain-drawer.js`/`minmax-params-panel.js`
-  în `minmax-engine-container.js` (dezlocuind comentariul placeholder). Abia după, integrarea în
-  `index.html`/`userInteractions.js` (tab nou), când există ceva vizibil de arătat beneficiarului.
+- Test manual în browser (autentificat, cu date reale): app `achizitii` → tab "MIN/MAX
+  Engine" → verifică fluxul complet filtre → rezultate → click rând → explain drawer →
+  params-panel → salvare. Dacă apar erori de consolă/randare, acela e primul lucru de reparat.
 

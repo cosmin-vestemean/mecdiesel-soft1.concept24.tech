@@ -5,8 +5,8 @@
  * branch-replenishment-container.js) and orchestrates the initial load
  * (run history, params, current-session results). Child view components
  * (results table, run panel, group ABC, explain drawer, params panel —
- * FAZA5_CONTRACT.md §9) consume the store via ContextConsumer and are wired
- * in separately, in the order given in that contract.
+ * FAZA5_CONTRACT.md §9) consume the store via ContextConsumer and are all
+ * wired in below, in the order given in that contract.
  *
  * @element minmax-engine-container
  */
@@ -16,6 +16,9 @@ import { ContextProvider } from 'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0
 import { minmaxEngineStore, MinmaxEngineStoreContext } from '../stores/minmax-engine-store.js';
 import './minmax-run-panel.js';
 import './minmax-results-table.js';
+import './minmax-group-abc.js';
+import './minmax-explain-drawer.js';
+import './minmax-params-panel.js';
 
 export class MinmaxEngineContainer extends LitElement {
   static get properties () {
@@ -92,13 +95,9 @@ export class MinmaxEngineContainer extends LitElement {
 
         <minmax-run-panel></minmax-run-panel>
         <minmax-results-table></minmax-results-table>
-
-        <!--
-          FAZA5_CONTRACT.md §9 components, wired in once built:
-          <minmax-group-abc></minmax-group-abc>
-          <minmax-explain-drawer></minmax-explain-drawer>
-          <minmax-params-panel></minmax-params-panel>
-        -->
+        <minmax-group-abc></minmax-group-abc>
+        <minmax-explain-drawer></minmax-explain-drawer>
+        <minmax-params-panel></minmax-params-panel>
       </div>
     `;
   }

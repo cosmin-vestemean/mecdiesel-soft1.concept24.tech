@@ -257,6 +257,11 @@
                   <i class="fas fa-file-export me-1"></i>Export Min/Max
                 </button>
               </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="minmaxEngineButton" data-bs-toggle="tab" type="button" role="tab">
+                  <i class="fas fa-cogs me-1"></i>MIN/MAX Engine
+                </button>
+              </li>
             </ul>
             
             <!-- Contextual Controls -->
@@ -343,6 +348,9 @@
               </div>
               <div id="exportMinMaxContent">
                 <export-minmax-panel></export-minmax-panel>
+              </div>
+              <div id="minmaxEngineContent">
+                <minmax-engine-container></minmax-engine-container>
               </div>
             </div>
           </div>
@@ -482,6 +490,8 @@
     <script type="module" src="components/zero-minmax/zero-minmax-panel.js"></script>
     <!-- Export Min/Max component -->
     <script type="module" src="components/export-minmax/export-minmax-panel.js"></script>
+    <!-- MIN/MAX Engine component (Faza 5) -->
+    <script type="module" src="components/minmax-engine/minmax-engine-container.js"></script>
     <!-- Batch Processing component -->
     <script type="module" src="components/batch-processing/batch-processing-container.js"></script>
     <!-- Online orders log component -->
