@@ -19,6 +19,7 @@ import {
 } from "@feathersjs/koa";
 import socketio from "@feathersjs/socketio";
 
+import { authentication } from "./authentication.js";
 import { configurationValidator } from "./configuration.js";
 import { logError } from "./hooks/log-error.js";
 import { mssql } from "./mssql.js";
@@ -546,6 +547,7 @@ const app = koa(feathers());
 
 // Load our app configuration (see config/ folder)
 app.configure(configuration(configurationValidator));
+app.configure(authentication);
 
 // Set up Koa middleware
 app.use(cors());

@@ -1,7 +1,7 @@
 # Current Focus
 
 ## Last Updated
-- 07.09.2026 (sesiunea 33 — Pasul 5 din FAZA5_REMEDIERI_PLAN.md implementat și testat)
+- 07.09.2026 (sesiunea 34 — bootstrap JWT pentru Pasul 6 implementat și testat)
 
 ## Current Goal
 - Faza 5 este cablată și fluxul read-only funcționează live; acceptanța urmează planul din
@@ -10,6 +10,13 @@
 - Poarta către Faza 4 rămâne pasul 8: invariante pe populație, eșantion numeric înghețat și confirmarea beneficiarului pe formule.
 
 ## Active Area
+- Bootstrap-ul de autentificare pentru Pasul 6 (§12.8) este FĂCUT: `authentication` complet în
+  `config/default.json` (`entity: null`, `authStrategies: ['jwt']`, expirare JWT absolută `8h`),
+  `src/authentication.js` înregistrează `AuthenticationService` + `JWTStrategy`, iar `app.js`
+  apelează `app.configure(authentication)` imediat după încărcarea configurației. Validatorul local
+  acceptă explicit `authentication.entity: null` (schema implicită Feathers cere doar string, deși
+  serviciul îl suportă). `PORT=3031 npx mocha test/app.test.js --exit`: 2 verzi; portul 3030 e
+  ocupat de PM2. `resolveRoles`, hook-urile de autorizare și auditul rămân neimplementate.
 - Pasul 5 (§12.7) este FĂCUT (cod + teste, 16 verzi în `test/stores/minmax-engine-store.test.js`):
   secvență monotonă per flux (`results`/`groupAbc`/`explain`/`history`/`params`) în
   `minmax-engine-store.js`, prin `_beginRequest(flow)`/`_isCurrent(flow, seq)`; dispatch de date/eroare/

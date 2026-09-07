@@ -9,6 +9,16 @@
     "default": 10,
     "max": 500
   },
+  "authentication": {
+    "secret": "replace-with-FEATHERS_SECRET",
+    "entity": null,
+    "authStrategies": [
+      "jwt"
+    ],
+    "jwtOptions": {
+      "expiresIn": "8h"
+    }
+  },
   "minmaxEngine": {
     "writesEnabled": false
   },
