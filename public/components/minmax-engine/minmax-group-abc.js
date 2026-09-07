@@ -8,8 +8,8 @@
  * to (or read back from) the store, unlike results() filters. Page/pageSize
  * are the only pieces of state shared with the store (state.groupAbc), so
  * paging still goes through setGroupAbcPage/setGroupAbcPageSize before
- * reloading. This view has no container-level initial load (unlike
- * results()), so it triggers its own first fetch on mount.
+ * reloading. The container owns the initial fetch through its lazy
+ * `activate()` flow.
  *
  * @element minmax-group-abc
  */
@@ -74,7 +74,6 @@ export class MinmaxGroupAbc extends LitElement {
     this.total = null;
     this._branches = [];
     this._filters = getDefaultFilters();
-    this._loaded = false; // guards the one-time initial fetch below
 
     this._storeConsumer = new ContextConsumer(this, {
       callback: (store) => {
@@ -106,11 +105,6 @@ export class MinmaxGroupAbc extends LitElement {
     });
 
     this._syncStateFromStore(this._store.getState());
-
-    if (!this._loaded) {
-      this._loaded = true;
-      this._store.loadGroupAbc(this._filters, { withTotal: true });
-    }
   }
 
   _syncStateFromStore (state) {

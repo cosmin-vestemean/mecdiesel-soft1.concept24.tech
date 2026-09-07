@@ -2,8 +2,8 @@
  * MIN/MAX Engine Container (Faza 5 — UI de confirmare)
  *
  * Provides the MinmaxEngineStore over Lit context (pattern: see
- * branch-replenishment-container.js) and orchestrates the initial load
- * (run history, params, current-session results). Child view components
+ * branch-replenishment-container.js) and orchestrates the lazy initial load
+ * (run history, params, current-session results and group ABC). Child view components
  * (results table, run panel, group ABC, explain drawer, params panel —
  * FAZA5_CONTRACT.md §9) consume the store via ContextConsumer and are all
  * wired in below, in the order given in that contract.
@@ -44,17 +44,13 @@ export class MinmaxEngineContainer extends LitElement {
       this._syncStateFromStore(newState);
     });
 
+    this._activationPromise = null;
     this._syncStateFromStore(minmaxEngineStore.getState());
   }
 
   // Render in light DOM (Bootstrap compatibility, same as sibling components)
   createRenderRoot () {
     return this;
-  }
-
-  connectedCallback () {
-    super.connectedCallback();
-    this._loadInitialData();
   }
 
   disconnectedCallback () {
@@ -73,12 +69,19 @@ export class MinmaxEngineContainer extends LitElement {
     this.total = state.total;
   }
 
+  activate () {
+    if (!this._activationPromise) {
+      this._activationPromise = this._loadInitialData();
+    }
+    return this._activationPromise;
+  }
+
   async _loadInitialData () {
-    // History/params don't depend on each other or on results; run in parallel.
     await Promise.all([
       minmaxEngineStore.loadHistory(),
       minmaxEngineStore.loadParams(),
-      minmaxEngineStore.loadResults({ withTotal: true })
+      minmaxEngineStore.loadResults({ withTotal: true }),
+      minmaxEngineStore.loadGroupAbc({}, { withTotal: true })
     ]);
   }
 

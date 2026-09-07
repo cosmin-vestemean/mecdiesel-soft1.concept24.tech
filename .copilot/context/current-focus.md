@@ -1,57 +1,41 @@
 # Current Focus
 
 ## Last Updated
-- 07.09.2026 (sesiunea 36 — Pasul 6 §12.8: Socket.IO JWT reparat)
+- 07.09.2026 (sesiunea 37)
 
 ## Current Goal
-- Faza 5 este cablată și fluxul read-only funcționează live; acceptanța urmează planul din
-  [FAZA5_CONTRACT.md](../../new_min_max/FAZA5_CONTRACT.md) §12 și [FAZA5_REMEDIERI_PLAN.md](../../new_min_max/FAZA5_REMEDIERI_PLAN.md).
-- Fazele 0-3 ale motorului sunt deployate și validate; `RUNID=5` este sesiunea curentă.
-- Poarta către Faza 4 rămâne pasul 8: invariante pe populație, eșantion numeric înghețat și confirmarea beneficiarului pe formule.
+- Faza 5 are pașii 0-5 și 7 implementați; cablajul de autorizare din Pasul 6 este funcțional.
+- Remedierea acestei sesiuni elimină cererile MIN/MAX anonime făcute înainte de login și mesajele
+  `Not authenticated` rezultate din ele.
+- Fazele 0-3 ale motorului sunt deployate; `RUNID=5` este sesiunea curentă. Scrierile rămân oprite.
 
 ## Active Area
-- Pasul 6 (§12.8) are autentificarea complet cablată: token emis la `validateUserPwd`, roluri server-side,
-  hook-uri pe `minmax-engine`, și autentificare JWT a conexiunii Socket.IO după login/reconnect. Vezi
-  [faza5-ui-backend.md](../wiki/faza5-ui-backend.md#autorizare-128--cablaj-complet).
-- **Comportament live neschimbat**: `MINMAX_ENGINE_WRITES_ENABLED` rămâne `false`; nimic nu s-a
-  deblocat pentru utilizatori reali.
-- Mai rămân auditul save și flip-ul deliberat al flagului. Pasul 7 va coalesca rezoluția inițială de
-  sesiune pentru `results()`/`groupAbc()`.
+- Pasul 7 (§12.9) este complet: containerul se montează fără fetch, iar clickul pe tab apelează
+  `activate()` idempotent pentru `history`, `params`, `results` și `groupAbc`.
+- Autentificarea JWT Socket.IO după login/reconnect rămâne proprietarul accesului la serviciu;
+  detalii în [faza5-ui-backend.md](../wiki/faza5-ui-backend.md) și [faza5-ui-frontend.md](../wiki/faza5-ui-frontend.md).
+- Validare: 108 teste MIN/MAX verzi; retestarea vizuală după logout/login nu a fost făcută deoarece
+  pagina browserului nu a fost partajată.
 
 ## Relevant Files
-- [FAZA5_REMEDIERI_PLAN.md](../../new_min_max/FAZA5_REMEDIERI_PLAN.md) — ordine și teste pentru remedieri.
-- [faza5-ui-backend.md](../wiki/faza5-ui-backend.md) / [faza5-ui-frontend.md](../wiki/faza5-ui-frontend.md) — implementare și verificări live.
-- [minmax-engine-model.md](../wiki/minmax-engine-model.md) / [minmax-engine-formulas.md](../wiki/minmax-engine-formulas.md) — domeniu și formule.
-- [minmax-engine-open-items.md](../wiki/minmax-engine-open-items.md) / [open-threads.md](open-threads.md) — întrebări și fire tangențiale.
-- Autorizare: `src/services/minmax-engine/{roles,authorize}.js`, `src/authentication.js`, `src/app.js`,
-  `public/stores/app-auth.js`, `public/socketConfig.js`, `public/login/login.js`, `minmax-engine-store.js`.
-- Teste: `test/services/minmax-engine/{roles,authorize}.test.js`,
-  `test/services/s1-validate-user-pwd.test.js`, `test/stores/app-auth.test.js`.
-- [FAZA4_CONTRACT.md](../../new_min_max/FAZA4_CONTRACT.md) — `applyToErp`, amânat după Faza 5.
+- [FAZA5_REMEDIERI_PLAN.md](../../new_min_max/FAZA5_REMEDIERI_PLAN.md) — progresul canonic și poarta de acceptanță.
+- [faza5-ui-frontend.md](../wiki/faza5-ui-frontend.md) — activare lazy, store și componente.
+- [faza5-ui-backend.md](../wiki/faza5-ui-backend.md) — transport, autorizare și contractul serviciului.
+- `public/components/minmax-engine/minmax-engine-container.js`, `minmax-group-abc.js` — activarea lazy.
+- `public/userInteractions.js` — activarea la click pe tab; `test/components/minmax-engine/minmax-engine-container.test.js` — regresie.
+- [minmax-engine-formulas.md](../wiki/minmax-engine-formulas.md) / [minmax-engine-open-items.md](../wiki/minmax-engine-open-items.md) — Pasul 8 și întrebări business.
 
 ## Confirmed Decisions
-- Rolurile vin din configurație server-side (`minmaxEngine.readers`/`editors`), nu tabelă ACL —
-  motivul e în [FAZA5_CONTRACT.md](../../new_min_max/FAZA5_CONTRACT.md) §12.8.
-- Convenție unificată: orice pereche cheie-config/variabilă-env pentru minmax-engine — env-ul
-  câștigă când e definit, chiar și cu valoare goală explicită.
-- Tokenul de aplicație se emite direct (`createAccessToken`), nu prin `authentication.create()`;
-  clientul folosește apoi `authentication.create()` exclusiv pentru a-l atașa conexiunii Socket.IO.
-  Apelurile server-side fără `params.provider` ocolesc autorizarea, deliberat.
-- `saveParams` rămâne atomic cu payload JSON + `OPENJSON`, maximum 4 parametri și verificare `__ok` plus read-back.
-- Scrierea rămâne oprită până la audit + flip deliberat al flagului (ultimele 2 bife ale Pasului 6).
-- Sesiunea aplicației are 8 ore absolute, fără refresh/sliding expiration, doar în memoria paginii;
-  reconectarea Socket.IO cere reautentificare cu același token neexpirat.
-- Rezoluția sesiunii curente folosește `ESTE_CURENT` și statusurile DONE, niciodată `MAX(RUNID)`.
-- CLASA are 11 valori posibile (9 combinații ABC×XYZ + NOU + OD), nu 9 — definite o singură dată
-  per parte (backend `CLASA_VALUES`, UI `minmax-engine-constants.js`).
+- Datele protejate nu se încarcă în `connectedCallback()`; prima deschidere a tabului este limita de activare.
+- `activate()` păstrează aceeași promisiune și nu repetă inițializarea la revenirea în tab.
+- Rolurile sunt server-side, tokenul aplicației rămâne numai în memoria paginii, iar Socket.IO se autentifică pe conexiune.
+- `saveParams` rămâne atomic, iar `MINMAX_ENGINE_WRITES_ENABLED=false` până la audit și activare deliberată.
+- Sesiunea curentă se rezolvă prin `ESTE_CURENT` plus statusurile DONE, niciodată prin `MAX(RUNID)`.
 
 ## Open Questions
-- Restul Pasului 6: audit la save, apoi flip deliberat `MINMAX_ENGINE_WRITES_ENABLED=true`.
-- Garda fail-fast pentru `FEATHERS_SECRET` placeholder este în [open-threads.md](open-threads.md).
-- Pașii 7-8 din §12 rămân de implementat înaintea validării numerice.
-- Întrebările de business și firele tangențiale sunt în [minmax-engine-open-items.md](../wiki/minmax-engine-open-items.md) și [open-threads.md](open-threads.md).
+- Pasul 6: audit la save, apoi decizia explicită de activare a scrierilor.
+- Pasul 8: invariante SQL, eșantion numeric înghețat și confirmarea beneficiarului pe formule.
+- Retestare live după login pentru dispariția erorii; garda `FEATHERS_SECRET` rămâne în [open-threads.md](open-threads.md).
 
 ## Next Step
-- Audit la `saveParams`: REFID, timestamp, cheile logice modificate — fără valori secrete. Abia apoi
-  flip-ul flagului de scriere. Folosește Node.js 20.20.2; pentru suita completă cu PM2 activ:
-  `PORT=3999 npx mocha test/ --recursive` (121 verzi, un eșec preexistent).
+- Retestează live prin logout/login și deschiderea tabului MIN/MAX; apoi implementează auditul `saveParams` cu REFID, timestamp și cheile logice modificate, fără valori secrete.

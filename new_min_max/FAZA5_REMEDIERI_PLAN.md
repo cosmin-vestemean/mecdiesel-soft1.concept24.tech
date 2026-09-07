@@ -146,14 +146,20 @@ REFID falsificat în payload nu schimbă identitatea; token emis acum e respins 
 
 ## Pasul 7 — §12.9: activare lazy *(model: Sonnet)*
 
-- [ ] `connectedCallback()` al containerului nu mai face fetch.
-- [ ] Handler-ul tabului apelează `activate()` idempotent, care la prima activare pornește `history`,
+- [x] `connectedCallback()` al containerului nu mai face fetch.
+- [x] Handler-ul tabului apelează `activate()` idempotent, care la prima activare pornește `history`,
       `params`, `results`, `groupAbc`; apelurile ulterioare doar afișează.
-- [ ] `activate()` reține aceeași promisiune cât timp inițializarea e în curs.
-- [ ] `minmax-group-abc` nu mai lansează fetch din `_subscribeToStore()`.
+- [x] `activate()` reține aceeași promisiune cât timp inițializarea e în curs.
+- [x] `minmax-group-abc` nu mai lansează fetch din `_subscribeToStore()`.
 
 **Teste:** pornirea aplicației fără deschiderea tabului → zero apeluri `minmax-engine`; prima activare
 → exact setul planificat; revenirea în tab → fără repetare; refresh → o singură repetare.
+
+> **Validare 07.09.2026:** testul de componentă montează containerul înainte de autentificare și
+> confirmă zero apeluri; două activări concurente primesc aceeași promisiune și produc exact cele
+> patru fluxuri, iar activările ulterioare nu repetă încărcarea. Suita MIN/MAX relevantă: 108 teste
+> verzi. Aceasta elimină cererile anonime care lăsau în UI erorile `Not authenticated` înainte de
+> login.
 
 ## Pasul 8 — validarea numerică a rezultatelor *(nivel A: Sonnet; proiectare + interpretare: Opus)*
 

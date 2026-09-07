@@ -316,6 +316,10 @@ export function initializeUserInteractions() {
   $("#minmaxEngineButton").click(() => {
     hideAllButArray(["minmaxEngineContent"]);
     paginationManager.setActiveTab("minmaxEngineButton");
+    const minmaxEngine = document.querySelector("minmax-engine-container");
+    if (minmaxEngine) {
+      minmaxEngine.activate();
+    }
   });
 
   // Update items button handler to work with hierarchical navigation

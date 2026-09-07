@@ -9,8 +9,8 @@
 
 - `public/stores/minmax-engine-store.js` — stare + orchestrare Feathers într-un singur loc (vezi
   „Decizii de design" mai jos pentru motiv).
-- `public/components/minmax-engine/minmax-engine-container.js` — `ContextProvider`, încărcare
-  inițială (`loadHistory`/`loadParams`/`loadResults` în paralel), montează acum toate cele 6
+- `public/components/minmax-engine/minmax-engine-container.js` — `ContextProvider`, activare lazy
+  idempotentă (`loadHistory`/`loadParams`/`loadResults`/`loadGroupAbc` în paralel), montează toate cele 6
   componente din contract în ordine (run-panel, results-table, group-abc, explain-drawer,
   params-panel).
 - `public/components/minmax-engine/minmax-run-panel.js` — primul `ContextConsumer` real, cablat în
@@ -73,9 +73,12 @@
   (apply/reset/paginare). Motiv: `loadGroupAbc(filters)` primește filtrele ca parametru explicit
   (nu le citește din store), deci nu există alt consumator care să aibă nevoie de ele partajate.
   Doar `page`/`pageSize` (`state.groupAbc`) rămân pe store, prin `setGroupAbcPage`/
-  `setGroupAbcPageSize`. Componenta își declanșează și propriul fetch inițial la montare (spre
-  deosebire de `results()`, care e încărcat de container) — `groupAbc()` nu face parte din
-  `_loadInitialData()` al containerului.
+  `setGroupAbcPageSize`. Componenta nu face fetch la abonarea la store; încărcarea inițială este
+  deținută de `activate()` din container împreună cu celelalte trei fluxuri.
+- **Limita de activare este deschiderea tabului, nu montarea componentei:** containerul există în DOM
+  înainte de login, deci `connectedCallback()` nu poate apela servicii protejate. Handlerul
+  `#minmaxEngineButton` apelează `activate()` după autentificare; metoda reține aceeași promisiune
+  și nu repetă încărcarea la clickuri sau reveniri ulterioare în tab.
 
 ## Bug-uri găsite și corectate la testarea live (07.09.2026)
 
@@ -88,6 +91,10 @@
   `sessionStorage.getItem('s1Token')`, tiparul funcțional din `top-abc-container.js`.
   `zero-minmax-panel.js`/`export-minmax-panel.js` au același bug latent, netratat în această
   sesiune (vezi `.copilot/context/open-threads.md`).
+- **Cereri anonime înainte de login:** montarea `minmax-engine-container` pornea imediat trei
+  fluxuri, iar abonarea Group ABC pornea al patrulea; `ensureConnectionAuth()` întorcea `false` fără
+  token, după care apelurile continuau și răspundeau `Not authenticated`. Activarea lazy descrisă
+  mai sus elimină această cursă.
 
 Bug-uri de backend (OFFSET/FETCH bindăți, răspunsuri gzip nedecomprimate) găsite în aceeași
 sesiune de testare — vezi [faza5-ui-backend.md](faza5-ui-backend.md).
@@ -109,11 +116,10 @@ Confirmat live în frontend:
 - sortarea „Filiala" afișează eroarea SQL 80040E14 generată în backend;
 - editarea a șapte celule COV este respinsă înainte de S1 cu `21 > 20`.
 
-Store-ul mai necesită request sequence separat pentru fiecare flux asincron, astfel încât un
-răspuns vechi să nu suprascrie pagina/drawer-ul nou, și control explicit `withTotal`: count numai la
-schimbarea populației, nu la fiecare pagină sau sortare. Încărcarea inițială devine lazy printr-un
-`activate()` idempotent apelat la prima deschidere a tabului; group ABC nu mai pornește propriul
-fetch din subscription.
+Store-ul are request sequence separat pentru fiecare flux asincron și control explicit `withTotal`:
+count la schimbarea populației, nu la fiecare pagină sau sortare. Activarea lazy este acoperită de
+un test de componentă care confirmă zero apeluri la montare, aceeași promisiune pentru activări
+concurente și exact patru fluxuri la prima activare. Suita MIN/MAX relevantă are 108 teste verzi.
 
 `saveParams()` nu se testează prin scriere reală înainte de remedierea §12.1 + §12.2 și instalarea
 autorizării §12.8. Sesiunea aplicației are durată absolută de 8 ore, fără refresh/sliding expiration,
