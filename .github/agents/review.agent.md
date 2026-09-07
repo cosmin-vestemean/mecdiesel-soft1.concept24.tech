@@ -2,7 +2,7 @@
 description: "Use for validation, output review, and diff verification on a fresh small context. Read-only — reports, does not fix."
 name: "Review"
 tools: [read, search, execute]
-model: ['Claude Opus 4.8', 'Claude Opus 4.7']
+model: ['Claude Opus 5', 'GPT-5.6 Sol']
 argument-hint: "Point to the diff, output, or change to validate"
 handoffs:
   - label: "Implementation"

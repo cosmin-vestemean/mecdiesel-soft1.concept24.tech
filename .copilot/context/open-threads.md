@@ -59,4 +59,21 @@ Firele **pe obiectiv** rămân în `current-focus.md`.
   next_step: >
     La urmatoarea atingere a PLAN_IMPLEMENTARE.md / SUMAR_TEORETIC_CONFIRMARE.md,
     de inlocuit cifrele fixe cu invariante.
+
+- id: handoff-faza3-modulo-decimal
+  opened: 2026-09-03
+  status: open
+  area: new_min_max/FAZA3_HANDOFF.md
+  summary: >
+    §7.4 da ca verificare de acceptanta `BUY_QTY % N_PACK <> 0`, dar operatorul
+    `%` respinge operanzi DECIMAL in T-SQL, deci expresia esueaza la rulare.
+    Implementarea din 03_compute.sql foloseste
+    `BUY_QTY - FLOOR(BUY_QTY / N_PACK) * N_PACK <> 0`. Decizia si motivul sunt
+    deja in current-focus.md si in memoria de repo; doar handoff-ul a ramas
+    necorectat, constient (decizie utilizator 03.09.2026).
+  why_tangential: >
+    Igiena de documentatie, nu blocaj de implementare. Codul e corect.
+  next_step: >
+    De corectat propozitia din §7.4 la urmatoarea atingere a handoff-ului, sau
+    la generarea wiki-ului (Faza 5), care ia formulele din aceeasi sursa.
 ```

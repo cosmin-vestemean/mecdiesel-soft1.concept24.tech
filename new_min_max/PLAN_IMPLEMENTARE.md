@@ -173,6 +173,8 @@ Seed:
 | `EXCLUDERI_CLIENTI` | `C.000003,MECDIS` | §1.2 de mai sus — **coduri, nu `TRDR`** |
 | `EXCLUDERI_PREFIXE` | `DISC.,OTHER.` | secțiunea 2.1 |
 | `NRSAPT` | 52 | secțiunea 5 |
+| `RETENTIE_RULARI` | 20 | **nou** — câte rulări își păstrează substratul de audit (§4.1); antetele din `CCCMINMAXRUN` rămân |
+| `INCLUDE_EXSTAT_IN_STATISTICI` | 0 | **nou** — articolele cu `ISNULL(CCCEXSTAT,0) <> 0` contribuie (1) sau nu (0) la agregatul de companie și la cumulativul Pareto ABC. Default 0 = aliniat cu `NecesarAchizitie.js`; vezi §10 item 13 |
 | `LT_ZILE` / `FRECVENTA_ZILE` | **per prefix cod articol** | secțiunea 3.6 + I14 |
 
 > **Precizare client (14.08.2026, I14):** `LT`, `SSF`, `FRECVENTA_zile`, `SL` și overmax se mapează pe **prefix de cod articol** (`FEBI%`, `MEC%`), nu doar per furnizor — exact ca ecranul legacy „Scrie min MAX" din S1. `SCOPE = 'PREFIX'` cu `SCOPEKEY` = prefixul de cod acoperă cerința; furnizorul rămâne filtru opțional în șabloane.
@@ -251,14 +253,23 @@ Ordinea nu e negociabilă: winsorizarea este definită **per linie de vânzare**
 
 1. **Winsorizare p95**: `PERCENTILE_CONT(0.95)` per SKU, aplicată liniilor pozitive. Pentru SKU cu ≥ `WINSOR_MIN_LINII` linii — plafon la p95. Pentru SKU sub prag, comportamentul e dat de `WINSOR_SUB_PRAG` (**E2, cerere client**): implicit `MEDIANA` — plafon secundar la mediana istorică a articolului, ca o comandă unică de proiect să nu devină „norma" unui articol care se vinde în câteva bucăți. Nu afectează valoarea netă → ABC rămâne corect.
 2. **Netting** per (SKU, client, fereastră): `SUM(...)`, apoi `CASE WHEN < 0 THEN 0`.
-3. **Bucket-uri săptămânale**: `DATEDIFF(wk, TRNDATE, @AZI)` 0..51, materializate prin `CROSS JOIN` cu un tally de 52 poziții pentru a **include săptămânile cu 0 vânzări** (I12 — confirmat: zerourile intră în `σ`).
-4. **Agregate**: `VZ_4S`, `VZ_13S`, `VZ_26S`, `VZ_52S`, `VAL_52S`, `SAPT_VZ`, `SAPT_8S`, `SAPT_FARA`, `ULT_VANZ`, `MIN_DOC`, `SIGMA_WK = STDEV(...)` (eșantion, numitor `n−1`, pe seria winsorizată p95 cu zerouri).
+3. **Bucket-uri săptămânale**: `DATEDIFF(wk, TRNDATE, @AZI)` 0..51. Săptămânile cu 0 vânzări **participă la `σ`** (I12 — confirmat), dar seria densă **nu se materializează**. La 50.955 SKU × 14 filiale × 52 săptămâni ar însemna ~37.000.000 de rânduri, din care doar ~199.400 (0,5%) sunt observații reale; restul sunt zerouri implicate de absență, nu date. Seria rămâne **rară**, iar zerourile intră în agregate pe cale algebrică (pasul 4). Substratul persistat: `CCCMINMAXWEEK`, §4.1.
+4. **Agregate**: `VZ_4S`, `VZ_13S`, `VZ_26S`, `VZ_52S`, `VAL_52S`, `SAPT_VZ`, `SAPT_8S`, `SAPT_FARA`, `ULT_VANZ`, `MIN_DOC`, `SIGMA_WK` (eșantion, numitor `n−1`, pe seria winsorizată p95 cu zerouri). Toate se calculează din seria rară: sumele și numărătoarele ignoră zerourile prin construcție, iar `SIGMA_WK` se obține din momentele de ordin 1 și 2, cu `n` **constant**:
+
+   ```
+   SIGMA_WK = SQRT( (SUM_X2 - SUM_X * SUM_X / n) / (n - 1) )    -- n = NRSAPT = 52
+   SIGMA_MTH = SQRT( (SUM_M2 - SUM_M * SUM_M / 12) / 11 )       -- n = 12
+   ```
+
+   Rândurile absente contribuie 0 și la `SUM_X`, și la `SUM_X2`, deci rezultatul este identic cu `STDEV()` peste seria densă. Momentele de ordin 1 sunt deja persistate — `SUM_X = SUM_M = VZ_52S`. Se adaugă doar cele de ordin 2 (`SIGMA_WK_SUMSQ`, `SIGMA_MTH_SUMSQ` în `CCCMINMAXDET`), ca wiki-ul să poată afișa exact termenii pe care utilizatorul îi verifică manual.
+
+   > Rândurile `(BRANCH, MTRL)` fără nicio vânzare (~580.000 din cele 713.370) nu au serie de reconstruit: toate valorile sunt constante cunoscute (`VZ_* = 0`, `SAPT_* = 0`, `SAPT_FARA = NRSAPT`, `SIGMA_WK = SIGMA_MIN`, `LIFECYCLE = OD`, `AVG = 0`). Se generează direct la nivelul de 713.370, niciodată prin seria de săptămâni.
 5. **Plancher de variabilitate (E3)**: `SIGMA_WK = CASE WHEN SIGMA_WK = 0 THEN @SIGMA_MIN ELSE SIGMA_WK END` — articolele cu istoric perfect constant primesc totuși o rezervă minimă, nu zero.
 6. **Agregat HQ (I6)**: când `HQ_DIN_AGREGAT_COMPANIE = 1`, rândurile pentru branch-ul cu `ESTE_HQ = 1` se construiesc din însumarea pe SKU a tuturor filialelor incluse, nu din liniile atribuite locației 1000.
 
 `MIN_DOC` = cea mai mică cantitate de vânzare a articolului din ultimele 52 de săptămâni (unitatea minimă tipică de livrare), default 1 — se calculează din date, nu e parametru.
 
-Output în `#MinMaxBase` sau tabelă de staging persistentă.
+Pașii 1-3 sunt **comuni** cu `Classify` și `ClassifyGroup` și se execută o singură dată per `RUNID`, materializând `CCCMINMAXWEEK` + `CCCMINMAXWINSOR` (§4.1). Cele trei proceduri citesc de acolo, în loc să reconstruiască fiecare întregul pipeline de la liniile de vânzare. Output-ul propriu al lui `Prepare` rămâne `#MinMaxBase`.
 
 ### `sp_MinMaxEngine_Classify` (per SKU)
 
@@ -335,11 +346,84 @@ Coloane suplimentare de semnalare, pentru revizuire manuală:
 | `CCCMINMAXRUN` | antet rulare: `RUNID`, `AZI`, parametri folosiți (JSON), durată, user, status |
 | `CCCMINMAXDET` | rezultat per SKU × branch — cele 39 de coloane din secțiunea 4, plus coloanele `WARN_*` de semnalare (§3) |
 | `CCCMINMAXGRP` | ABC-XYZ per `MTRGROUP` × branch |
+| `CCCMINMAXWEEK` | **seria săptămânală rară** (winsorizată + nettată) — intrare pentru agregate *și* substrat de audit (§4.1) |
+| `CCCMINMAXWINSOR` | **statisticile de winsorizare per SKU** (p95, mediană, prag aplicat, efect) (§4.1) |
 | `CCCMINMAXAPPLY` | audit scrieri în ERP: valori vechi + noi, user, timestamp, `RUNID` |
 
 Rulările sunt **versionate, nu suprascrise** — necesar pentru rularea paralelă de validare (1-2 săptămâni) și pentru comparații între versiuni de parametri.
 
 `CCCMINMAXAPPLY` urmează modelul `CCCZEROMINMAX` (snapshot valori vechi) → scrierile în ERP sunt reversibile.
+
+### 4.1 Substrat de audit — seria rară și statisticile de winsorizare
+
+Cele două tabele servesc **simultan** două scopuri, și de aceea nu sunt un cost suplimentar:
+
+1. sunt **intrarea** din care `Prepare` / `Classify` / `ClassifyGroup` își calculează agregatele (§3, pașii 3-4) — azi fiecare procedură reconstruiește acest set de la zero, independent;
+2. sunt **substratul** pe care se sprijină cerința de transparență (§9 din `FAZA3_HANDOFF.md`): wiki-ul trebuie să poată reconstrui, la cerere, drumul complet de la linia de vânzare până la `ENG_MIN`/`ENG_MAX`.
+
+Motivul pentru care persistarea devine posibilă abia în forma rară:
+
+| Substrat per rulare | Rânduri | Ordin de mărime |
+|---|---|---|
+| Serie densă (52 săpt. × SKU × filială) | ~37.000.000 | ~2 GB |
+| Serie rară (`CCCMINMAXWEEK`) | ~350.000 | ~10 MB |
+
+În implementarea actuală cele 37M de rânduri se construiesc, se indexează, se scanează de două ori — și **se aruncă** la ieșirea din procedură. Nu există azi niciun substrat de audit.
+
+#### `CCCMINMAXWEEK`
+
+```
+RUNID              INT       NOT NULL
+COMPANY            SMALLINT  NOT NULL
+BRANCH             SMALLINT  NOT NULL      -- include randul HQ (agregat de companie)
+MTRL               INT       NOT NULL
+WEEK_INDEX         SMALLINT  NOT NULL      -- 0 = saptamana lui AZI, crescator spre trecut
+QTY                DECIMAL(28,8) NOT NULL  -- winsorizat + nettat, clampat la >= 0
+SALES_VALUE        DECIMAL(28,8) NOT NULL
+LAST_POSITIVE_SALE DATETIME  NULL
+PK CLUSTERED (RUNID, BRANCH, MTRL, WEEK_INDEX)
+```
+
+- se scriu **doar** rândurile cu `QTY <> 0 OR SALES_VALUE <> 0`; absența unei săptămâni **înseamnă** zero, prin definiție;
+- cheia clustered este exact ordinea cerută atât de agregatele de grup, cât și de lookup-ul punctual al drill-down-ului — un singur index acoperă ambele accese;
+- rândurile HQ se scriu materializat, nu se recalculează la citire, ca `Explain` să afișeze fix cifrele care au intrat în calcul.
+
+#### `CCCMINMAXWINSOR`
+
+```
+RUNID              INT       NOT NULL
+COMPANY            SMALLINT  NOT NULL
+MTRL               INT       NOT NULL
+POSITIVE_LINE_COUNT INT      NOT NULL
+P95_QTY            DECIMAL(28,8) NULL
+MEDIAN_QTY         DECIMAL(28,8) NULL
+PRAG_APLICAT       VARCHAR(10) NOT NULL    -- P95 | MEDIANA | NONE
+NR_LINII_PLAFONATE INT       NULL
+QTY_BRUT           DECIMAL(28,8) NULL      -- suma cantitatilor inainte de plafonare
+QTY_WINSORIZAT     DECIMAL(28,8) NULL      -- suma dupa plafonare
+PK CLUSTERED (RUNID, MTRL)
+```
+
+Volum: ~52.700 rânduri per rulare. Răspunde direct la întrebarea pe care o va pune beneficiarul — *„de ce cantitatea din calcul e mai mică decât ce am vândut?"* — fără să fie nevoie de liniile individuale.
+
+> Dacă se cere drill-down **pe linie de vânzare** („care anume comandă a fost plafonată"), se adaugă un `CCCMINMAXLINE` (~240.000 rânduri/rulare). Se decide după prima demonstrație de wiki; nu blochează nimic.
+
+#### Contractul căii de explicație
+
+`sp_MinMaxEngine_Explain @RunId, @Branch, @Mtrl` returnează, în result set-uri succesive: antetul rulării cu `PARAMSJSON`, statisticile de winsorizare ale articolului, **seria de 52 de săptămâni reconstruită dens** (52 de rânduri — `#Weeks LEFT JOIN CCCMINMAXWEEK`), cele 12 bucket-uri lunare, agregatele cu termenii `SUM_X` / `SUM_X2`, apoi lanțul `SAFETY → LT_STOCK → SLTS → BUF → CYCLE → MAX_RAW → MAX_INF → CAP6 → VZ26_CAP → ENG_MAX → ENG_MIN → BUY_RAW → BUY_QTY` cu intrările fiecărui pas, și în final post-procesarea (HQ CAP, podea).
+
+Două reguli, ambele obligatorii:
+
+- **`Explain` citește exclusiv starea persistată a rulării** — `CCCMINMAXRUN`, `CCCMINMAXWEEK`, `CCCMINMAXWINSOR`, `CCCMINMAXDET`. **Niciun acces la `MTRTRN` / `FINDOC` / `MTRL`.** `AZI` derivă din `MAX(TRNDATE)` pe date vii, iar populația crește în cursul aceleiași zile (observat: 50.968 → 50.969 SKU în aceeași sesiune). O cale de explicație care reinterogează ERP-ul ar afișa alte numere decât rularea pe care pretinde că o explică.
+- **`Explain` are voie să fie implementarea naivă, densă, citibilă**, pentru că rulează pe o singură celulă din 713.370. Devine astfel și **oracolul de corectitudine** al căii rapide (§9).
+
+#### Retenție
+
+~10 MB/rulare pentru `CCCMINMAXWEEK` + ~3 MB pentru `CCCMINMAXWINSOR`. Se păstrează ultimele `N` rulări (parametru `RETENTIE_RULARI`, default 20) plus rulările marcate explicit ca reper; restul se curăță odată cu `RUNID`-ul, prin endpoint-ul `purgeRuns`.
+
+#### Convenție de instalare
+
+Ambele tabele intră în [sql/00b_persist.sql](sql/00b_persist.sql) (DDL `IF NOT EXISTS` + secțiunea de aliniere ghidată de `INFORMATION_SCHEMA` pentru instalările existente), se înregistrează în `setup()` din `S1-MEC/AJS/NewMinMax.js` și primesc pereche în [tools/sync-check.cjs](tools/sync-check.cjs).
 
 ---
 
@@ -356,6 +440,8 @@ Fișier nou `S1-MEC/AJS/MinMaxEngine.js`, după tiparul din [S1-MEC/AJS/ZeroMinM
 | `getRunResults` | rezultate paginate + filtrate din `CCCMINMAXDET` |
 | `getGroupAbc` | `CCCMINMAXGRP` pentru o rulare |
 | `getRunHistory` | istoric rulări |
+| `explainRow` | drill-down pe un `(RUNID, BRANCH, MTRL)` — `sp_MinMaxEngine_Explain`, sursa de date a wiki-ului (§4.1) |
+| `purgeRuns` | curăță substratul de audit al rulărilor peste `RETENTIE_RULARI` |
 | `applyToErp` | scriere manuală în ERP (vezi mai jos) |
 | `importPackFromExcel` | populare `MTRL.MTRPACK` din Excel (tipar `MTRBRNLIMITS.js`) |
 
@@ -446,6 +532,7 @@ Verificări suplimentare:
 - **reconciliere `VZ_*` cu Top ABC existent pe același interval și pe același mod de atribuire.** Top ABC rulează implicit pe filiala **agentului**; dacă v5 rulează pe `CLIENT` (`TRDBRANCH`) diferența e mică (87,7% suprapunere), dar dacă rulează pe `DOC` cele două rapoarte diferă structural cu circa o treime — reconcilierea trebuie făcută cu `MOD_ATRIBUIRE_FILIALA` identic (I7)
 - validarea că winsorizarea nu modifică `VAL_52S` (deci ABC rămâne identic)
 - comparație `ENG_MIN`/`ENG_MAX` cu output-ul Python pe un eșantion agreat
+- **harness de echivalență sparse vs. dens**: pe un eșantion aleatoriu de `(BRANCH, MTRL)`, `sp_MinMaxEngine_Explain` (calea densă, naivă) trebuie să reproducă exact valorile persistate de calea rapidă în `CCCMINMAXDET`. Se rulează la fiecare modificare a agregatelor. `SIGMA_WK` și `SIGMA_MTH` se compară cu toleranță de rotunjire (forma algebrică vs. `STDEV()`), restul coloanelor la egalitate strictă.
 
 Scrierea în ERP **nu este automată**: rezultatele se calculează și se inspectează, aplicarea în `MTRBRNLIMITS`/`MTRL` se declanșează manual, cu confirmare și cu revenire posibilă (valorile anterioare se salvează în `CCCMINMAXAPPLY`).
 
@@ -467,6 +554,43 @@ Scrierea în ERP **nu este automată**: rezultatele se calculează și se inspec
 | 10 | Confirmarea că HQ se dimensionează pe agregatul de companie (I6) | nu — altfel HQ iese integral zero | `HQ_DIN_AGREGAT_COMPANIE = 1` |
 | 11 | Există istoric recepții pentru `σ_LT`? (I14 / lacuna L1 — variabilitatea lead time-ului rămâne ignorată) | nu | termen absent din formulă |
 | 12 | Pentru clasa `NOU`: `σ_WK` calculat doar de la prima vânzare încoace? (E5) | nu | seria completă de 52 de săptămâni |
+| 13 | **Articolele cu `CCCEXSTAT` contribuie la statisticile celorlalte?** | nu, dar **schimbă clasele articolelor active** | `INCLUDE_EXSTAT_IN_STATISTICI = 0` (aliniat cu modulul existent) |
+
+**Item 13 — context măsurat pe producție (03.09.2026).** Maparea flagurilor din ecranul „Nomenclator articole", confirmată de client: **În lichidare** = `CCCITEMOUTLET`, **Blocat achiziții** = `CCCBLOCKPUR`, **Exclude statistici** = `CCCEXSTAT`. Pe articolele cu vânzări în 52S:
+
+| Flag | Articole | |
+|---|---|---|
+| `CCCEXSTAT` | 21.139 | |
+| `CCCBLOCKPUR` | 21.079 | |
+| ambele | 20.734 | **98% același set** |
+| doar `CCCEXSTAT` | 405 | |
+| doar `CCCBLOCKPUR` | 345 | |
+| `CCCITEMOUTLET` | 2.232 | practic submulțime a `CCCEXSTAT` (80 în afară) |
+| `CCCEXSTAT` **cu** `MTRBRNLIMITS` întreținut manual | **1.614** | grupul de risc — cineva încă le ține politică de stoc |
+
+Cele trei flaguri călătoresc împreună, dar au înțelesuri distincte, iar motorul le confundă azi într-unul singur — le citește pe toate ca simple coloane informative (`FLAG_LICHIDARE` / `FLAG_BLOCAT` / `FLAG_EXCLUS`). Separarea corectă:
+
+1. **contribuție la statisticile celorlalte** (`GRP_TOTAL_VAL`, ordonarea Pareto, agregatul de companie) → guvernată de `CCCEXSTAT`, al cărui înțeles literal este „nu conta la statistici". **Precedent în producție:** [necesar-achizitii/NecesarAchizitie.js](../necesar-achizitii/NecesarAchizitie.js) filtrează deja dur `isnull(m.cccexstat, 0) = 0`, alături de `m.isactive = 1`, pe universul de articole. Motorul nou trebuie să fie consecvent cu modulul pe care îl înlocuiește;
+2. **calculul propriu de MIN/MAX** → se face și se afișează, ca raportul să rămână complet (stocul rămas de lichidat trebuie să fie vizibil);
+3. **scrierea în ERP** → `MIN = MAX = 0` prin `FLAGS_ZERO_LA_APPLY = 1` (E15, deja confirmat 14.08.2026).
+
+Doar punctul 1 este nedecis. **Impact măsurat pe producție (03.09.2026)**, Pareto recalculat în ambele variante pe cele 13 filiale fizice, 64.516 rânduri active `BRANCH × MTRGROUP × MTRL` (`VAL_52S` nu e afectat de winsorizare, deci comparația nu cere o rulare persistată):
+
+| | |
+|---|---|
+| Rânduri cu clasă schimbată | **3.050 (4,7%)** |
+| Promovări (B→A 268, C→B 247, C→A 6) | 521 |
+| Retrogradări | 2.529, din care **1.226 pierd `A`** |
+| Clasa `A` | 18.636 → **17.684** (−5,1%) |
+| Clasa `B` | 19.011 → 18.913 |
+
+Direcția efectului este **contraintuitivă și trebuie reținută ca atare**: pragul ABC este procent din `GRP_TOTAL_VAL`, deci scoaterea articolelor excluse micșorează totalul grupei, crește ponderea fiecărui articol rămas și face cumulativul să atingă 80% *mai devreme* — clasa `A` se **restrânge**. Efectul „locuri eliberate în topul grupei" există, dar este minoritar (521 vs. 2.529).
+
+Consecința practică: comportamentul actual **nu sub-stochează, ci supra-stochează** — marfa în lichidare umflă totalul grupei și menține 1.226 de articole active în clasa `A` cu `SL` 95%. `INCLUDE_EXSTAT_IN_STATISTICI = 0` dă o clasă `A` mai strictă și mai concentrată, cu prețul ca acele articole să primească mai puțin stoc. Alegere de business, nu corectură tehnică; magnitudinea (4,7%) nu blochează nimic.
+
+Rămâne de decis cu clientul și ce se face cu cele **1.614** articole marcate `CCCEXSTAT` care au totuși min/max întreținut manual în `MTRBRNLIMITS`.
+
+> Efect secundar, nu motiv: `INCLUDE_EXSTAT_IN_STATISTICI = 0` reduce universul de articole de la 52.701 la ~31.562 (−40%) și liniile de la 240.235 la ~181.600 (−24%). Nu înlocuiește rescrierea sparse din §4.1 — seria densă ar rămâne la ~22M de rânduri, tot cu ~0,5% densitate.
 
 Niciunul nu blochează Fazele 0-3 — toate sunt parametri cu valoare implicită.
 

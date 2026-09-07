@@ -9,11 +9,29 @@
 CREATE OR ALTER PROCEDURE dbo.sp_MinMaxEngine_ClassifyGroup
     @Company SMALLINT,
     @Mtrgroup INT = NULL,
-    @SummaryOnly BIT = 0
+    @SummaryOnly BIT = 0,
+    @Persist BIT = 0,
+    @RunId INT = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
+
+    -- ---------------------------------------------------------------
+    -- 0. Validare sesiune, inaintea oricarui calcul
+    --    Fara asta, un @RunId lipsa s-ar afla abia dupa intreg pipeline-ul.
+    -- ---------------------------------------------------------------
+    IF @Persist = 1
+    BEGIN
+        IF @RunId IS NULL
+            THROW 50005, 'sp_MinMaxEngine_ClassifyGroup: @RunId is required when @Persist = 1; open a session with sp_MinMaxEngine_StartRun.', 1;
+
+        IF NOT EXISTS (SELECT 1 FROM CCCMINMAXRUN WHERE RUNID = @RunId AND COMPANY = @Company)
+            THROW 50006, 'sp_MinMaxEngine_ClassifyGroup: the requested RUNID does not exist for this company.', 1;
+
+        IF NOT EXISTS (SELECT 1 FROM CCCMINMAXRUN WHERE RUNID = @RunId AND SESSION_STATUS = 'OPEN')
+            THROW 50015, 'sp_MinMaxEngine_ClassifyGroup: the session is not OPEN; a finished session is immutable.', 1;
+    END;
 
     -- ---------------------------------------------------------------
     -- 1. Citire parametri din CCCMINMAXPARAMS
@@ -29,6 +47,8 @@ BEGIN
     DECLARE @Azi DATE;
     DECLARE @PercentileSql NVARCHAR(MAX);
     DECLARE @WinsorPctSql VARCHAR(32);
+    DECLARE @ParamsJson NVARCHAR(MAX);
+    DECLARE @StartedAt DATETIME = GETDATE();
 
     SELECT @NrSaptamani = TRY_CONVERT(INT, PARAMVALUE)
     FROM CCCMINMAXPARAMS
@@ -476,7 +496,82 @@ BEGIN
     FROM Step4_XyzAndClass;
 
     -- ---------------------------------------------------------------
-    -- 13. Output rezultate sau sumar de validare
+    -- 13. Persistenta rularii in CCCMINMAXGRP
+    --     Starea sta in coloanele GROUP_* ale antetului, nu in STATUS:
+    --     ClassifyGroup se ataseaza unei rulari existente fara sa
+    --     suprascrie starea lasata de Classify sau de Compute.
+    -- ---------------------------------------------------------------
+    IF @Persist = 1
+    BEGIN
+        SET @ParamsJson =
+            N'{"NRSAPT":' + CONVERT(NVARCHAR(32), @NrSaptamani) +
+            N',"WINSOR_PCT":' + CONVERT(NVARCHAR(32), CONVERT(DECIMAL(10, 4), @WinsorPct)) +
+            N',"WINSOR_MIN_LINII":' + CONVERT(NVARCHAR(32), @WinsorMinLinii) +
+            N',"WINSOR_SUB_PRAG":"' + @WinsorSubPrag + N'"' +
+            N',"SIGMA_MIN":' + CONVERT(NVARCHAR(32), @SigmaMin) +
+            N',"HQ_DIN_AGREGAT_COMPANIE":' + CONVERT(NVARCHAR(32), CONVERT(TINYINT, @HqDinAgregatCompanie)) +
+            N',"PRAG_REC_HQ":' + CONVERT(NVARCHAR(32), @PragRecHq) +
+            N',"PRAG_REC_BR":' + CONVERT(NVARCHAR(32), @PragRecBr) +
+            N'}';
+
+        UPDATE CCCMINMAXRUN
+        SET GROUP_STATUS = 'RUNNING',
+            GROUP_STARTEDAT = @StartedAt,
+            GROUP_FINISHEDAT = NULL,
+            GROUP_DURATA_SEC = NULL,
+            GROUP_NR_RANDURI = NULL,
+            GROUP_PARAMSJSON = @ParamsJson,
+            GROUP_ERRORMSG = NULL
+        WHERE RUNID = @RunId;
+
+        BEGIN TRY
+            INSERT INTO CCCMINMAXGRP (
+                RUNID, COMPANY, AZI, BRANCH, MARIME, ESTE_HQ, ESTE_PODEA,
+                MTRGROUP, MTRGROUP_CODE, MTRGROUP_NAME, NR_SKU_GRP, NR_SKU_VZ,
+                VZ_4S, VZ_13S, VZ_26S, VZ_52S, VAL_52S,
+                SAPT_VZ, SAPT_8S, SAPT_FARA, ULT_VANZ, SIGMA_WK,
+                LUNI_VZ, MAX_LUNA_QTY, MEAN_MTH, SIGMA_MTH, CV, IS_FORCED_Z,
+                LIFECYCLE, ABC, XYZ, CLASA,
+                PREV_CUMULATIVE_PCT, CUMULATIVE_PCT, BR_TOTAL_VAL, BR_GROUP_COUNT
+            )
+            SELECT
+                @RunId, COMPANY, AZI, CONVERT(SMALLINT, BRANCH), MARIME, ESTE_HQ, ESTE_PODEA,
+                MTRGROUP, MTRGROUP_CODE, MTRGROUP_NAME, NR_SKU_GRP, NR_SKU_VZ,
+                VZ_4S, VZ_13S, VZ_26S, VZ_52S, VAL_52S,
+                SAPT_VZ, SAPT_8S, SAPT_FARA, ULT_VANZ, SIGMA_WK,
+                LUNI_VZ, MAX_LUNA_QTY, MEAN_MTH, SIGMA_MTH, CV, IS_FORCED_Z,
+                LIFECYCLE, ABC, XYZ, CLASA,
+                PREV_CUMULATIVE_PCT, CUMULATIVE_PCT, BR_TOTAL_VAL, BR_GROUP_COUNT
+            FROM #MinMaxGroupClassified;
+
+            UPDATE CCCMINMAXRUN
+            SET GROUP_STATUS = 'DONE',
+                GROUP_FINISHEDAT = GETDATE(),
+                GROUP_DURATA_SEC = DATEDIFF(SECOND, @StartedAt, GETDATE()),
+                GROUP_NR_RANDURI = (SELECT COUNT(*) FROM CCCMINMAXGRP WHERE RUNID = @RunId)
+            WHERE RUNID = @RunId;
+        END TRY
+        BEGIN CATCH
+            -- XACT_ABORT poate lasa tranzactia apelantului condamnata; atunci antetul nu mai poate fi marcat.
+            IF XACT_STATE() <> -1
+                UPDATE CCCMINMAXRUN
+                SET GROUP_STATUS = 'ERROR',
+                    GROUP_FINISHEDAT = GETDATE(),
+                    GROUP_DURATA_SEC = DATEDIFF(SECOND, @StartedAt, GETDATE()),
+                    GROUP_ERRORMSG = LEFT(ERROR_MESSAGE(), 500)
+                WHERE RUNID = @RunId;
+
+            THROW;
+        END CATCH;
+
+        SELECT RUNID, COMPANY, AZI, FAZA, STATUS,
+               GROUP_STATUS, GROUP_NR_RANDURI, GROUP_DURATA_SEC, GROUP_STARTEDAT, GROUP_FINISHEDAT
+        FROM CCCMINMAXRUN
+        WHERE RUNID = @RunId;
+    END;
+
+    -- ---------------------------------------------------------------
+    -- 14. Output rezultate sau sumar de validare
     -- ---------------------------------------------------------------
     IF @SummaryOnly = 1
     BEGIN
@@ -525,6 +620,10 @@ BEGIN
 
         RETURN;
     END;
+
+    -- Randurile sunt deja in CCCMINMAXGRP; nu se mai streameaza setul complet.
+    IF @Persist = 1
+        RETURN;
 
     SELECT
         COMPANY, AZI, BRANCH, MARIME, ESTE_HQ, ESTE_PODEA,

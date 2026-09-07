@@ -2,7 +2,7 @@
 description: "Use for multi-file implementation and refactors across modules. Sustained agentic coding throughput."
 name: "Implement"
 tools: [read, edit, search, execute, todo, context7/*]
-model: ['Claude Sonnet 4.6', 'Claude Sonnet 4.5']
+model: ['Claude Sonnet 5', 'GPT-5.6 Sol']
 argument-hint: "Point to the plan or describe the change to implement"
 handoffs:
   - label: "Review"

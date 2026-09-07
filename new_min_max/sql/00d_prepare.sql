@@ -195,6 +195,9 @@ BEGIN
         GROUP BY hq.BRANCH, bw.MTRL, bw.WEEK_INDEX;
     END;
 
+    CREATE CLUSTERED INDEX IX_BranchWeekly_BranchMtrlWeek
+        ON #BranchWeekly (BRANCH, MTRL, WEEK_INDEX);
+
     -- ---------------------------------------------------------------
     -- 7. MIN_DOC per articol
     -- ---------------------------------------------------------------
@@ -206,38 +209,10 @@ BEGIN
     GROUP BY MTRL;
 
     -- ---------------------------------------------------------------
-    -- 8. Seria saptamanala completa cu zerouri
-    -- ---------------------------------------------------------------
-    CREATE TABLE #Weeks (WEEK_INDEX INT NOT NULL PRIMARY KEY);
-    DECLARE @WeekIndex INT = 0;
-    WHILE @WeekIndex < @NrSaptamani
-    BEGIN
-        INSERT INTO #Weeks (WEEK_INDEX) VALUES (@WeekIndex);
-        SET @WeekIndex = @WeekIndex + 1;
-    END;
-
-    SELECT
-        b.BRANCH, b.MARIME, b.ESTE_HQ, b.ESTE_PODEA,
-        i.MTRL, i.MTRSUP, i.CODE, i.MIN_DOC, w.WEEK_INDEX,
-        CONVERT(DECIMAL(28, 8), COALESCE(bw.QTY, 0)) AS QTY,
-        CONVERT(DECIMAL(28, 8), COALESCE(bw.SALES_VALUE, 0)) AS SALES_VALUE,
-        bw.LAST_POSITIVE_SALE
-    INTO #WeeklySeries
-    FROM #Items i
-    CROSS JOIN #ActiveBranches b
-    CROSS JOIN #Weeks w
-    LEFT JOIN #BranchWeekly bw
-        ON bw.BRANCH = b.BRANCH AND bw.MTRL = i.MTRL AND bw.WEEK_INDEX = w.WEEK_INDEX;
-
-    CREATE CLUSTERED INDEX IX_WeeklySeries_BranchMtrlWeek
-        ON #WeeklySeries (BRANCH, MTRL, WEEK_INDEX);
-
-    -- ---------------------------------------------------------------
-    -- 9. Agregate de baza (ferestre VZ, frecventa, recenta, SIGMA_WK)
+    -- 8. Agregate saptamanale rare; saptamanile absente sunt zerouri implicite
     -- ---------------------------------------------------------------
     SELECT
-        @Company AS COMPANY, @Azi AS AZI,
-        BRANCH, MARIME, ESTE_HQ, ESTE_PODEA, MTRL, MAX(MTRSUP) AS MTRSUP, MAX(CODE) AS CODE,
+        BRANCH, MTRL,
         CONVERT(DECIMAL(28, 8), SUM(CASE WHEN WEEK_INDEX < 4 THEN QTY ELSE 0 END)) AS VZ_4S,
         CONVERT(DECIMAL(28, 8), SUM(CASE WHEN WEEK_INDEX < 13 THEN QTY ELSE 0 END)) AS VZ_13S,
         CONVERT(DECIMAL(28, 8), SUM(CASE WHEN WEEK_INDEX < 26 THEN QTY ELSE 0 END)) AS VZ_26S,
@@ -245,18 +220,59 @@ BEGIN
         CONVERT(DECIMAL(28, 8), SUM(SALES_VALUE)) AS VAL_52S,
         SUM(CASE WHEN QTY > 0 THEN 1 ELSE 0 END) AS SAPT_VZ,
         SUM(CASE WHEN WEEK_INDEX < 8 AND QTY > 0 THEN 1 ELSE 0 END) AS SAPT_8S,
-        COALESCE(MIN(CASE WHEN QTY > 0 THEN WEEK_INDEX END), @NrSaptamani) AS SAPT_FARA,
+        MIN(CASE WHEN QTY > 0 THEN WEEK_INDEX END) AS SAPT_FARA,
         MAX(CASE WHEN QTY > 0 THEN LAST_POSITIVE_SALE END) AS ULT_VANZ,
-        MAX(MIN_DOC) AS MIN_DOC,
+        MIN(QTY) AS MIN_WEEK_QTY,
+        MAX(QTY) AS MAX_WEEK_QTY,
+        SUM(CONVERT(FLOAT, QTY) * CONVERT(FLOAT, QTY)) AS SIGMA_WK_SUMSQ
+    INTO #WeeklyStats
+    FROM #BranchWeekly
+    WHERE WEEK_INDEX >= 0 AND WEEK_INDEX < @NrSaptamani
+    GROUP BY BRANCH, MTRL;
+
+    CREATE CLUSTERED INDEX IX_WeeklyStats_BranchMtrl
+        ON #WeeklyStats (BRANCH, MTRL);
+
+    -- ---------------------------------------------------------------
+    -- 9. Un singur rand per articol x filiala, cu SIGMA_WK din momente
+    -- ---------------------------------------------------------------
+    SELECT
+        @Company AS COMPANY, @Azi AS AZI,
+        b.BRANCH, b.MARIME, b.ESTE_HQ, b.ESTE_PODEA,
+        i.MTRL, i.MTRSUP, i.CODE,
+        CONVERT(DECIMAL(28, 8), COALESCE(ws.VZ_4S, 0)) AS VZ_4S,
+        CONVERT(DECIMAL(28, 8), COALESCE(ws.VZ_13S, 0)) AS VZ_13S,
+        CONVERT(DECIMAL(28, 8), COALESCE(ws.VZ_26S, 0)) AS VZ_26S,
+        CONVERT(DECIMAL(28, 8), COALESCE(ws.VZ_52S, 0)) AS VZ_52S,
+        CONVERT(DECIMAL(28, 8), COALESCE(ws.VAL_52S, 0)) AS VAL_52S,
+        COALESCE(ws.SAPT_VZ, 0) AS SAPT_VZ,
+        COALESCE(ws.SAPT_8S, 0) AS SAPT_8S,
+        COALESCE(ws.SAPT_FARA, @NrSaptamani) AS SAPT_FARA,
+        ws.ULT_VANZ,
+        i.MIN_DOC,
         CONVERT(DECIMAL(28, 8),
             CASE
-                WHEN COALESCE(STDEV(CONVERT(FLOAT, QTY)), 0) = 0 THEN @SigmaMin
-                ELSE STDEV(CONVERT(FLOAT, QTY))
+                WHEN COALESCE(ws.SAPT_VZ, 0) = 0
+                    OR (ws.SAPT_VZ = @NrSaptamani AND ws.MIN_WEEK_QTY = ws.MAX_WEEK_QTY)
+                    OR variance.SAMPLE_VARIANCE <= 0 THEN @SigmaMin
+                ELSE SQRT(variance.SAMPLE_VARIANCE)
             END
         ) AS SIGMA_WK
     INTO #MinMaxBase
-    FROM #WeeklySeries
-    GROUP BY BRANCH, MARIME, ESTE_HQ, ESTE_PODEA, MTRL;
+    FROM #Items i
+    CROSS JOIN #ActiveBranches b
+    LEFT JOIN #WeeklyStats ws
+        ON ws.BRANCH = b.BRANCH AND ws.MTRL = i.MTRL
+    CROSS APPLY (
+        SELECT CASE
+            WHEN @NrSaptamani > 1 THEN
+                (COALESCE(CONVERT(FLOAT, ws.SIGMA_WK_SUMSQ), 0.0)
+                    - POWER(COALESCE(CONVERT(FLOAT, ws.VZ_52S), 0.0), 2)
+                        / CONVERT(FLOAT, @NrSaptamani))
+                    / CONVERT(FLOAT, @NrSaptamani - 1)
+            ELSE 0.0
+        END AS SAMPLE_VARIANCE
+    ) variance;
 
     -- ---------------------------------------------------------------
     -- 10. Output rezultate sau sumare de validare

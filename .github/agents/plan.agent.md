@@ -2,7 +2,7 @@
 description: "Use for planning, architecture, and irreversible design decisions. Produces a model-annotated execution plan. Read-only — does not edit code."
 name: "Plan"
 tools: [read, search, web, todo, context7/*]
-model: ['Claude Opus 4.8', 'Claude Opus 4.7']
+model: ['Claude Opus 5']
 argument-hint: "Describe the feature, problem, or decision to plan"
 handoffs:
   - label: "Implementation"
