@@ -1,7 +1,7 @@
 # Current Focus
 
 ## Last Updated
-- 07.09.2026 (sesiunea 32 — Pasul 4 din FAZA5_REMEDIERI_PLAN.md implementat și testat)
+- 07.09.2026 (sesiunea 33 — Pasul 5 din FAZA5_REMEDIERI_PLAN.md implementat și testat)
 
 ## Current Goal
 - Faza 5 este cablată și fluxul read-only funcționează live; acceptanța urmează planul din
@@ -10,15 +10,18 @@
 - Poarta către Faza 4 rămâne pasul 8: invariante pe populație, eșantion numeric înghețat și confirmarea beneficiarului pe formule.
 
 ## Active Area
-- Pasul 4 (§12.6+§12.10+§12.11) este FĂCUT (cod + teste, 96 verzi): `loadResults()`/`loadGroupAbc()`
-  primesc `withTotal` explicit; cache pe cheie de populație (`_resultsCache`/`_groupAbcCache`, sloturi
-  separate) pentru RUNID rezolvat; `groupAbc()` backend întoarce `total`; `minmax-group-abc.js`
-  folosește `totalPages` în loc de euristica `rows.length < pageSize`.
-- GAP DE SCOP asumat: `results()`/`groupAbc()` încă rezolvă „current” independent la primul apel
-  (fără împrumut între cache-uri) — coalescarea completă e scopul Pasului 7 (§12.9 `activate()`), nu
-  al Pasului 4. Verificare live a pasului 4 NEFĂCUTĂ încă (doar teste unitare cu service mockat).
-- Urmează pasul 5 (§12.7): request sequence monoton per flux (results/groupAbc/explain/history/params)
-  în store, ca răspunsurile async vechi să nu suprascrie starea nouă.
+- Pasul 5 (§12.7) este FĂCUT (cod + teste, 16 verzi în `test/stores/minmax-engine-store.test.js`):
+  secvență monotonă per flux (`results`/`groupAbc`/`explain`/`history`/`params`) în
+  `minmax-engine-store.js`, prin `_beginRequest(flow)`/`_isCurrent(flow, seq)`; dispatch de date/eroare/
+  `loading=false` gardat de secvență; `closeExplain()` incrementează secvența `explain`; `_fetchParams()`
+  nu mai dispatch-uiește direct (decuplat de `loadParams()` ca `saveParams()` să rămână flux separat,
+  negardat de secvența `params`). Verificat cu promisiuni controlate rezolvate în ordine inversă
+  (pagina 2/3, două articole, două seturi group ABC, history, params). Verificare live NEFĂCUTĂ.
+- GAP DE SCOP moștenit din Pasul 4, neschimbat: `results()`/`groupAbc()` încă rezolvă „current”
+  independent la primul apel (fără împrumut între cache-uri) — coalescarea completă e scopul
+  Pasului 7 (§12.9 `activate()`).
+- Urmează pasul 6 (§12.8): autorizare completă (decizie deja luată 07.09.2026 — roluri din configurație
+  server-side, token semnat 8h absolute, `resolveRoles(refid)` unic).
 
 ## Relevant Files
 - [FAZA5_REMEDIERI_PLAN.md](../../new_min_max/FAZA5_REMEDIERI_PLAN.md) — ordine și teste pentru remedieri.
@@ -36,11 +39,11 @@
   per parte (backend `CLASA_VALUES`, UI `minmax-engine-constants.js`).
 
 ## Open Questions
-- Pașii 4-8 din §12 rămân de implementat înaintea validării numerice.
+- Pașii 6-8 din §12 rămân de implementat înaintea validării numerice.
 - Întrebările de business și firele tangențiale sunt în [minmax-engine-open-items.md](../wiki/minmax-engine-open-items.md) și [open-threads.md](open-threads.md).
 
 ## Next Step
-- Implementarea pasului 5 (§12.7), cu teste de store pe promisiuni controlate rezolvate în ordine
-  inversă (pagina 2/3, două articole, două seturi group ABC).
+- Implementarea pasului 6 (§12.8): `resolveRoles(refid)`, token de aplicație semnat 8h absolute,
+  hook `authenticate`, audit la save — abia apoi se comută `MINMAX_ENGINE_WRITES_ENABLED` pe `true`.
 - Menține Node.js 20.20.2 pentru acest proiect; celelalte site-uri rămân pe Node-ul de sistem 18.12.1.
 

@@ -174,3 +174,160 @@ describe('minmax-engine-store — population cache (§12.6+§12.10+§12.11)', ()
     });
   });
 });
+
+// Store test for FAZA5_REMEDIERI_PLAN.md Pasul 5 (§12.7): a monotonic request
+// sequence per async flow, so a stale response resolved AFTER a newer one for
+// the same flow never overwrites fresher state. Every test drives the race
+// with hand-controlled ("deferred") promises resolved in reverse order —
+// exactly the scenario the plan calls out (older request settles last).
+describe('minmax-engine-store — request sequencing (§12.7)', () => {
+  let MinmaxEngineStore;
+
+  before(async () => {
+    global.sessionStorage = global.window.sessionStorage;
+    global.sessionStorage.setItem('s1Token', 'test-token');
+    ({ MinmaxEngineStore } = await import('../../public/stores/minmax-engine-store.js'));
+  });
+
+  function deferred () {
+    let resolve, reject;
+    const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+    return { promise, reject, resolve };
+  }
+
+  it('loadResults(): page 2 resolved after page 3 does not overwrite the newer page', async () => {
+    const store = new MinmaxEngineStore();
+    const page2 = deferred();
+    const page3 = deferred();
+    const responses = [page2, page3];
+    let call = 0;
+    store._getService = () => ({ results: async () => responses[call++].promise });
+
+    store.setPage(2);
+    const p1 = store.loadResults({ withTotal: false });
+    store.setPage(3);
+    const p2 = store.loadResults({ withTotal: false });
+
+    // Reverse order: the newer request (page 3) settles first.
+    page3.resolve({ page: 3, pageSize: 100, rows: [{ MTRL: 3 }], runId: 5, total: 999 });
+    await p2;
+    assert.strictEqual(store.getState().rows[0].MTRL, 3);
+    assert.strictEqual(store.getState().loading, false);
+
+    // The older request (page 2) settles last and must be discarded entirely.
+    page2.resolve({ page: 2, pageSize: 100, rows: [{ MTRL: 2 }], runId: 5, total: 999 });
+    await p1;
+
+    assert.strictEqual(store.getState().rows[0].MTRL, 3, 'the stale page-2 response must not overwrite page-3 state');
+    assert.strictEqual(store.getState().page, 3);
+    assert.strictEqual(store.getState().loading, false, 'the stale response finally-block must not flip loading back on');
+  });
+
+  it('loadGroupAbc(): two different filter sets resolved in reverse order keep only the later one', async () => {
+    const store = new MinmaxEngineStore();
+    const setA = deferred();
+    const setB = deferred();
+    const responses = [setA, setB];
+    let call = 0;
+    store._getService = () => ({ groupAbc: async () => responses[call++].promise });
+
+    const p1 = store.loadGroupAbc({ branches: [1000] }, { withTotal: true });
+    const p2 = store.loadGroupAbc({ branches: [2000] }, { withTotal: true });
+
+    setB.resolve({ page: 1, pageSize: 100, rows: [{ ABC: 'B-set' }], runId: 5, total: 7 });
+    await p2;
+    assert.strictEqual(store.getState().groupAbc.rows[0].ABC, 'B-set');
+
+    setA.resolve({ page: 1, pageSize: 100, rows: [{ ABC: 'A-set' }], runId: 5, total: 3 });
+    await p1;
+
+    assert.strictEqual(store.getState().groupAbc.rows[0].ABC, 'B-set', 'the stale first filter set must not overwrite the newer one');
+    assert.strictEqual(store.getState().groupAbc.total, 7);
+    assert.strictEqual(store.getState().groupAbc.loading, false);
+  });
+
+  it('openExplain(): opening a second article before the first resolves keeps only the second', async () => {
+    const store = new MinmaxEngineStore();
+    store.dispatch({ type: 'SET_RESULTS', payload: { rows: [], runId: 5 } }); // pretend results() already resolved a run
+
+    const article1 = deferred();
+    const article2 = deferred();
+    const responses = [article1, article2];
+    let call = 0;
+    store._getService = () => ({ explain: async () => responses[call++].promise });
+
+    const p1 = store.openExplain(1000, 111);
+    const p2 = store.openExplain(1000, 222);
+
+    article2.resolve({ series: [], summary: { mtrl: 222 } });
+    await p2;
+    assert.strictEqual(store.getState().explain.mtrl, 222);
+    assert.strictEqual(store.getState().explain.data.summary.mtrl, 222);
+
+    article1.resolve({ series: [], summary: { mtrl: 111 } });
+    await p1;
+
+    assert.strictEqual(store.getState().explain.data.summary.mtrl, 222, 'the stale first-article response must not overwrite the second');
+  });
+
+  it('closeExplain(): a response arriving after the drawer was closed is discarded', async () => {
+    const store = new MinmaxEngineStore();
+    store.dispatch({ type: 'SET_RESULTS', payload: { rows: [], runId: 5 } });
+
+    const pending = deferred();
+    store._getService = () => ({ explain: async () => pending.promise });
+
+    const p = store.openExplain(1000, 111);
+    store.closeExplain();
+
+    pending.resolve({ series: [], summary: { mtrl: 111 } });
+    await p;
+
+    assert.strictEqual(store.getState().explain.open, false);
+    assert.strictEqual(store.getState().explain.data, null, 'a response for an already-closed drawer must not populate data');
+  });
+
+  it('loadHistory(): a stale response resolved after a newer refresh is discarded', async () => {
+    const store = new MinmaxEngineStore();
+    const first = deferred();
+    const second = deferred();
+    const responses = [first, second];
+    let call = 0;
+    store._getService = () => ({ history: async () => responses[call++].promise });
+
+    const p1 = store.loadHistory();
+    const p2 = store.loadHistory();
+
+    second.resolve({ rows: [{ RUNID: 9 }] });
+    await p2;
+    assert.strictEqual(store.getState().runHistory[0].RUNID, 9);
+
+    first.resolve({ rows: [{ RUNID: 1 }] });
+    await p1;
+
+    assert.strictEqual(store.getState().runHistory[0].RUNID, 9, 'the stale response must not overwrite the newer history');
+    assert.strictEqual(store.getState().loadingHistory, false);
+  });
+
+  it('loadParams(): a stale response resolved after a newer refresh is discarded', async () => {
+    const store = new MinmaxEngineStore();
+    const first = deferred();
+    const second = deferred();
+    const responses = [first, second];
+    let call = 0;
+    store._getService = () => ({ params: async () => responses[call++].promise });
+
+    const p1 = store.loadParams();
+    const p2 = store.loadParams();
+
+    second.resolve({ branches: [], cov: [], params: [{ PARAMKEY: 'B' }], writesEnabled: false });
+    await p2;
+    assert.strictEqual(store.getState().params.params[0].PARAMKEY, 'B');
+
+    first.resolve({ branches: [], cov: [], params: [{ PARAMKEY: 'A' }], writesEnabled: false });
+    await p1;
+
+    assert.strictEqual(store.getState().params.params[0].PARAMKEY, 'B', 'the stale response must not overwrite the newer params');
+    assert.strictEqual(store.getState().params.loading, false);
+  });
+});

@@ -111,10 +111,10 @@ o cer; „Urmator" e dezactivat pe ultima pagină plină exact.
 
 ## Pasul 5 — §12.7: concurență în store *(model: Sonnet)*
 
-- [ ] Câte un request sequence monoton pentru `results`, `groupAbc`, `explain`, `history`, `params`.
-- [ ] Dispatch (date, eroare, `loading=false`) numai dacă apelul e încă ultimul din fluxul său.
-- [ ] Închiderea drawer-ului incrementează secvența `explain`.
-- [ ] Salvarea are flux separat; butonul rămâne dezactivat până la tranzacție **plus** recitire.
+- [x] Câte un request sequence monoton pentru `results`, `groupAbc`, `explain`, `history`, `params`.
+- [x] Dispatch (date, eroare, `loading=false`) numai dacă apelul e încă ultimul din fluxul său.
+- [x] Închiderea drawer-ului incrementează secvența `explain`.
+- [x] Salvarea are flux separat; butonul rămâne dezactivat până la tranzacție **plus** recitire.
 
 **Teste:** promisiuni controlate rezolvate în ordine inversă (pagina 2/3, două articole, două seturi
 group ABC) — numai ultima cerere modifică starea.

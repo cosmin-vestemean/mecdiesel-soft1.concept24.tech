@@ -180,6 +180,15 @@ export class MinmaxEngineStore {
     this._resultsCache = { key: null, resolvedRunId: null };
     this._groupAbcCache = { key: null, resolvedRunId: null };
 
+    // Monotonic request sequence per async flow (§12.7): each load*/open*
+    // call increments its flow's counter and captures the new value; the
+    // response is only dispatched (data, error, or loading=false) while that
+    // captured value is still the current one, so an older request that
+    // resolves after a newer one can never clobber fresher state. `explain`
+    // is also incremented on drawer close, so a response for an already-
+    // closed drawer is discarded too.
+    this._sequences = { explain: 0, groupAbc: 0, history: 0, params: 0, results: 0 };
+
     this.subscribe = this.subscribe.bind(this);
     this.unsubscribe = this.unsubscribe.bind(this);
     this.getState = this.getState.bind(this);
@@ -419,8 +428,29 @@ export class MinmaxEngineStore {
   setRunId (runId) { this.dispatch({ type: 'SET_RUN_ID', payload: runId }); }
   setGroupAbcPage (page) { this.dispatch({ type: 'SET_GROUP_ABC_PAGE', payload: page }); }
   setGroupAbcPageSize (pageSize) { this.dispatch({ type: 'SET_GROUP_ABC_PAGE_SIZE', payload: pageSize }); }
-  closeExplain () { this.dispatch({ type: 'CLOSE_EXPLAIN' }); }
+
+  // Drawer close also retires the in-flight explain() request, if any, so a
+  // late response for a closed (or reopened-on-a-different-row) drawer never
+  // dispatches (\u00a712.7).
+  closeExplain () {
+    this._sequences.explain += 1;
+    this.dispatch({ type: 'CLOSE_EXPLAIN' });
+  }
+
   reset () { this.dispatch({ type: 'RESET_ALL' }); }
+
+  // --- Request Sequencing (\u00a712.7) ---
+  // Call at the start of an async flow to obtain this request's sequence
+  // number; pass it to `_isCurrent` before every dispatch that follows an
+  // await, so a stale (superseded) response never overwrites newer state.
+  _beginRequest (flow) {
+    this._sequences[flow] += 1;
+    return this._sequences[flow];
+  }
+
+  _isCurrent (flow, seq) {
+    return this._sequences[flow] === seq;
+  }
 
   // --- Service Wiring ---
   _getService () {
@@ -464,6 +494,7 @@ export class MinmaxEngineStore {
     const pinnedRunId = (!requestedWithTotal && sameCachedPopulation) ? this._resultsCache.resolvedRunId : null;
     const requestRunId = pinnedRunId !== null ? pinnedRunId : (state.runId === null ? undefined : state.runId);
 
+    const seq = this._beginRequest('results');
     this.setLoading(true);
     this.setError('');
     try {
@@ -476,28 +507,33 @@ export class MinmaxEngineStore {
         token: this._token(),
         withTotal
       });
+      if (!this._isCurrent('results', seq)) return; // superseded by a newer results() call
       this._resultsCache = { key, resolvedRunId: response.runId };
       this.dispatch({ type: 'SET_RESULTS', payload: response });
     } catch (err) {
+      if (!this._isCurrent('results', seq)) return;
       console.error('minmax-engine-store: loadResults failed', err);
       this.setError((err && err.message) || 'Nu s-au putut incarca rezultatele.');
     } finally {
-      this.setLoading(false);
+      if (this._isCurrent('results', seq)) this.setLoading(false);
     }
   }
 
   // --- Async Orchestration: history() ---
   async loadHistory (limit = DEFAULT_HISTORY_LIMIT) {
+    const seq = this._beginRequest('history');
     this.dispatch({ type: 'SET_LOADING_HISTORY', payload: true });
     this.dispatch({ type: 'SET_HISTORY_ERROR', payload: '' });
     try {
       const response = await this._getService().history({ limit, token: this._token() });
+      if (!this._isCurrent('history', seq)) return;
       this.dispatch({ type: 'SET_RUN_HISTORY', payload: response.rows });
     } catch (err) {
+      if (!this._isCurrent('history', seq)) return;
       console.error('minmax-engine-store: loadHistory failed', err);
       this.dispatch({ type: 'SET_HISTORY_ERROR', payload: (err && err.message) || 'Nu s-a putut incarca istoricul.' });
     } finally {
-      this.dispatch({ type: 'SET_LOADING_HISTORY', payload: false });
+      if (this._isCurrent('history', seq)) this.dispatch({ type: 'SET_LOADING_HISTORY', payload: false });
     }
   }
 
@@ -516,6 +552,7 @@ export class MinmaxEngineStore {
     const pinnedRunId = (!requestedWithTotal && sameCachedPopulation) ? this._groupAbcCache.resolvedRunId : null;
     const requestRunId = pinnedRunId !== null ? pinnedRunId : (state.runId === null ? undefined : state.runId);
 
+    const seq = this._beginRequest('groupAbc');
     this.dispatch({ type: 'SET_GROUP_ABC_LOADING', payload: true });
     this.dispatch({ type: 'SET_GROUP_ABC_ERROR', payload: '' });
     try {
@@ -527,36 +564,44 @@ export class MinmaxEngineStore {
         token: this._token(),
         withTotal
       });
+      if (!this._isCurrent('groupAbc', seq)) return; // superseded by a newer groupAbc() call
       this._groupAbcCache = { key, resolvedRunId: response.runId };
       this.dispatch({ type: 'SET_GROUP_ABC_RESULTS', payload: response });
     } catch (err) {
+      if (!this._isCurrent('groupAbc', seq)) return;
       console.error('minmax-engine-store: loadGroupAbc failed', err);
       this.dispatch({ type: 'SET_GROUP_ABC_ERROR', payload: (err && err.message) || 'Nu s-a putut incarca clasificarea ABC.' });
     } finally {
-      this.dispatch({ type: 'SET_GROUP_ABC_LOADING', payload: false });
+      if (this._isCurrent('groupAbc', seq)) this.dispatch({ type: 'SET_GROUP_ABC_LOADING', payload: false });
     }
   }
 
   // --- Async Orchestration: params() — contract §7 precondition ---
   async loadParams () {
+    const seq = this._beginRequest('params');
     this.dispatch({ type: 'SET_PARAMS_LOADING', payload: true });
     this.dispatch({ type: 'SET_PARAMS_ERROR', payload: '' });
     try {
-      await this._fetchParams();
+      const response = await this._fetchParams();
+      if (!this._isCurrent('params', seq)) return; // superseded by a newer loadParams() call
+      this.dispatch({ type: 'SET_PARAMS_DATA', payload: response });
     } catch (err) {
+      if (!this._isCurrent('params', seq)) return;
       console.error('minmax-engine-store: loadParams failed', err);
       this.dispatch({ type: 'SET_PARAMS_ERROR', payload: (err && err.message) || 'Nu s-au putut incarca parametrii.' });
     } finally {
-      this.dispatch({ type: 'SET_PARAMS_LOADING', payload: false });
+      if (this._isCurrent('params', seq)) this.dispatch({ type: 'SET_PARAMS_LOADING', payload: false });
     }
   }
 
-  // Raw fetch, no try/catch: saveParams() needs the rejection to propagate
-  // (§12.1) instead of being swallowed the way the public loadParams() does.
+  // Raw fetch, no dispatch, no try/catch: shared by loadParams() (gated by
+  // the `params` request sequence, §12.7) and saveParams() (its own separate
+  // flow, never gated by that sequence — a save's read-back must land
+  // regardless of any concurrent loadParams() call). saveParams() also needs
+  // the rejection to propagate (§12.1) instead of being swallowed the way
+  // the public loadParams() does.
   async _fetchParams () {
-    const response = await this._getService().params({ token: this._token() });
-    this.dispatch({ type: 'SET_PARAMS_DATA', payload: response });
-    return response;
+    return this._getService().params({ token: this._token() });
   }
 
   // --- Async Orchestration: saveParams() — the ONLY write path, contract §7 ---
@@ -577,6 +622,7 @@ export class MinmaxEngineStore {
       });
 
       const fresh = await this._fetchParams();
+      this.dispatch({ type: 'SET_PARAMS_DATA', payload: fresh });
       const mismatch = findSaveMismatch(fresh, { branchUpdates, covUpdates, paramsUpdates });
       if (mismatch) {
         throw new Error(`Salvarea a reusit dar recitirea nu corespunde (${mismatch}).`);
@@ -597,18 +643,23 @@ export class MinmaxEngineStore {
   // Uses resolvedRunId (the actual RUNID the last results() call resolved to),
   // never a client-guessed "latest" run.
   async openExplain (branch, mtrl) {
+    const seq = this._beginRequest('explain');
     this.dispatch({ type: 'OPEN_EXPLAIN', payload: { branch, mtrl } });
 
     const runId = this._state.resolvedRunId;
     if (runId === null || runId === undefined) {
-      this.dispatch({ type: 'SET_EXPLAIN_ERROR', payload: 'Nicio sesiune rezolvata inca; incarca rezultatele mai intai.' });
+      if (this._isCurrent('explain', seq)) {
+        this.dispatch({ type: 'SET_EXPLAIN_ERROR', payload: 'Nicio sesiune rezolvata inca; incarca rezultatele mai intai.' });
+      }
       return;
     }
 
     try {
       const response = await this._getService().explain({ branch, mtrl, runId, token: this._token() });
+      if (!this._isCurrent('explain', seq)) return; // superseded by a newer openExplain()/closeExplain()
       this.dispatch({ type: 'SET_EXPLAIN_DATA', payload: response });
     } catch (err) {
+      if (!this._isCurrent('explain', seq)) return;
       console.error('minmax-engine-store: openExplain failed', err);
       this.dispatch({ type: 'SET_EXPLAIN_ERROR', payload: (err && err.message) || 'Nu s-a putut incarca explicatia.' });
     }
