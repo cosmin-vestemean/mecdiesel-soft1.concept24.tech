@@ -139,6 +139,46 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
       assert.strictEqual(capturedBody.sqlParams[1], '1000,1200,2200')
     })
 
+    it('accepts NOU and OD as clasa filter values and returns the matching rows (§12.5)', async () => {
+      let capturedBody
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXDET'))
+        .reply(200, (uri, body) => {
+          capturedBody = body
+          return reply([{ BRANCH: 1000, CLASA: 'NOU', MTRL: 1, RUNID: 5 }, { BRANCH: 1000, CLASA: 'OD', MTRL: 2, RUNID: 5 }])
+        })
+
+      const service = makeService()
+      const result = await service.results({ filters: { clasa: ['NOU', 'OD'] }, runId: 5, token: 'tok' })
+
+      assert.ok(capturedBody.sqlQuery.includes("STRING_SPLIT(:2, ',')"))
+      assert.strictEqual(capturedBody.sqlParams[1], 'NOU,OD')
+      assert.strictEqual(result.rows.length, 2)
+      assert.deepStrictEqual(result.rows.map((r) => r.CLASA), ['NOU', 'OD'])
+    })
+
+    it('escapes LIKE wildcards in codeLike and returns only the literally-matched row (§12.5)', async () => {
+      let capturedBody
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXDET'))
+        .reply(200, (uri, body) => {
+          capturedBody = body
+          return reply([{ BRANCH: 1000, CODE: '50%OFF', MTRL: 1, RUNID: 5 }])
+        })
+
+      const service = makeService()
+      const result = await service.results({ filters: { codeLike: '50%OFF_1' }, runId: 5, token: 'tok' })
+
+      assert.ok(capturedBody.sqlQuery.includes("d.CODE LIKE :2 ESCAPE '\\'"))
+      assert.strictEqual(capturedBody.sqlParams[1], '50\\%OFF\\_1%')
+      assert.strictEqual(result.rows.length, 1)
+      assert.strictEqual(result.rows[0].CODE, '50%OFF')
+    })
+
     it('rejects filter combinations that exceed the 20 positional parameter cap', async () => {
       nock(FAKE_BASE_URL)
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
@@ -315,9 +355,43 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
   })
 
   describe('explain()', () => {
+    it('rejects an explicit runId that is not a finished FULL/Compute-DONE session (§12.13, like results())', async () => {
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
+        .reply(200, reply([]))
+
+      const service = makeService()
+      await assert.rejects(
+        service.explain({ branch: 1000, mtrl: 42, runId: 5, token: 'tok' }),
+        (err) => err.code === 'RUN_NOT_READY'
+      )
+    })
+
+    it('resolves the current run (ESTE_CURENT=1) when runId is omitted, like results()', async () => {
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('ESTE_CURENT = 1'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('PARAMSJSON'))
+        .reply(200, reply([{ PARAMSJSON: '{}', RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT * FROM CCCMINMAXDET'))
+        .reply(200, reply([{ BRANCH: 1000, ENG_MAX: 10, MTRL: 42, RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXWINSOR'))
+        .reply(200, reply([{ MTRL: 42, RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('CCCMINMAXWEEK'))
+        .reply(200, reply([]))
+
+      const service = makeService()
+      const result = await service.explain({ branch: 1000, mtrl: 42, token: 'tok' })
+
+      assert.strictEqual(result.det.RUNID, 5)
+      assert.strictEqual(result.run.RUNID, 5)
+    })
+
     it('rejects when there is no persisted CCCMINMAXDET row for the given key', async () => {
       nock(FAKE_BASE_URL)
-        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXRUN WHERE RUNID'))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('PARAMSJSON'))
         .reply(200, reply([{ RUNID: 5 }]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT * FROM CCCMINMAXDET'))
         .reply(200, reply([]))
@@ -335,7 +409,9 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
 
     it('returns the det row, run header, winsor stats and dense weekly series', async () => {
       nock(FAKE_BASE_URL)
-        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXRUN WHERE RUNID'))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('PARAMSJSON'))
         .reply(200, reply([{ PARAMSJSON: '{}', RUNID: 5 }]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT * FROM CCCMINMAXDET'))
         .reply(200, reply([{ BRANCH: 1000, ENG_MAX: 10, MTRL: 42, RUNID: 5 }]))

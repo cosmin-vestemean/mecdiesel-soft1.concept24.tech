@@ -17,12 +17,12 @@
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
 import { ContextConsumer } from 'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0/index.js';
 import { MinmaxEngineStoreContext } from '../../stores/minmax-engine-store.js';
+import { CLASA_OPTIONS } from './minmax-engine-constants.js';
 
 // Enum options mirrored from GRP_COLUMNS/LIFECYCLE_VALUES etc. in minmax-engine.class.js.
 const LIFECYCLE_OPTIONS = ['STANDARD', 'NOU', 'OD'];
 const ABC_OPTIONS = ['A', 'B', 'C'];
 const XYZ_OPTIONS = ['X', 'Y', 'Z'];
-const CLASA_OPTIONS = ['AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ'];
 
 // Columns rendered from CCCMINMAXGRP (subset, per 00b_persist.sql).
 const GROUP_COLUMNS = [

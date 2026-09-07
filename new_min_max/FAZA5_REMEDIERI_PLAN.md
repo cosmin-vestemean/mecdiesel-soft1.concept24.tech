@@ -76,10 +76,10 @@ poziționali** și o singură tranzacție; drafturile supraviețuiesc rollback-u
 
 ## Pasul 3 — §12.5 + §12.12 + §12.13: corectitudinea filtrelor și a drill-down-ului *(model: Sonnet)*
 
-- [ ] `CLASA_VALUES` (backend) și ambele `CLASA_OPTIONS` (UI) devin cele 11 clase, inclusiv `NOU` și
+- [x] `CLASA_VALUES` (backend) și ambele `CLASA_OPTIONS` (UI) devin cele 11 clase, inclusiv `NOU` și
       `OD`; mulțimea din UI se definește **o singură dată**, într-un modul comun.
-- [ ] `codeLike` escapează `%`, `_`, `[` și adaugă `ESCAPE`.
-- [ ] `explain()` trece prin `_resolveRunId()`, ca `results()`.
+- [x] `codeLike` escapează `%`, `_`, `[` și adaugă `ESCAPE`.
+- [x] `explain()` trece prin `_resolveRunId()`, ca `results()`.
 
 **Teste:** `clasa=['NOU','OD']` acceptat de backend și prezent în UI; cod cu `%` și cod cu `_`
 tratate literal; `explain` pe o sesiune neîncheiată → `RUN_NOT_READY`.

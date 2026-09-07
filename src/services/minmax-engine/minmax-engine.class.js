@@ -80,7 +80,9 @@ const GRP_COLUMNS = {
 const LIFECYCLE_VALUES = new Set(['STANDARD', 'NOU', 'OD'])
 const ABC_VALUES = new Set(['A', 'B', 'C'])
 const XYZ_VALUES = new Set(['X', 'Y', 'Z'])
-const CLASA_VALUES = new Set(['AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ'])
+// 11 classes: the 9 ABC x XYZ combinations plus NOU/OD (CLASA mirrors LIFECYCLE
+// for non-STANDARD items, per CCCMINMAXCOV's 11x3 seed — §12.5).
+const CLASA_VALUES = new Set(['AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ', 'NOU', 'OD'])
 const FLAG_TXT_VALUES = new Set(['OK', 'UP', 'DOWN', 'MAJOR_UP', 'SUPRASTOC', 'FARA_REFERINTA'])
 const STATUS_TREND_VALUES = new Set(['ACTIVE', 'STABLE', 'TREND_DOWN', 'DECLINE'])
 
@@ -178,6 +180,13 @@ function addInterval (clauses, params, range, column, label) {
   }
 }
 
+// Escapes T-SQL LIKE wildcards (%, _, [) plus the escape char itself, so a
+// user-typed CODE substring is matched literally (§12.5). Paired with
+// `ESCAPE '\'` in the generated clause.
+function escapeLikeValue (value) {
+  return value.replace(/[\\%_[]/g, (ch) => `\\${ch}`)
+}
+
 function buildDetWhereClauses (filters, params) {
   const clauses = []
   const f = filters || {}
@@ -185,7 +194,8 @@ function buildDetWhereClauses (filters, params) {
   addIntListFilter(clauses, params, f.branches, 'd.BRANCH', 'branches')
   addTriState(clauses, params, f.esteHq, 'd.ESTE_HQ')
   if (typeof f.codeLike === 'string' && f.codeLike.trim()) {
-    clauses.push(`d.CODE LIKE ${bind(params, f.codeLike.trim() + '%')}`)
+    const escaped = escapeLikeValue(f.codeLike.trim())
+    clauses.push(`d.CODE LIKE ${bind(params, escaped + '%')} ESCAPE '\\'`)
   }
   addIntListFilter(clauses, params, f.mtrl, 'd.MTRL', 'mtrl')
   addIntListFilter(clauses, params, f.mtrgroup, 'd.MTRGROUP', 'mtrgroup')
@@ -503,10 +513,14 @@ export class MinmaxEngineService {
    * Drill-down for one (RUNID, BRANCH, MTRL): reads ONLY persisted state
    * (CCCMINMAXDET/RUN/WINSOR/WEEK), never MTRTRN/FINDOC/MTRL. Does not
    * recompute anything. See FAZA5_CONTRACT.md §6.
+   * runId goes through the same _resolveRunId() as results() (§12.13): an
+   * omitted runId falls back to the current run, and an explicit one must
+   * be a finished FULL/Compute-DONE session (RUN_NOT_READY otherwise) — you
+   * cannot drill down into an unfinished session.
    */
   async explain (data) {
     const token = requireToken(data)
-    const runId = sqlInt(data.runId, 'runId')
+    const runId = await this._resolveRunId(data.runId, token)
     const branch = sqlInt(data.branch, 'branch')
     const mtrl = sqlInt(data.mtrl, 'mtrl')
 

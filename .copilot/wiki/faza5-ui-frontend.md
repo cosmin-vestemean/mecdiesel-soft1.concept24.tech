@@ -101,9 +101,10 @@ drept finalizată. Soluțiile și testele sunt definite canonic în `new_min_max
 
 Confirmat live în frontend:
 
-- selectorul `MARIME` afișează `MARE` pentru 12 filiale persistate ca `MIC`, iar page size arată
-  50 deși store-ul folosește 100; opțiunile trebuie legate prin `?selected`, nu `.value` înainte de
-  randarea copiilor;
+- după remedierea §12.4, cele 16 anteturi sortabile pot fi activate succesiv fără eroare, iar configurația
+  celor 18 filiale păstrează selecția `MARIME`: 6 `MARE`, 12 `MIC`, 0 `MEDIU`;
+- selectoarele `MARIME` și page size folosesc `.selected` pe fiecare `<option>`, nu `.value` sau
+  `?selected`, astfel încât selecția rămâne corectă după re-render;
 - filtrul `CLASA` omite valorile reale `NOU` și `OD` (pe RUNID 5: 659, respectiv 680.918 rânduri);
 - sortarea „Filiala" afișează eroarea SQL 80040E14 generată în backend;
 - editarea a șapte celule COV este respinsă înainte de S1 cu `21 > 20`.
