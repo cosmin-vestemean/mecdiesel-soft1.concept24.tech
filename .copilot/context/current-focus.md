@@ -46,6 +46,8 @@
 ## Open Questions
 - Niciuna tehnică; singurul punct deschis e o decizie de business (confirmare beneficiar pe
   formule).
+- UX de revizuit ulterior: butonul „Rulează” este sus, iar secțiunea „Parametri MIN/MAX”
+  este jos; ordinea vizuală este neergonomică pentru fluxul „modifică parametrii → salvează → rulează”.
 
 ## Next Step
 - Obține confirmarea beneficiarului pe formulele MIN/MAX (deschide Faza 4). Înainte de utilizare

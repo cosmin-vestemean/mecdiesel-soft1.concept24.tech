@@ -375,15 +375,39 @@ export class MinmaxResultsTable extends LitElement {
     const totalPages = this.total ? Math.max(1, Math.ceil(this.total / this.pageSize)) : null;
 
     return html`
-      <div class="minmax-results-table card mb-3">
-        <div class="card-header d-flex align-items-center justify-content-between">
+      <div class="minmax-results-table card mb-2">
+        <div class="card-header py-1 px-2 d-flex align-items-center justify-content-between">
           <span><i class="fas fa-table me-2"></i>Rezultate MIN/MAX</span>
           <span class="text-muted small">${this.total !== null ? `${this.total} randuri` : ''}</span>
         </div>
-        <div class="card-body">
+        <div class="card-body p-2">
           ${this.error ? html`<div class="alert alert-danger py-2">${this.error}</div>` : ''}
 
-          <div class="filters-panel border rounded p-2 mb-3 bg-light">
+          <div class="filters-panel border rounded p-2 mb-2 bg-light">
+            <style>
+              /* Compact filters: tighter labels/controls, smaller buttons */
+              minmax-results-table .filters-panel .small.text-muted {
+                margin-bottom: 0.1rem !important;
+                font-size: 0.68rem;
+              }
+              minmax-results-table .filters-panel .btn-sm {
+                padding: 0.1rem 0.4rem;
+                font-size: 0.75rem;
+              }
+              minmax-results-table .filters-panel .form-control-sm,
+              minmax-results-table .filters-panel .form-select-sm {
+                padding: 0.1rem 0.4rem;
+                font-size: 0.78rem;
+                height: auto;
+              }
+              minmax-results-table .filters-panel .row {
+                --bs-gutter-y: 0.25rem;
+                --bs-gutter-x: 0.5rem;
+              }
+              minmax-results-table .filters-panel details {
+                margin-bottom: 0.25rem !important;
+              }
+            </style>
             <!-- Nivel 1: mereu vizibil (Anexa §A1) -->
             <div class="row g-2 align-items-end mb-2">
               <div class="col-auto">
@@ -440,11 +464,42 @@ export class MinmaxResultsTable extends LitElement {
           </div>
 
           <div class="table-responsive">
-            <table class="table table-sm table-hover align-middle mb-0">
+            <style>
+              /* Datacentric density: minimize internal whitespace so more data
+                 fits on screen (users are readers, not casual browsers). */
+              minmax-results-table .minmax-dense {
+                font-size: 0.78rem;
+                line-height: 1.15;
+                white-space: nowrap;
+              }
+              minmax-results-table .minmax-dense th,
+              minmax-results-table .minmax-dense td {
+                padding: 0.15rem 0.4rem;
+                vertical-align: middle;
+              }
+              minmax-results-table .minmax-dense thead th {
+                padding: 0.25rem 0.4rem;
+                font-size: 0.72rem;
+                line-height: 1.1;
+              }
+              minmax-results-table .minmax-dense td {
+                border-bottom: 1px solid #eef1f3;
+              }
+              minmax-results-table .minmax-dense .badge {
+                font-size: 0.68rem;
+                padding: 0.15em 0.4em;
+              }
+              minmax-results-table .minmax-dense td:has(.badge) {
+                padding-top: 0.1rem;
+                padding-bottom: 0.1rem;
+              }
+            </style>
+            <table class="table table-sm table-hover align-middle mb-0 minmax-dense">
               <thead class="sticky-top bg-white" style="z-index: 1;">
                 <tr>
                   ${RESULT_COLUMNS.map((col) => html`
-                    <th style="${col.sortField ? 'cursor:pointer;' : ''}"
+                    <th class="${col.type === 'number' ? 'text-end' : ''}"
+                        style="${col.sortField ? 'cursor:pointer;' : ''}"
                         @click="${col.sortField ? () => this._sortBy(col.sortField) : null}">
                       ${col.label}${col.sortField ? this._renderSortIcon(col.sortField) : ''}
                     </th>
