@@ -419,6 +419,71 @@ review, cu context mic** *(model: Opus, agentul `Review`)*:
   filesystem, fără build step. Referință durabilă (tabelul complet + convenția de reutilizare):
   [softone-error-codes.md](../.copilot/wiki/softone-error-codes.md).
 
+## Anexă — Propuneri de ergonomie UI (analiză live 08.09.2026, NECONFIRMATE de beneficiar)
+
+**Statut: propunere, nu pas contractat.** Nu face parte din §12 și nu blochează poarta de
+acceptanță de mai sus — acolo se validează *corectitudinea numerelor*, aici se propune
+*lizibilitatea ecranului*. Analiză făcută prin inspecție live a tab-ului MIN/MAX (DOM, culori
+calculate, structură de filtre), nu din capturi de ecran. Ordonat după impactul asupra fluxului de
+business real (`ruleaza → evalueaza → ajusteaza parametrii → re-ruleaza → aplica`, cadență lunară),
+nu după cât de ușor e de implementat.
+
+### A. Cele mai relevante pentru operare (impact mare asupra deciziei de business)
+
+1. **Ierarhizarea celor ~84 de controale de filtrare pe 3 niveluri**, ca să nu concureze vizual cu
+   scopul lor real — găsirea excepțiilor lunii:
+   - *Nivel 1, mereu vizibil:* `Cod`, `Filiala`, `Flag`, `Clasa`, `Trend` — singurele care corespund
+     direct coloanelor cheie din tabel.
+   - *Nivel 2, secțiune „Excepții de verificat", expandată implicit:* cele 4 `Warn *` (VZ26=0,
+     stoc negativ, stoc mort, grupă mică) + `Lifecycle` — acestea răspund direct la „ce e stricat
+     luna asta", nu la căutare generică.
+   - *Nivel 3, „Filtre avansate", colapsat implicit:* `MTRL`, `Grupa`, cele 8 flag-uri ERP (`HQ`,
+     `HQ cap aplicat`, `Podea aplicata`, `Are pozitie ERP`, `Discontinuat`, `Lichidare`, `Blocat`,
+     `Exclus`) și cele 12 intervale numerice (`Eng Min/Max`, `Buy Qty`, `Stoc`, `Ord.Furn`,
+     `Acop.curenta`, `Flag ratio`, `CV`, `AVG`, `Vz26S/52S`, `Val52S`) — folosite ocazional, pentru
+     investigarea unui outlier anume, nu la fiecare sesiune.
+2. **Redundanță de dimensiune `ABC`/`XYZ` vs. `Clasa`**: `Clasa` (AX...CZ, NOU, OD) e deja produsul
+   cartezian al `ABC` × `XYZ`, afișate și ele separat ca grupuri proprii de filtrare. Riscă
+   combinații contradictorii (`ABC=A` + `Clasa=BZ`) și dublează spațiul ocupat fără informație nouă.
+   Propunere: păstrează doar `Clasa`, elimină toggle-urile `ABC`/`XYZ` separate.
+3. **Fără contor de filtre active.** Cu atâtea controale, e ușor ca un `min`/`max` uitat completat
+   să reducă tăcut rezultatele. Un chip vizibil („3 filtre active") lângă `Aplica filtre`/
+   `Reseteaza` previne concluzii greșite de tip „nu mai sunt probleme luna asta" când de fapt
+   filtrul ascunde rândurile.
+4. **Antetul tabelului de rezultate nu e sticky** (`position: static` măsurat live) și tabelul are
+   20 de coloane pe o lățime de 1464px într-un container de 909px — la scroll orizontal *și*
+   vertical se pierde simultan contextul coloanei și al capului de tabel, exact în ecranul unde se
+   citesc `ENG_MIN`/`ENG_MAX`/`BUY_QTY` rând cu rând.
+5. **Semantica de culoare a `SUPRASTOC`** e `bg-info` (albastru-deschis, aceeași familie cu
+   „informativ, neutru"), deși semnalează bani blocați în stoc — ar trebui să iasă în evidență ca
+   avertisment (portocaliu/amber), nu ca `DOWN` (roșu) dar nici ca neutru.
+
+### B. Relevante pentru ergonomie, impact operațional secundar
+
+6. Panoul de sesiuni (run-panel) ocupă spațiu vertical permanent deasupra rezultatelor — utilă ca
+   informație, dar merită formă compactă/colapsabilă („Sesiunea curentă: RUNID 7 · DONE · 708.876
+   rânduri ▾"), cu detaliile per-sesiune în expand.
+7. Suprasolicitare de verde (75 elemente pe ecran: `DONE` × 3 pe sesiune, `OK`, `Da` pe HQ Cap) —
+   diluează semnalul exact unde ar trebui să atragă atenția (sesiunea curentă, flag `OK`).
+8. Două albastrui de accent diferite (`rgb(37,99,235)` pe butoane primare vs. `rgb(68,110,155)` pe
+   badge-urile de sesiune) — inconsecvență vizuală minoră, ușor de unificat.
+9. Contrast text sub prag pe cel puțin un badge (`SUPRASTOC`, `bg-info text-dark` ≈ 2.6:1, sub
+   pragul WCAG AA de 4.5:1) — de verificat sistematic toate combinațiile badge fundal/text.
+10. Câmpul „10" izolat, fără etichetă, lângă titlu — pare page-size neintegrat cu paginarea de jos
+    (care are deja 50/100/200/500/1000); de unificat sau eliminat.
+11. Drawer-ul `explain` afișează parametrii ca tabel brut cheie-valoare; randarea formulei
+    `ENG_MIN`/`ENG_MAX` cu valorile deja înlocuite, deasupra tabelelor de parametri, ar reduce
+    efortul de citire — mai ales util acum că Nivelul B (§Pasul 8) a validat exact acest lanț de
+    calcul ca fiind corect.
+
+### Ce nu e inclus aici, deliberat
+
+Nu se propune nicio modificare de cod în această anexă — doar inventarul priorizat. Implementarea
+(dacă e aprobată) intră sub aceleași reguli de la începutul acestui document (un pas = un commit,
+test pe răspuns, fără atingerea procedurilor stocate) și necesită confirmare explicită de prioritate
+din partea beneficiarului înainte de a deveni pași executabili, la fel ca punctul „confirmarea
+beneficiarului pe formule" din poarta de acceptanță de mai sus.
+
 ## După finalizare
 
 - Actualizează `.copilot/context/current-focus.md` cu noul pas următor.
