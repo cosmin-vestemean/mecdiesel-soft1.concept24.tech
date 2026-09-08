@@ -107,7 +107,9 @@ o cer; „Urmator" e dezactivat pe ultima pagină plină exact.
 > store. Clauza „încărcarea inițială rezolvă sesiunea o singură dată deși două fluxuri o cer" rămâne
 > **doar parțial acoperită**: `results()` și `groupAbc()` au cache-uri separate (filtre diferite) și
 > nu împrumută rezolvarea una de la alta la primul apel — asta cere un proprietar unic al apelurilor
-> inițiale, care e exact scopul Pasului 7 (§12.9, `activate()`). Verificare live încă nefăcută.
+> inițiale, care e exact scopul Pasului 7 (§12.9, `activate()`). Verificarea live din 08.09.2026 a
+> confirmat câte un singur apel pentru `history`, `params`, `results` și `groupAbc` la prima activare
+> și zero apeluri suplimentare la revenirea în tab.
 
 ## Pasul 5 — §12.7: concurență în store *(model: Sonnet)*
 
@@ -160,6 +162,11 @@ REFID falsificat în payload nu schimbă identitatea; token emis acum e respins 
 > patru fluxuri, iar activările ulterioare nu repetă încărcarea. Suita MIN/MAX relevantă: 108 teste
 > verzi. Aceasta elimină cererile anonime care lăsau în UI erorile `Not authenticated` înainte de
 > login.
+>
+> **Validare live 08.09.2026:** într-o filă nouă, containerul a rămas neactivat înainte de login și
+> nu a afișat `Not authenticated`; după login, prima deschidere a produs exact cele patru fluxuri,
+> iar revenirea în tab nu le-a repetat. Reconectarea Socket.IO a păstrat autorizarea, iar
+> `loadHistory()` a întors cele 5 sesiuni fără eroare.
 
 ## Pasul 8 — validarea numerică a rezultatelor *(nivel A: Sonnet; proiectare + interpretare: Opus)*
 
@@ -249,7 +256,8 @@ Faza 5 se declară acceptată numai după toate cele de mai jos, verificate înt
 review, cu context mic** *(model: Opus, agentul `Review`)*:
 
 - [ ] suită unit/component verde;
-- [ ] retestare live a sortărilor și a selectoarelor;
+- [x] retestare live a sortărilor și a selectoarelor (08.09.2026: toate antetele sortabile,
+      page size rezultate/group ABC și `MARIME` verificate cu rerandare);
 - [ ] o salvare controlată urmată de read-back;
 - [ ] o simulare de rollback care **nu** raportează succes;
 - [ ] utilizator read-only primește 403 la `saveParams`;

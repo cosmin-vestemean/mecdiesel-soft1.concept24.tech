@@ -1,12 +1,12 @@
 # Current Focus
 
 ## Last Updated
-- 07.09.2026 (sesiunea 37)
+- 08.09.2026 (sesiunea 38)
 
 ## Current Goal
 - Faza 5 are pașii 0-5 și 7 implementați; cablajul de autorizare din Pasul 6 este funcțional.
-- Remedierea acestei sesiuni elimină cererile MIN/MAX anonime făcute înainte de login și mesajele
-  `Not authenticated` rezultate din ele.
+- Activarea lazy a fost confirmată live: zero cereri MIN/MAX înainte de login, exact cele patru
+  fluxuri la prima deschidere și zero repetări la revenirea în tab.
 - Fazele 0-3 ale motorului sunt deployate; `RUNID=5` este sesiunea curentă. Scrierile rămân oprite.
 
 ## Active Area
@@ -14,8 +14,8 @@
   `activate()` idempotent pentru `history`, `params`, `results` și `groupAbc`.
 - Autentificarea JWT Socket.IO după login/reconnect rămâne proprietarul accesului la serviciu;
   detalii în [faza5-ui-backend.md](../wiki/faza5-ui-backend.md) și [faza5-ui-frontend.md](../wiki/faza5-ui-frontend.md).
-- Validare: 108 teste MIN/MAX verzi; retestarea vizuală după logout/login nu a fost făcută deoarece
-  pagina browserului nu a fost partajată.
+- Validare: 108 teste MIN/MAX verzi; test live 08.09.2026 pe login, activare, reconnect Socket.IO,
+  toate sortările, selectoarele, paginarea și drawer-ul `explain`, fără `Not authenticated`.
 
 ## Relevant Files
 - [FAZA5_REMEDIERI_PLAN.md](../../new_min_max/FAZA5_REMEDIERI_PLAN.md) — progresul canonic și poarta de acceptanță.
@@ -35,7 +35,8 @@
 ## Open Questions
 - Pasul 6: audit la save, apoi decizia explicită de activare a scrierilor.
 - Pasul 8: invariante SQL, eșantion numeric înghețat și confirmarea beneficiarului pe formule.
-- Retestare live după login pentru dispariția erorii; garda `FEATHERS_SECRET` rămâne în [open-threads.md](open-threads.md).
+- Garda `FEATHERS_SECRET` rămâne în [open-threads.md](open-threads.md).
 
 ## Next Step
-- Retestează live prin logout/login și deschiderea tabului MIN/MAX; apoi implementează auditul `saveParams` cu REFID, timestamp și cheile logice modificate, fără valori secrete.
+- Implementează auditul `saveParams` cu REFID, timestamp și cheile logice modificate, fără valori
+  secrete; păstrează `MINMAX_ENGINE_WRITES_ENABLED=false` până la validarea auditului.
