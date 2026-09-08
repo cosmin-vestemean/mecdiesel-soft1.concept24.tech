@@ -201,24 +201,88 @@ date vii, deci populația crește în aceeași zi (vezi thread-ul `criterii-nume
 - [ ] **Rotunjire la ambalaj:** pentru `N_PACK > 1`,
       `BUY_QTY - FLOOR(BUY_QTY / N_PACK) * N_PACK = 0`. **Nu** folosi `%` — modulo pe `DECIMAL` nu
       există în T-SQL.
-- [ ] **Plafon HQ:** unde `HQ_CAP_APLICAT = 1`, `ENG_MAX` este exact plafonul; unde este `0`, `ENG_MAX`
+- [x] **Plafon HQ:** unde `HQ_CAP_APLICAT = 1`, `ENG_MAX` este exact plafonul; unde este `0`, `ENG_MAX`
       este strict sub plafon. Verificare în ambele sensuri, nu doar implicație.
-- [ ] **Podea:** `PODEA_APLICATA = 1` apare numai pe filiale cu `ESTE_PODEA = 1` în
+- [x] **Podea:** `PODEA_APLICATA = 1` apare numai pe filiale cu `ESTE_PODEA = 1` în
       `CCCMINMAXBRANCH`, iar valoarea rezultată respectă podeaua.
-- [ ] **Consistența clasificării:** pentru `LIFECYCLE = 'STANDARD'`, `CLASA = ABC || XYZ`;
+- [x] **Consistența clasificării:** pentru `LIFECYCLE = 'STANDARD'`, `CLASA = ABC || XYZ`;
       `CLASA ∈ {NOU, OD}` exact când `LIFECYCLE ∈ {NOU, OD}`. Echivalență, nu incluziune.
-- [ ] **Warning-uri, ca echivalențe:** `WARN_STOC_MORT ⇔ (ENG_MAX = 0 AND STOC_QTY > 0)`;
+- [x] **Warning-uri, ca echivalențe:** `WARN_STOC_MORT ⇔ (ENG_MAX = 0 AND STOC_QTY > 0)`;
       `WARN_STOC_NEG ⇔ (STOC_QTY < 0)`; `WARN_VZ26_ZERO ⇔ (VZ_26S <= 0)`.
-- [ ] **Coerență `DET` ↔ `GRP`:** fiecare pereche `(BRANCH, MTRGROUP)` din `CCCMINMAXDET` există în
+- [x] **Coerență `DET` ↔ `GRP`:** fiecare pereche `(BRANCH, MTRGROUP)` din `CCCMINMAXDET` există în
       `CCCMINMAXGRP`, iar `NR_SKU_GRP` egalează numărul distinct de `MTRL` din `DET`.
-- [ ] **Filiale excluse:** filialele cu `INCLUS = 0` nu produc recomandări de cumpărare *(de confirmat
+- [x] **Filiale excluse:** filialele cu `INCLUS = 0` nu produc recomandări de cumpărare *(de confirmat
       ca invariant înainte de a-l impune — nu presupune comportamentul)*.
-- [ ] **Calibrare `FLAG` — raportare, nu pass/fail:** pe populația curată (`STANDARD/NOU`, cu
+- [x] **Calibrare `FLAG` — raportare, nu pass/fail:** pe populația curată (`STANDARD/NOU`, cu
       `ERP_MAX`, fără lichidare/blocare/excludere), procentul din banda necritică `0,50–2,00`. Pragul
       acceptat de client este **>80% în bandă**, nu >80% etichetă `OK` strictă.
 
-**Definiție de terminat pentru nivel A:** scriptul rulează pe `RUNID = 5`, fiecare invariant are un
-verdict explicit, iar orice abatere e fie corectată, fie documentată ca decizie conștientă.
+**Rezultate măsurate 08.09.2026 (`node new_min_max/tools/validate-minmax-invariants.cjs 5`, RUNID=5,
+706.734 = 50.481 × 14 rânduri):** toate invariantele PASS cu o singură excepție — `NR_SKU_GRP`.
+Calibrare FLAG: 15.115/17.682 = 85,5% în bandă (peste pragul de 80% al clientului).
+
+#### Singura abatere: `NR_SKU_GRP` — defect cosmetic în `ClassifyGroup`, nu întrebare de business
+
+**Confirmarea beneficiarului (08.09.2026) — „filialele inactive și cele cu depozite inactive nu
+prezintă interes" — schimbă natura abaterii, nu doar prioritatea ei.** Înainte de confirmare,
+discrepanța părea o întrebare deschisă de business („cine are dreptate, `Classify` sau
+`ClassifyGroup`?"). După confirmare, `Classify` **este** specificația: eliminarea articolelor ale
+căror singure vânzări sunt pe filiale `INCLUS=0` e comportamentul dorit, nu o pierdere. Rămâne un
+singur vinovat: `ClassifyGroup` numără o populație pe care businessul a declarat-o în afara
+perimetrului.
+
+**Consecință directă:** itemul de business „filialele închise pierd 7,25 mil RON" se **închide** —
+nu e o pierdere, e o graniță de perimetru asumată. Vezi
+[minmax-engine-open-items.md](../.copilot/wiki/minmax-engine-open-items.md).
+
+**Severitate: cosmetică, dar măsurată, nu presupusă.** Pe cele 559 rânduri de grupă non-HQ
+comparabile din `RUNID=5`:
+
+| Câmp | Diferențe față de agregarea `CCCMINMAXDET` |
+|---|---|
+| `VZ_52S` | **0** |
+| `VAL_52S` | **0** |
+| `NR_SKU_GRP` | **468** |
+
+Vânzările la nivel de grupă coincid la bănuț, pentru că `#WeeklySeries` face
+`LEFT JOIN #GroupWeekly ON gw.BRANCH = b.BRANCH` cu `b` din `#ActiveBranches` — liniile filialelor
+excluse pur și simplu nu găsesc pereche și cad. Doar `NR_SKU_GRP` scapă, fiindcă vine din
+`#Groups`/`#ItemGroups`, construite din `#SalesLines` **nefiltrat**, și e purtat mai departe prin
+`MAX(NR_SKU_GRP)` fără să intre vreodată într-un calcul: `LIFECYCLE` folosește
+`SAPT_VZ`/`SAPT_FARA`/`VZ_52S`, `ABC` folosește Pareto pe `VAL_52S`, `XYZ` folosește `CV`.
+Contoarele care **chiar** contează — `GRP_ITEM_COUNT` și `GRP_TOTAL_VAL`, care produc
+`WARN_GRUPA_MICA` și pragul Pareto — stau în `CCCMINMAXDET` și sunt calculate de `Classify` cu
+`COUNT(*) OVER (PARTITION BY BRANCH, MTRGROUP)` peste populația corectă. **Clasificarea ABC per SKU
+nu este contaminată.**
+
+**Cosmetic în matematică nu înseamnă cosmetic în încredere.** `NR_SKU_GRP` se afișează în ecranul
+group ABC: un utilizator care citește „3.384 SKU în grupă" și apoi face drill-down în 3.321 vede un
+număr care nu se reconciliază cu nimic. Într-un proiect al cărui scop declarat include un wiki de
+transparență pentru beneficiar, asta e un cost real, chiar dacă nu mișcă niciun MIN/MAX.
+
+**Remedierea nu se face acum:** ar însemna modificarea `sp_MinMaxEngine_ClassifyGroup`, interzisă de
+regula #5 („Faza 5 e strict UI + serviciu"). **Nu este „o singură clauză"** — afirmația inițială a
+fost greșită: `#IncludedLines` (§5) se construiește **din** `#ItemGroups` și `#Groups` (§3), deci
+„`#ItemGroups` peste `#IncludedLines`" ar fi un ciclu. Fixul real cere mutarea blocului
+`#ActiveBranches` (§4) înaintea §3 plus rescrierea subinterogării de filtrare, ceea ce inversează și
+ordinea `THROW`-urilor (`50002` ajunge înaintea lui `50003`). De verificat înainte de implementare: o
+grupă ale cărei articole s-ar vinde exclusiv pe filiale închise ar dispărea complet din `#Groups`, nu
+doar și-ar corecta contorul.
+
+> **Corecție a analizei inițiale din această sesiune, păstrată deliberat ca avertisment
+> metodologic.** Prima trasare a cauzei a comparat `RUNID=5` (înghețat) cu `ufn_MinMaxSalesLines`
+> interogat **live**, și a concluzionat că toate cele 7 articole „fantomă" din eșantion vin de pe
+> filiale închise. Fals: 6 din 7 sunt într-adevăr pe 2300/2400, dar `MTRL 2747063` vinde pe **2200 și
+> 2700, ambele incluse**, cu `TRNDATE = 2026-09-07` — exact `AZI`-ul rulării. Este o vânzare intrată
+> în fereastră *după* ce rularea se încheiase, adică fix thread-ul
+> `criterii-numerice-nereproductibile` manifestându-se în chiar analiza care îl invoca. Invarianta în
+> sine rămâne curată (compară `GRP` cu `DET`, ambele din `RUNID=5`); doar *explicația* fusese
+> contaminată. **Regulă de reținut: când explici o abatere dintr-o rulare înghețată, folosește doar
+> stare persistată; orice interogare live introduce drift în raționament, nu doar în cifre.**
+
+**Definiție de terminat pentru nivel A — ÎNDEPLINITĂ:** scriptul rulează pe `RUNID = 5`, fiecare
+invariant are un verdict explicit, iar singura abatere este explicată, cuantificată și limitată la un
+câmp necalculat, cu remedierea programată în afara perimetrului Fazei 5.
 
 ### Nivel B — recalcul manual pe eșantion stratificat
 
@@ -261,7 +325,9 @@ review, cu context mic** *(model: Opus, agentul `Review`)*:
 - [ ] o salvare controlată urmată de read-back;
 - [ ] o simulare de rollback care **nu** raportează succes;
 - [ ] utilizator read-only primește 403 la `saveParams`;
-- [ ] pasul 8 nivel A: toate invariantele au verdict, abaterile sunt corectate sau documentate;
+- [x] pasul 8 nivel A: toate invariantele au verdict, abaterile sunt corectate sau documentate
+      (08.09.2026: 8/9 PASS + calibrare FLAG 85,5%; `NR_SKU_GRP` documentat ca defect cosmetic în
+      `ClassifyGroup`, fără efect asupra vreunei valori calculate);
 - [ ] pasul 8 nivel B: eșantionul înghețat e verificat, fără diferențe neexplicate;
 - [ ] **confirmarea beneficiarului pe formule**, nu doar pe cifre — este întrebarea a doua din pasul 8
       și singura care deschide Faza 4.

@@ -17,9 +17,16 @@
 - **D2a:** cele 25 linii `ORD_FURN` de pe depozitul 8002 „BONURI VALORICE" (`FPRMS 4500`, factură
   fără stoc) nu au `CCCBRANCH`. Azi incluse în rândul HQ, excluse de pe filiale. De decis dacă se
   exclud complet.
-- **Filialele închise** (2300/2400/2600/2900) pierd 7,25 mil RON (5,7% valoare 52S) din ambele
-  agregate. De decis: reatribuire către filiala care servește azi, sau măcar includere în agregatul
-  de companie.
+- **Filialele închise** (2300/2400/2600/2900) — **ÎNCHIS 08.09.2026, confirmat de beneficiar:**
+  filialele inactive și cele cu depozite inactive **nu prezintă interes**. Cele 7,25 mil RON (5,7%
+  valoare 52S) atribuite lor nu sunt o pierdere de corectat, ci o graniță de perimetru asumată;
+  `INNER JOIN #ActiveBranches` din `sp_MinMaxEngine_Classify` este specificația, nu un defect.
+  Consecință rămasă, pur tehnică: `sp_MinMaxEngine_ClassifyGroup` construiește `#ItemGroups` din
+  `#SalesLines` nefiltrat, deci `NR_SKU_GRP` numără articole din afara perimetrului (468/559 rânduri
+  de grupă pe RUNID=5). Vânzările de grupă (`VZ_52S`/`VAL_52S`) coincid exact cu `CCCMINMAXDET`, iar
+  `NR_SKU_GRP` nu intră în niciun calcul — defect de afișare, de aliniat la următoarea atingere a
+  procedurilor. Detalii în [FAZA5_REMEDIERI_PLAN.md](../../new_min_max/FAZA5_REMEDIERI_PLAN.md)
+  Pasul 8.
 - **Faza 2b — agregare ABC pe grupă:** formula exactă rămâne de confirmat (§3.3.1). Implementarea
   curentă partiționează cumulativul pe `BRANCH`, ordonare secundară deterministă pe
   `MTRGROUP_CODE`.

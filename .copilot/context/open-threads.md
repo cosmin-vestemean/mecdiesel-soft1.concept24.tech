@@ -94,6 +94,159 @@ Firele **pe obiectiv** rămân în `current-focus.md`.
     in productie (poate niciodata testate cu sesiune noua de login), si daca nu,
     de aplicat acelasi fix (sessionStorage.getItem('s1Token') in loc de window.token).
 
+- id: classifygroup-nr-sku-grp-populatie
+  opened: 2026-09-08
+  status: closed
+  closed_note: >
+    Absorbit in new_min_max/FAZA6_CONTRACT.md §7 (08.09.2026). Calatoreste ca
+    pasager pe deploy-ul AJS al Fazei 6; singur nu s-ar fi justificat.
+  area: new_min_max/sql/02_classify_group.sql
+  summary: >
+    sp_MinMaxEngine_ClassifyGroup construieste #ItemGroups din #SalesLines
+    NEFILTRAT, in timp ce sp_MinMaxEngine_Classify filtreaza prin
+    INNER JOIN #ActiveBranches inainte de a construi #Items. Rezultat:
+    NR_SKU_GRP numara articole din afara perimetrului (468 din 559 randuri de
+    grupa non-HQ pe RUNID=5). Beneficiarul a confirmat 08.09.2026 ca filialele
+    inactive nu prezinta interes, deci Classify are dreptate si ClassifyGroup e
+    cel de aliniat. Impact masurat: VZ_52S si VAL_52S de grupa coincid EXACT cu
+    agregarea CCCMINMAXDET (0 diferente din 559), iar NR_SKU_GRP e purtat prin
+    MAX() fara sa intre in LIFECYCLE/ABC/XYZ/CV. Contoarele care conteaza
+    (GRP_ITEM_COUNT, GRP_TOTAL_VAL -> WARN_GRUPA_MICA si pragul Pareto) stau in
+    CCCMINMAXDET si sunt corecte.
+  why_tangential: >
+    Cere modificarea unei proceduri stocate, interzisa de regula #5 a Fazei 5
+    (strict UI + serviciu). Nu blocheaza poarta: nicio valoare calculata nu e
+    afectata.
+  next_step: >
+    La urmatoarea atingere a procedurilor, filtreaza populatia lui #ItemGroups la
+    filialele active. NU e "o singura clauza" (afirmatie initiala gresita):
+    #IncludedLines (sectiunea 5) se construieste DIN #ItemGroups si #Groups
+    (sectiunea 3), deci inversarea ar fi un ciclu. Fixul cere mutarea blocului
+    #ActiveBranches (sectiunea 4) inaintea sectiunii 3 plus rescrierea
+    subinterogarii, si inverseaza ordinea THROW (50002 inaintea lui 50003). De
+    verificat inainte: o grupa cu articole doar pe filiale inchise ar disparea
+    complet din #Groups, nu doar si-ar corecta contorul. Apoi re-ruleaza
+    new_min_max/tools/validate-minmax-invariants.cjs ca sa confirme 9/9.
+    Atentie: numarul e afisat in ecranul group ABC, deci pana la fix
+    utilizatorul vede un total care nu se reconciliaza cu drill-down-ul.
+
+- id: faza5-iteratia2-runengine-din-ui
+  opened: 2026-09-08
+  status: closed
+  closed_note: >
+    Promovat la faza de sine statatoare: new_min_max/FAZA6_CONTRACT.md §3-§4
+    (08.09.2026). Cele 4 decizii de design sunt consemnate acolo.
+  area: S1-MEC/AJS/NewMinMax.js, src/services/minmax-engine/, public/components/minmax-engine/
+  summary: >
+    Cerinta noua (08.09.2026): beneficiarul vrea sa lanseze singur ciclul lunar
+    din interfata. FAZA5_CONTRACT.md exclude explicit runEngine din iteratia 1,
+    iar NewMinMax.js are UN SINGUR endpoint (setup) - deci e de scris de la zero,
+    nu de cablat. Design discutat si agreat, cu 4 decizii:
+    (1) TRANSPORT - endpoint AJS, NU whitelist de EXEC in WSMCP. Garda
+    WSMCP_classifyStatement isi trage puterea din faptul ca scaneaza textul si nu
+    parseaza; procedurile se numesc sp_MinMaxEngine_* deci trip AMBELE garzi
+    (keyword EXEC + prefix SP_/XP_), iar a doua e cea care opreste sp_executesql
+    si xp_cmdshell. Un whitelist ar cere parser de securitate in AJS, fara harness
+    de test, intr-un gateway PARTAJAT cu serverul MCP.
+    (2) FORMA - doua endpoint-uri: startRun (ms, doar EXEC StartRun, intoarce
+    RUNID) si runPhases (~2 min). Serviciul asteapta RUNID, lanseaza runPhases
+    FARA await, intoarce {runId} imediat; UI face poll pe history(). Progresul e
+    afisabil din STATUS/GROUP_STATUS/COMPUTE_STATUS plus *_STARTEDAT/*_FINISHEDAT,
+    deci FARA coloane noi. Principiu: baza de date e sursa de adevar pentru
+    progres, nu apelul HTTP.
+    (3) AUTORIZARE - minmax.edit plus _writesEnabled() verificat EXPLICIT in
+    runEngine(); calea AJS nu mosteneste flagul de la calea execSql. Decizie
+    utilizator: cine poate scrie parametrii poate si rula.
+    (4) AUDIT - log app-side, NU tabela CCC. O tabela de audit ar trebui adaugata
+    in whitelist-ul din sql-guard.js, deci canalul auditat si-ar putea falsifica
+    auditul - aceeasi eroare respinsa la tabela de roluri.
+  why_tangential: >
+    Extindere de scop peste Faza 5 iteratia 1 ("confirma ce calculam deja").
+    Depinde de nivelul B, care se face pe RUNID=5 inainte de orice sesiune noua.
+  next_step: >
+    Confirmare beneficiar pe buton, apoi scoping ca Faza 5 iteratia 2. Deploy-ul
+    duce ca unitate: runEngine + garda StartRun + AbandonRun + fixul
+    ClassifyGroup. Obligatoriu dupa orice editare SQL:
+    node new_min_max/tools/sync-check.cjs.
+
+- id: startrun-fara-garda-concurenta
+  opened: 2026-09-08
+  status: closed
+  closed_note: >
+    Absorbit in new_min_max/FAZA6_CONTRACT.md §5 (08.09.2026), impreuna cu
+    AbandonRun - garda nu se livreaza singura.
+  area: new_min_max/sql/00e_start_run.sql
+  summary: >
+    sp_MinMaxEngine_StartRun valideaza @Scope/@Mtrl (THROW 50030-50032) apoi face
+    INSERT NECONDITIONAT. Nu verifica daca exista deja o sesiune OPEN. Azi e
+    latent: doar un dezvoltator care ruleaza statement-uri manual poate deschide o
+    sesiune. Cu un buton in UI devine mod de esec real - dublu-click da doua
+    pipeline-uri de ~37M randuri concurente; FinishRun muta ESTE_CURENT deci
+    castiga ultima care termina, nedeterminist; o faza cazuta la mijloc lasa
+    sesiunea OPEN fara cale de curatare.
+  why_tangential: >
+    Cere modificarea unei proceduri stocate; nu se manifesta pana nu exista
+    butonul de run.
+  next_step: >
+    THROW 50039 daca exista SESSION_STATUS='OPEN' pe companie, LA PACHET cu
+    sp_MinMaxEngine_AbandonRun (SESSION_STATUS='ABANDONED', zero DELETE) - altfel
+    primul esec blocheaza motorul definitiv. Respinsa deliberat varianta "timeout
+    automat pe sesiuni mai vechi de N minute": alege un N arbitrar si poate porni
+    a doua rulare peste una lenta inca vie. Serviciul traduce 50039 in "o sesiune
+    este deja in curs" si afiseaza sesiunea, nu eroare rosie. Butonul disabled
+    ramane UX, nu garda - nu supravietuieste refresh-ului, celui de-al doilea tab
+    sau celui de-al doilea utilizator.
+
+- id: paramsjson-nu-captureaza-parametri-rezolvati
+  opened: 2026-09-08
+  status: open
+  area: new_min_max/sql/03_compute.sql, new_min_max/sql/00_params.sql
+  summary: >
+    COMPUTE_PARAMSJSON captureaza azi 7 scalari GLOBALI. Cand parametrii devin per
+    PREFIX/FURNIZOR (LT_ZILE si FRECVENTA_ZILE sunt deja marcati in seed "de
+    suprascris per prefix", iar CCCMINMAXTEMPLATE exista in schema cu 0 randuri),
+    antetul va spune "LT_ZILE=30" desi rularea a folosit alta valoare pentru o
+    parte din articole. Provenienta se rupe TACUT.
+    Legat: CCCMINMAXTEMPLATE nu are versiune si nici istoric (doar CREATEDAT/
+    CREATEDBY), deci editarea unui sablon pierde setul vechi. Salvarea e ca
+    antetul stocheaza VALORILE EFECTIVE, nu o cheie straina catre sablon - tiparul
+    snapshot, nu referinta. De pastrat explicit cand apar sabloanele.
+  why_tangential: >
+    Nu se manifesta pana nu exista parametri cu scope non-GLOBAL.
+  next_step: >
+    Inainte de a livra sabloanele: extinde snapshot-ul la suprafata REZOLVATA de
+    parametri, nu doar globalele.
+
+- id: retentie-sesiuni-de-implementat
+  opened: 2026-09-08
+  status: closed
+  closed_note: >
+    Absorbit in new_min_max/FAZA6_CONTRACT.md §6 (08.09.2026). Garda "refuz pe
+    sesiune aplicata" a fost ELIMINATA din design: CCCMINMAXAPPLY tine dovada,
+    deci faza nu depinde de Faza 4. Tabela de rezumat ramane electiva, §15.
+  area: new_min_max/sql/, .copilot/wiki/minmax-engine-model.md
+  summary: >
+    Designul de retentie e decis si documentat in minmax-engine-model.md
+    (sectiunea "Retentia sesiunilor"), dar NU e implementat. Masurat: ~730 MB per
+    sesiune, din care CCCMINMAXDET e 96%. Regula: DET curenta + precedenta,
+    WEEK/WINSOR doar curenta, antet + PARAMSJSON + GRP pentru totdeauna.
+    Tensiune de rezolvat: modelul actual are ZERO DELETE pe tabele persistate.
+    Rezolvarea nu e o exceptie, ci o distinctie - imutabilitatea inseamna "o
+    sesiune nu se rescrie niciodata", nu "nu se sterge niciodata".
+  why_tangential: >
+    Nu preseaza: la 2 sesiuni pe disc, spatiul nu e inca o problema. Devine
+    relevanta cand rularile lunare din UI incep sa se acumuleze.
+  next_step: >
+    sp_MinMaxEngine_PurgeRun @RunId, operatie EXPLICITA si separata (niciodata
+    implicita intr-o faza), cu trei garzi: refuz pe ESTE_CURENT=1, refuz pe
+    SESSION_STATUS='OPEN', refuz pe sesiune aplicata in ERP. Stergere in loturi -
+    706k randuri intr-o tranzactie umfla log-ul, desi DET fiind clustered pe
+    (RUNID, ...) stergerea pe RUNID e macar un range scan eficient.
+    Separat, ELECTIV: tabela de rezumat per sesiune (~40-60 numere: distributia
+    FLAG_TXT, distributia CLASA, SUM(BUY_QTY), % in banda, contoare WARN_*), fara
+    de care parametrii istorici nu pot masura randamentul - parametrii spun ce ai
+    setat, nu ce ai obtinut. De etichetat explicit ca electiva, nu cerinta.
+
 - id: feathers-secret-placeholder-fara-garda
   opened: 2026-09-07
   status: open

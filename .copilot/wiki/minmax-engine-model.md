@@ -33,6 +33,60 @@
   (`TOTAL_ROWS = DISTINCT_ITEMS × DISTINCT_BRANCHES`, `DISTINCT_BRANCHES = 14`, `HQ_ROWS =
   DISTINCT_ITEMS`, controale la zero).
 
+## Modelul de operare — centrul de greutate e sesiunea curentă
+
+> Formulat explicit 08.09.2026, după ce o dezbatere despre istoric a arătat că designul începuse să
+> graviteze în jurul păstrării trecutului. **Nu acolo e valoarea.**
+
+**Ciclul real:** rulezi sesiunea → evaluezi → ajustezi parametrii → re-rulezi → când rezultatele sunt
+mulțumitoare, le scrii în ERP pentru a fi folosite în achiziție. Sesiunea curentă, **reiterată până
+la satisfacție**, este produsul. Istoricul e un produs secundar.
+
+Consecințe de proiectare care decurg direct:
+
+- `explain` are sens **doar pe sesiunea curentă** — acolo se ia decizia.
+- `CCCMINMAXDET` e **memorie de lucru**, nu arhivă.
+- Parametrii și randamentul sunt **memorie de lungă durată**, la cost neglijabil.
+
+**Corecție de cerință (08.09.2026):** mecanismul `explain` și wiki-ul de transparență **nu au fost
+cerute de client** — sunt inițiativa echipei, ca beneficiarul să poată verifica în loc să ne creadă
+pe cuvânt. Cerința clientului este **calculul MIN/MAX**. Nici istoricul nu a fost cerut. Distincția
+contează: un mecanism de construire a încrederii are valoare mare devreme și descrescătoare pe măsură
+ce încrederea se așază, deci nu are nevoie de permanență — spre deosebire de o cerință de audit.
+
+## Retenția sesiunilor
+
+Cost măsurat pe date reale (08.09.2026): **~730 MB per sesiune completă**, din care `CCCMINMAXDET`
+reprezintă 96% (~700 MB / 706.734 rânduri). Antetul `CCCMINMAXRUN` costă ~7 KB.
+
+| Strat | Retenție | Rol |
+|---|---|---|
+| `CCCMINMAXRUN` + `PARAMSJSON` | pentru totdeauna | *ce am setat* |
+| rezumat per sesiune *(electiv, de construit)* | pentru totdeauna | *ce am obținut* — bucla de învățare |
+| `CCCMINMAXAPPLY` (Faza 4) | pentru totdeauna | *ce am aplicat*, la nivel de rând |
+| `CCCMINMAXDET` | **curentă + precedenta** | `explain` + comparația dinaintea apply-ului |
+| `CCCMINMAXWEEK` / `WINSOR` | **doar curenta** | substratul lui `explain` |
+
+Regim staționar ~1,5 GB, aproape plat, plus ~100 MB/an din auditul de apply. Pentru comparație, 42 de
+sesiuni păstrate integral ar însemna ~30 GB într-o bază ERP de producție partajată, unde costul real
+e fereastra de backup, nu discul.
+
+**De ce `DET` la 2 și nu la 1:** când rulezi sesiunea nouă, ai nevoie de cea veche ca să vezi ce s-a
+mișcat înainte de a decide dacă aplici. Purjarea la `FinishRun` ar șterge reperul exact când e cerut.
+Regula se auto-întreține într-o buclă de reglaj: fiecare rulare o împinge afară pe cea mai veche, dar
+toate își păstrează parametrii și randamentul.
+
+**De ce nu „fixăm" sesiunile aplicate:** `CCCMINMAXAPPLY` ([FAZA4_CONTRACT.md](../../new_min_max/FAZA4_CONTRACT.md) §7)
+păstrează deja `OLD_*`/`NEW_*`/`ENG_MIN`/`ENG_MAX` per poziție scrisă, cu `RUNID` și autor — ~78.000
+rânduri înguste per apply, față de 706.734 late în `DET`. Apply-ul își ține singur dovada.
+
+**ERP nu poate fi arhivă**, deși pare tentant: (1) `MTRBRNLIMITS.REMAINLIMMAX` e o valoare curentă,
+suprascrisă la fiecare apply — `CCCZEROMINMAX` stochează `OLD_*` exact din acest motiv, iar
+`revertApply` e posibil numai fiindcă reținem noi valorile anterioare; (2) ERP primește două numere
+per rând, nu `BUY_QTY`, `CLASA`, derivarea sau indicatorii; (3) **doar 10,4% din rânduri ating
+ERP-ul** — măsurat pe RUNID=5: 23.004 din 656.253 rânduri de filială au poziție `MTRBRNLIMITS`, plus
+cele 50.481 de HQ care merg în `MTRL`.
+
 ## „HQ" și filialele
 
 - **Branch 1000 = stratul de companie, NU o locație fizică.** Persistat în `MTRL`
