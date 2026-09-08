@@ -4,14 +4,16 @@
 - 08.09.2026 (sesiunea 47)
 
 ## Current Goal
-- Finalizează deploy-ul hardening-ului SQL Server Agent pentru Faza 6 fără a crea încă o sesiune.
+- Deploy-ul AJS și `NewMinMax/setup` pentru hardening-ul SQL Server Agent din Faza 6 sunt finalizate.
 - Starea live confirmată: `RUNID=5` este `DONE`/`ESTE_CURENT=1`; `RUNID=6` este
-  `ABANDONED`/`ERROR`; jobul `MEC_MinMaxEngine_RunPhases_1000` este enabled și inactiv.
+  `ABANDONED`/`ERROR`; zero sesiuni `OPEN`; jobul `MEC_MinMaxEngine_RunPhases_1000` este enabled,
+  valid și inactiv, iar SQL Server Agent este `Running`/`Automatic`.
 
 ## Active Area
 - Codul local finalizat mută `Classify → ClassifyGroup → Compute → FinishRun` în SQL Server Agent,
-  eliminând plafonul AJS de 60s. Prima versiune Agent este instalată în producție; revizia locală
-  post-review nu este încă redeployată. Vezi [minmax-engine-model.md](../wiki/minmax-engine-model.md).
+  eliminând plafonul AJS de 60s. Revizia post-review este instalată în producție; `setup()` păstrează
+  acum jobul valid prin early-return, evitând eroarea de realiniere a unui job raportat de Agent ca
+  provenit de la MSX. Vezi [minmax-engine-model.md](../wiki/minmax-engine-model.md).
 
 ## Relevant Files
 - [FAZA6_CONTRACT.md](../../new_min_max/FAZA6_CONTRACT.md) — contract, ordine de livrare și criterii de readiness.
@@ -30,9 +32,8 @@
 - `sync-check.cjs` confirmă 13/13 perechi SQL/AJS. `node --check` și suita focalizată au trecut cu 144 teste.
 
 ## Open Questions
-- Este necesar redeploy-ul manual al versiunii curente din `NewMinMax.js`, urmat imediat de `setup()`.
 - Statusul deploy-ului aplicației Feathers/UI pentru protecțiile de polling și abandon trebuie confirmat înainte de primul run UI.
-- După setup, execuția Agent completă pe producție nu este încă validată; scriptul AJS diagnostic temporar trebuie eliminat din S1.
+- Execuția Agent completă pe producție nu este încă validată; scriptul AJS diagnostic temporar trebuie eliminat din S1.
 
 ## Next Step
-- După confirmarea redeploy-ului AJS, rulează `NewMinMax/setup` și verifică read-only jobul/procedurile; nu porni un `RUNID` până acea verificare nu reușește.
+- Confirmă deploy-ul Feathers/UI, apoi pornește primul run complet din UI și urmărește polling-ul până la `DONE`; nu lansa manual procedura Agent.

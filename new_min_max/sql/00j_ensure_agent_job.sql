@@ -20,8 +20,36 @@ BEGIN
         + CONVERT(NVARCHAR(10), @Company) + N';';
     DECLARE @Owner sysname = SUSER_SNAME(0x01);
     DECLARE @JobId UNIQUEIDENTIFIER;
+    DECLARE @JobIsValid BIT = 0;
 
     SELECT @JobId = job_id FROM msdb.dbo.sysjobs WHERE name = @JobName;
+
+    IF @JobId IS NOT NULL AND EXISTS (
+        SELECT 1
+        FROM msdb.dbo.sysjobs j
+        INNER JOIN msdb.dbo.sysjobsteps s ON s.job_id = j.job_id
+        INNER JOIN msdb.dbo.sysjobservers js ON js.job_id = j.job_id AND js.server_id = 0
+        WHERE j.job_id = @JobId
+            AND j.enabled = 1
+            AND j.start_step_id = 1
+            AND s.step_id = 1
+            AND s.step_name = N'RunPhases'
+            AND s.subsystem = N'TSQL'
+            AND s.database_name = @DbName
+            AND s.command = @Command
+            AND s.on_success_action = 1
+            AND s.on_fail_action = 2
+            AND s.retry_attempts = 0
+            AND (SELECT COUNT(*) FROM msdb.dbo.sysjobsteps sx WHERE sx.job_id = j.job_id) = 1
+            AND NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobschedules sc WHERE sc.job_id = j.job_id)
+    )
+        SET @JobIsValid = 1;
+
+    IF @JobIsValid = 1
+    BEGIN
+        SELECT @JobName AS JOB_NAME, @JobId AS JOB_ID;
+        RETURN;
+    END;
 
     IF @JobId IS NOT NULL AND EXISTS (
         SELECT 1
