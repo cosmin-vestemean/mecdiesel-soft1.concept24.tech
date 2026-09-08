@@ -295,7 +295,7 @@ export class MinmaxParamsPanel extends LitElement {
                     <input type="checkbox" class="form-check-input" .checked="${draft.inclus}"
                            @change="${(e) => this._setBranchField(row, 'inclus', e.target.checked)}">
                   </td>
-                  <td>${row.ESTE_HQ ? html`<span class="badge bg-info text-dark">HQ</span>` : html`<span class="text-muted">-</span>`}</td>
+                  <td>${row.ESTE_HQ ? html`<span class="badge bg-primary">HQ</span>` : html`<span class="text-muted">-</span>`}</td>
                   <td>
                     <input type="checkbox" class="form-check-input" .checked="${draft.estePodea}"
                            @change="${(e) => this._setBranchField(row, 'estePodea', e.target.checked)}">

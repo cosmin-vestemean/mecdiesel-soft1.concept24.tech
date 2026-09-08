@@ -11,8 +11,15 @@
  */
 
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
+// NOTE: not 'lit@3/directives/...' — that shim re-exports via a bare
+// specifier ('lit-html/directives/...') that browsers can't resolve without
+// an import map. This URL points at the real file, which uses relative
+// imports only.
+import { unsafeHTML } from 'https://cdn.jsdelivr.net/npm/lit-html@3/directives/unsafe-html.js';
 import { ContextConsumer } from 'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0/index.js';
 import { MinmaxEngineStoreContext } from '../../stores/minmax-engine-store.js';
+import { renderBool } from './minmax-engine-constants.js';
+import katex from 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.mjs';
 
 // Ordinea exacta din contract §6: intrarile lantului de calcul.
 const INPUT_FIELDS = [
@@ -157,7 +164,8 @@ export class MinmaxExplainDrawer extends LitElement {
   _formatValue (row, field) {
     const value = row[field.key];
     if (field.type === 'boolean') {
-      return value ? html`<span class="badge bg-success">Da</span>` : html`<span class="text-muted">-</span>`;
+      // Green dot instead of text/badge (see renderBool in constants).
+      return renderBool(value);
     }
     if (field.type === 'text') {
       return value ?? '-';
@@ -172,6 +180,133 @@ export class MinmaxExplainDrawer extends LitElement {
     } catch {
       return raw;
     }
+  }
+
+  // Anexa §B11: render the ENG_MIN/ENG_MAX formula chain with the actual
+  // values substituted, above the raw parameter tables. Formulas transcribed
+  // from new_min_max/sql/03_compute.sql Step1-Step6 + §7a-7c (read-only
+  // display; the authoritative calculation stays in the stored procedure).
+  // Constants (InflatieHq, HqCapFactor, ...) come from run.COMPUTE_PARAMSJSON
+  // with the same fallbacks as 03_compute.sql, since they aren't persisted
+  // per-row on CCCMINMAXDET.
+  _parseComputeParams (run) {
+    const raw = run && run.COMPUTE_PARAMSJSON;
+    if (!raw) return {};
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  }
+
+  // KaTeX renders the symbolic/substituted math (Anexa feedback 08.09.2026:
+  // Unicode approximations of √/⌈⌉/σ read as amateurish). throwOnError:false
+  // means a malformed TeX string degrades to a visible red error span instead
+  // of throwing — safe for production.
+  _katex (tex) {
+    return unsafeHTML(katex.renderToString(tex, { throwOnError: false }));
+  }
+
+  // LaTeX-safe numeric literal: period decimal separator, trimmed to 4
+  // decimals (the ro-RO comma separator used elsewhere would be parsed by
+  // KaTeX as punctuation with its own spacing rules, not a decimal point).
+  _texNum (v) {
+    const num = Number(v);
+    if (!Number.isFinite(num)) return '0';
+    return String(Math.round(num * 10000) / 10000);
+  }
+
+  _renderFormula (det, run) {
+    if (!det) return '';
+    const n = (v) => this._formatNumber(v);
+    const t = (v) => this._texNum(v);
+    const k = (tex) => this._katex(tex);
+    const num = (v) => (v === null || v === undefined ? 0 : Number(v));
+    const lifecycle = det.LIFECYCLE;
+    const cp = this._parseComputeParams(run);
+
+    const inflatieHq = num(cp.INFLATIE_HQ) || 1.30;
+    const hqCapFactor = num(cp.HQ_CAP_FACTOR) || 1.5;
+    const capLuni = num(cp.CAP_LUNI) || 6;
+    const czCycleZero = cp.CZ_CYCLE_ZERO === undefined ? true : Boolean(Number(cp.CZ_CYCLE_ZERO));
+
+    const avg = num(det.AVG);
+    const covTgt = num(det.COV_TGT);
+    const ad = num(det.ad);
+    const frecventaZile = num(det.FRECVENTA_ZILE);
+    const safety = num(det.SAFETY);
+    const ltStock = num(det.LT_STOCK);
+    const slts = num(det.SLTS);
+    const buf = num(det.BUF);
+    const cycle = num(det.CYCLE);
+    const maxRaw = num(det.MAX_RAW);
+    const maxInf = num(det.MAX_INF);
+    const cap6 = num(det.CAP6);
+    const vz26Cap = num(det.VZ26_CAP);
+    const sumBrMax = (det.SUM_BR_MAX === null || det.SUM_BR_MAX === undefined) ? null : num(det.SUM_BR_MAX);
+    const engMax = num(det.ENG_MAX);
+    const engMin = num(det.ENG_MIN);
+    const minDoc = num(det.MIN_DOC);
+    const minBase = Math.max(Math.ceil(buf), minDoc);
+    const buyRaw = num(det.BUY_RAW);
+    const buyQty = num(det.BUY_QTY);
+    const stocQty = num(det.STOC_QTY);
+    const ordFurn = num(det.ORD_FURN);
+    const nPack = num(det.N_PACK) || 1;
+
+    const cycleShortCircuit = covTgt === 0 && czCycleZero;
+    const isOd = lifecycle === 'OD';
+    const engMaxEqualsMin = Math.abs(engMax - engMin) < 0.00005;
+
+    return html`
+      <div class="mb-3">
+        <h6 class="text-muted">Formula de calcul (valori înlocuite)</h6>
+        <div class="minmax-formula-block border rounded p-2 bg-light small" style="line-height: 2.1;">
+          <div>${k('\\text{SAFETY} = \\sigma_{wk} \\times SSF \\times \\sqrt{\\dfrac{LT}{7}}')} = <strong>${n(safety)}</strong></div>
+          <div>${k('\\text{LT\\_STOCK} = ad \\times LT_{zile}')} = <strong>${n(ltStock)}</strong></div>
+          <div>${k('\\text{SLTS} = LT\\_STOCK \\times \\left(\\dfrac{100}{SL} - 1\\right)')} = <strong>${n(slts)}</strong></div>
+          <div>${k('\\text{BUF} = SAFETY + SLTS + LT\\_STOCK')} = <strong>${n(buf)}</strong></div>
+          <div>${cycleShortCircuit
+            ? k('\\text{CYCLE} = 0 \\quad (COV\\_TGT = 0)')
+            : k(`\\text{CYCLE} = \\max(AVG \\times COV\\_TGT,\\ ad \\times FRECVENTA\\_ZILE) = \\max(${t(avg * covTgt)}, ${t(ad * frecventaZile)})`)} = <strong>${n(cycle)}</strong></div>
+          <div>${k(`\\text{MAX\\_RAW} = \\left\\lceil BUF + CYCLE \\right\\rceil = \\left\\lceil ${t(buf)} + ${t(cycle)} \\right\\rceil`)} = <strong>${n(maxRaw)}</strong></div>
+          <div>${det.ESTE_HQ
+            ? k(`\\text{MAX\\_INF} = \\left\\lceil MAX\\_RAW \\times InflatieHQ \\right\\rceil = \\left\\lceil ${t(maxRaw)} \\times ${t(inflatieHq)} \\right\\rceil`)
+            : k('\\text{MAX\\_INF} = MAX\\_RAW')} = <strong>${n(maxInf)}</strong></div>
+          <div>${k(`\\text{CAP6} = \\left\\lceil AVG \\times CapLuni \\right\\rceil = \\left\\lceil ${t(avg)} \\times ${t(capLuni)} \\right\\rceil`)} = <strong>${n(cap6)}</strong></div>
+          <div>${det.VZ_26S > 0
+            ? k('\\text{VZ26\\_CAP} = VZ\\_26S')
+            : k('\\text{VZ26\\_CAP} = \\text{sentinelă} \\ (VZ\\_26S = 0)')} = <strong>${n(vz26Cap)}</strong></div>
+          <div class="border-top pt-2 mt-1">
+            ${isOd
+              ? k('\\text{ENG\\_MAX} = 0 \\quad (OD)')
+              : (det.HQ_CAP_APLICAT && sumBrMax !== null)
+                ? html`${k(`\\text{ENG\\_MAX} = \\left\\lceil SUM\\_BR\\_MAX \\times HqCapFactor \\right\\rceil = \\left\\lceil ${t(sumBrMax)} \\times ${t(hqCapFactor)} \\right\\rceil`)} <span class="text-muted">(cap HQ aplicat)</span>`
+                : (det.PODEA_APLICATA && engMaxEqualsMin)
+                  ? html`${k('\\text{ENG\\_MAX} = ENG\\_MIN')} <span class="text-muted">(podea aplicată)</span>`
+                  : k(`\\text{ENG\\_MAX} = \\min(MAX\\_INF, CAP6, VZ26\\_CAP) = \\min(${t(maxInf)}, ${t(cap6)}, ${t(vz26Cap)})`)
+            } = <strong class="text-primary">${n(engMax)}</strong>
+          </div>
+          <div class="mt-1">
+            ${k(`\\text{MIN\\_BASE} = \\max\\!\\left(\\left\\lceil BUF \\right\\rceil, MIN\\_DOC\\right) = \\max(${Math.ceil(buf)}, ${t(minDoc)})`)} = <strong>${n(minBase)}</strong>
+          </div>
+          <div class="mt-1">
+            ${isOd
+              ? k('\\text{ENG\\_MIN} = 0 \\quad (OD)')
+              : det.PODEA_APLICATA
+                ? html`<span class="text-muted">podea aplicată (procent din ENG_MIN al rândului HQ, indisponibil pe acest rând)</span>`
+                : k(`\\text{ENG\\_MIN} = \\min(MIN\\_BASE, ENG\\_MAX) = \\min(${t(minBase)}, ${t(engMax)})`)
+            } = <strong class="text-primary">${n(engMin)}</strong>
+          </div>
+          <div class="border-top pt-2 mt-1">
+            ${k(`\\text{BUY\\_RAW} = \\max(0,\\ ENG\\_MAX - STOC^{+} - ORD\\_FURN) = \\max(0,\\ ${t(engMax)} - ${stocQty > 0 ? t(stocQty) : '0'} - ${t(ordFurn)})`)} = <strong>${n(buyRaw)}</strong>
+          </div>
+          <div class="mt-1">
+            ${k(`\\text{BUY\\_QTY} = \\left\\lceil \\dfrac{BUY\\_RAW}{N\\_PACK} \\right\\rceil \\times N\\_PACK = \\left\\lceil \\dfrac{${t(buyRaw)}}{${t(nPack)}} \\right\\rceil \\times ${t(nPack)}`)} = <strong class="text-success">${n(buyQty)}</strong>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   _renderFieldTable (title, fields, row) {
@@ -288,6 +423,7 @@ GROUP_PARAMSJSON: ${this._formatJson(run.GROUP_PARAMSJSON)}</pre>
             </div>
 
             ${this._renderRunHeader(this.data.run)}
+            ${this._renderFormula(det, this.data.run)}
             ${this._renderFieldTable('Intrari', INPUT_FIELDS, det)}
             ${this._renderFieldTable('Lant de calcul', CHAIN_FIELDS, det)}
             ${this.data.winsor

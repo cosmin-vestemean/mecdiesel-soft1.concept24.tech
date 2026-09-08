@@ -35,6 +35,8 @@
   altfel, deci montarea permanentă nu afectează layout-ul). Afișează exact câmpurile din contract
   §6, în ordinea din contract (`INPUT_FIELDS`, `CHAIN_FIELDS`), plus antetul `CCCMINMAXRUN`,
   `CCCMINMAXWINSOR` și seria densă de 52 de săptămâni — nu recalculează nimic, doar formatează.
+  Deasupra tabelelor brute, `_renderFormula()` randează lanțul `SAFETY → BUY_QTY` cu valorile
+  rândului substituite, folosind **KaTeX** pentru notația matematică (vezi „Decizii de design").
 - `public/components/minmax-engine/minmax-params-panel.js` — al cincilea `ContextConsumer`, cablat
   în container. Singura scriere din interfață (contract §7): parametri globali
   (`CCCMINMAXPARAMS`), matricea COV_TGT (`CCCMINMAXCOV`, grid `CLASA_ORDER × MARIME_ORDER`, 11×3=33
@@ -67,7 +69,27 @@
 - **Pattern CDN, nu npm:** tot frontend-ul (inclusiv fișierele noi) importă `lit`/`@lit/context`
   din `cdn.jsdelivr.net`. `public/` nu are build step (fără Vite/webpack/import maps), deci un
   bare specifier de tip `import ... from '@lit/context'` nu s-ar rezolva în browser — nu instala
-  aceste pachete via npm pentru acest strat.
+  aceste pachete via npm pentru acest strat. **Excepție explicită, nu contradicție:** o librărie
+  poate fi totuși `devDependency` în `package.json` **doar** pentru rezoluția în teste (Node), atât
+  timp cât browserul o ia tot din CDN — vezi `katex` mai jos.
+- **KaTeX pentru formula din drawer, nu wiki-ul static (D6):** `FAZA3_HANDOFF.md` §9.6 (D6,
+  nerezolvată) discută randarea matematicii pentru wiki-ul HTML static (neconstruit încă),
+  recomandând MathML pre-randat pentru independență de CDN într-un `<iframe>` posibil izolat.
+  `_renderFormula()` din `minmax-explain-drawer.js` e alt artefact (valori substituite live, nu
+  formulă statică) și **nu** e supus acelei constrângeri — restul aplicației depinde deja de mai
+  multe CDN-uri (Lit, Bootstrap, FontAwesome, jQuery), deci KaTeX via `cdn.jsdelivr.net`
+  (`katex@0.16.11`, CSS + JS `.mjs` ca modul ESM) e consistent cu riscul deja acceptat. D6 rămâne
+  deschisă pentru wiki-ul static, dacă/când se construiește.
+- **Gotcha CDN găsit prin această integrare:** `unsafeHTML` (necesar pentru `katex.renderToString`
+  → `unsafeHTML(html)`) NU trebuie importat din
+  `https://cdn.jsdelivr.net/npm/lit@3/directives/unsafe-html.js` — acel fișier reexportă printr-un
+  specifier **bare** (`"lit-html/directives/unsafe-html.js"`) pe care browserul nu-l poate rezolva
+  fără import map, ceea ce blochează silențios întregul modul (și, în cascadă,
+  `minmax-engine-container.js`, manifestat ca `minmaxEngine.activate is not a function`).
+  Import corect: `https://cdn.jsdelivr.net/npm/lit-html@3/directives/unsafe-html.js` (pachetul
+  `lit-html` direct, nu `lit`). Testele Node redirectează ambele CDN-uri (`katex`,
+  `lit-html/directives/unsafe-html.js`) către pachetele npm locale via
+  `test/helpers/cdn-module-loader.mjs`.
 - **Filtre tranzitorii pentru `groupAbc()`** (`minmax-group-abc.js`): spre deosebire de
   `results()`, filtrele nu trec prin `store.setFilters()`/`state.filters` — trăiesc doar ca stare
   locală a componentei și se transmit direct la `store.loadGroupAbc(filters)` la fiecare apel

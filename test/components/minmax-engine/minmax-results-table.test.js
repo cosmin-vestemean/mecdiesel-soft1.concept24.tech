@@ -68,3 +68,85 @@ describe('minmax-results-table — page-size select (§12.4)', () => {
     }
   });
 });
+
+// Anexa (ergonomie UI, 08.09.2026) — hierarchy, redundancy removal, counter.
+describe('minmax-results-table — Anexa filter ergonomics', () => {
+  before(async () => {
+    // Reuse the module already imported above.
+  });
+
+  function mount () {
+    const el = document.createElement('minmax-results-table');
+    document.body.appendChild(el);
+    el._draftFilters = { branches: [], clasa: [], codeLike: '', engMin: {}, flagTxt: [], lifecycle: [], statusTrend: [] };
+    return el;
+  }
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('groups filters into three levels with an always-visible level 1', async () => {
+    const el = mount();
+    await el.updateComplete;
+
+    // Nivel 1 always visible: Cod, Filiala, Flag, Clasa, Trend.
+    const level1 = el.querySelector('.filters-panel > .row');
+    assert.ok(level1.textContent.includes('Cod (prefix)'), 'level 1 has Cod');
+    assert.ok(level1.textContent.includes('Filiale'), 'level 1 has Filiala');
+    assert.ok(level1.textContent.includes('Flag'), 'level 1 has Flag');
+    assert.ok(level1.textContent.includes('Clasa'), 'level 1 has Clasa');
+
+    // Nivel 2 (exceptions) expanded by default; Nivel 3 (advanced) collapsed.
+    const details = [...el.querySelectorAll('.filters-panel details')];
+    assert.strictEqual(details.length, 2, 'exactly two collapsible levels');
+    assert.ok(details[0].open, 'exceptions level expanded by default');
+    assert.ok(!details[1].open, 'advanced level collapsed by default');
+    assert.ok(details[0].textContent.includes('Excepții'), 'level 2 labelled as exceptions');
+    assert.ok(details[1].textContent.includes('avansate'), 'level 3 labelled as advanced');
+  });
+
+  it('removes the redundant ABC/XYZ toggle groups, keeping only Clasa (§A2)', async () => {
+    const el = mount();
+    await el.updateComplete;
+
+    const labels = [...el.querySelectorAll('.filters-panel .small.text-muted')].map((n) => n.textContent.trim());
+    assert.ok(!labels.includes('ABC'), 'no standalone ABC filter group');
+    assert.ok(!labels.includes('XYZ'), 'no standalone XYZ filter group');
+    assert.ok(labels.includes('Clasa'), 'Clasa filter group kept');
+  });
+
+  it('shows an active-filter counter chip only when draft filters are set (§A3)', async () => {
+    const el = mount();
+    await el.updateComplete;
+
+    assert.ok(!el.querySelector('.badge.bg-primary'), 'no chip with empty draft');
+
+    el._draftFilters = { ...el._draftFilters, clasa: ['AX'], engMin: { min: 5 } };
+    await el.updateComplete;
+
+    const chip = el.querySelector('.badge.bg-primary');
+    assert.ok(chip, 'chip appears once filters are set');
+    assert.strictEqual(chip.textContent.trim(), '2 filtre active');
+  });
+
+  it('renders SUPRASTOC as a warning (amber), not neutral info (§A5)', async () => {
+    const el = mount();
+    el.rows = [{ BRANCH: 1000, FLAG_TXT: 'SUPRASTOC' }];
+    el._draftFilters = {};
+    await el.updateComplete;
+
+    const badge = el.querySelector('tbody .badge');
+    assert.ok(badge, 'flag badge rendered');
+    assert.ok(badge.classList.contains('bg-warning'), 'SUPRASTOC uses warning colour');
+    assert.ok(!badge.classList.contains('bg-info'), 'no longer the neutral info colour');
+  });
+
+  it('keeps the results table header sticky (§A4)', async () => {
+    const el = mount();
+    await el.updateComplete;
+
+    const thead = el.querySelector('.table-responsive thead');
+    assert.ok(thead.classList.contains('sticky-top'), 'thead is sticky');
+  });
+});

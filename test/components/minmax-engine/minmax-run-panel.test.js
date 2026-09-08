@@ -112,4 +112,36 @@ describe('minmax-run-panel — Phase 6 launch button', () => {
     row.click();
     assert.strictEqual(selected, false);
   });
+
+  // Anexa §B6/§B7: compact collapsible history + DONE no longer a green badge.
+  it('collapses the history table behind a summary naming the current run (§B6)', async () => {
+    setAppToken(jwtWithRoles(['minmax.edit']));
+    const { element } = mount({ open: true });
+    element.resolvedRunId = 6;
+    await element.updateComplete;
+
+    const details = element.querySelector('details');
+    assert.ok(details, 'history table wrapped in <details>');
+    assert.ok(!details.open, 'collapsed by default');
+    assert.ok(details.querySelector('summary').textContent.includes('RUNID 6'), 'summary names the current run');
+    assert.ok(details.querySelector('table'), 'table lives inside the collapsible region');
+  });
+
+  it('renders DONE as plain muted text, keeping badges only for OPEN/ERROR (§B7)', async () => {
+    setAppToken(jwtWithRoles(['minmax.edit']));
+    const { element } = mount();
+    element.runHistory = [
+      { RUNID: 5, SESSION_STATUS: 'DONE', COMPUTE_STATUS: 'DONE', GROUP_STATUS: 'DONE' },
+      { RUNID: 6, SESSION_STATUS: 'OPEN', COMPUTE_STATUS: 'ERROR', GROUP_STATUS: 'DONE' }
+    ];
+    await element.updateComplete;
+
+    const rows = [...element.querySelectorAll('tbody tr')];
+    const doneRow = rows[0];
+    const mixedRow = rows[1];
+    assert.ok(!doneRow.querySelector('.badge.bg-success'), 'DONE row has no green badges');
+    assert.ok(doneRow.textContent.includes('DONE'), 'status text still visible');
+    assert.ok(mixedRow.querySelector('.badge.bg-warning'), 'OPEN stays a warning badge');
+    assert.ok(mixedRow.querySelector('.badge.bg-danger'), 'ERROR stays a danger badge');
+  });
 });

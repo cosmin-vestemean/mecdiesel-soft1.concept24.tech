@@ -4,7 +4,9 @@
 // component tests can import the real source files unmodified.
 const REDIRECTS = {
   'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js': 'lit',
-  'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0/index.js': '@lit/context'
+  'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0/index.js': '@lit/context',
+  'https://cdn.jsdelivr.net/npm/lit-html@3/directives/unsafe-html.js': 'lit-html/directives/unsafe-html.js',
+  'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.mjs': 'katex'
 };
 
 export async function resolve (specifier, context, nextResolve) {

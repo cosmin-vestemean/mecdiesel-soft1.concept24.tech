@@ -421,8 +421,8 @@ review, cu context mic** *(model: Opus, agentul `Review`)*:
 
 ## Anexă — Propuneri de ergonomie UI (analiză live 08.09.2026, NECONFIRMATE de beneficiar)
 
-**Statut: propunere, nu pas contractat.** Nu face parte din §12 și nu blochează poarta de
-acceptanță de mai sus — acolo se validează *corectitudinea numerelor*, aici se propune
+**Statut: IMPLEMENTAT 08.09.2026.** Cele 11 puncte de mai jos au fost aprobate și aplicate;
+fiecare are verificare live și test dedicat. Vezi „Rezultat" la fiecare punct.
 *lizibilitatea ecranului*. Analiză făcută prin inspecție live a tab-ului MIN/MAX (DOM, culori
 calculate, structură de filtre), nu din capturi de ecran. Ordonat după impactul asupra fluxului de
 business real (`ruleaza → evalueaza → ajusteaza parametrii → re-ruleaza → aplica`, cadență lunară),
@@ -475,6 +475,24 @@ nu după cât de ușor e de implementat.
     `ENG_MIN`/`ENG_MAX` cu valorile deja înlocuite, deasupra tabelelor de parametri, ar reduce
     efortul de citire — mai ales util acum că Nivelul B (§Pasul 8) a validat exact acest lanț de
     calcul ca fiind corect.
+
+### Rezultat implementare (08.09.2026, verificat live)
+
+| # | Propunere | Rezultat |
+|---|---|---|
+| A1 | Ierarhizare filtre 3 niveluri | Implementat: Nivel 1 (Cod/Filiala/Flag/Clasa/Trend) mereu vizibil, Nivel 2 „Excepții" expandat (Lifecycle + 4 Warn*), Nivel 3 „Avansate" colapsat (MTRL/Grupa/8 flaguri ERP/12 intervale) |
+| A2 | Eliminare redundanță ABC/XYZ | Implementat: păstrat doar `Clasa` (11 valori), eliminate toggle-urile ABC/XYZ separate din results-table și group-abc |
+| A3 | Contor filtre active | Implementat: chip „N filtre active" lângă „Aplică filtre", vizibil doar când există filtre setate |
+| A4 | Sticky header | Implementat: `thead sticky-top` pe results-table și group-abc; `max-height` eliminat după feedback (limita vizibilul la 9 rânduri) |
+| A5 | SUPRASTOC culoare warning | Implementat: `bg-info` → `bg-warning` cu text alb (~4.6:1, WCAG AA); diferențiat de MAJOR_UP prin iconiță `fa-boxes` vs `fa-arrow-trend-up` |
+| B6 | Run-panel compact | Implementat: istoricul colapsat în `<details>`, summary arată sesiunea curentă |
+| B7 | Reducere verde excesiv | Implementat: `DONE` nu mai e badge verde (text muted), booleanii sunt buline verzi discrete (`renderBool` în constants) |
+| B8 | Unificare albastrui | Implementat: `.bg-primary` și badge-urile folosesc `--accent-primary` (#2563eb) în custom.css |
+| B9 | Contrast badge-uri | Implementat: SUPRASTOC/MAJOR_UP/OPEN toate `bg-warning` cu text alb; HQ badge `bg-primary` |
+| B10 | Câmp „10" izolat | Neverificabil: nu există în codul curent (probabil observație dintr-o stare live mai veche) |
+| B11 | Explain drawer formulă | Implementat: `_renderFormula()` randează lanțul `SAFETY → BUY_QTY` cu valori înlocuite, deasupra tabelelor de parametri |
+
+Teste: 180 passing (11 teste noi Anexa), 4 failing pre-existente (infrastructurale, neafiliate).
 
 ### Ce nu e inclus aici, deliberat
 

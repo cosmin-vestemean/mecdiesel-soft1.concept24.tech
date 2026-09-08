@@ -615,6 +615,18 @@ body.sidebar-collapsed .top-bar {
   box-shadow: 0 0 0 2px var(--accent-primary-light);
 }
 
+/* Anexa §B8: unify the two accent blues — badges (.bg-primary) used the
+   Bootstrap theme blue #446e9b while primary buttons used --accent-primary
+   #2563eb. Both now resolve to the accent colour. */
+.bg-primary,
+.badge.bg-primary {
+  background-color: var(--accent-primary) !important;
+}
+
+.table-primary {
+  --bs-table-bg: var(--accent-primary-light);
+}
+
 /* Outline buttons */
 .btn-outline-primary {
   border: 1px solid var(--accent-primary);

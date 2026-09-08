@@ -13,19 +13,27 @@
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
 import { ContextConsumer } from 'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0/index.js';
 import { MinmaxEngineStoreContext } from '../../stores/minmax-engine-store.js';
-import { CLASA_OPTIONS } from './minmax-engine-constants.js';
+import { CLASA_OPTIONS, renderBool } from './minmax-engine-constants.js';
 
 // Sort whitelist mirrored from DET_COLUMNS in minmax-engine.class.js — shapes
 // the UI only; the backend re-validates independently and is the real guard.
 const FLAG_TXT_OPTIONS = ['OK', 'UP', 'DOWN', 'MAJOR_UP', 'SUPRASTOC', 'FARA_REFERINTA'];
 const STATUS_TREND_OPTIONS = ['ACTIVE', 'STABLE', 'TREND_DOWN', 'DECLINE'];
 const LIFECYCLE_OPTIONS = ['STANDARD', 'NOU', 'OD'];
-const ABC_OPTIONS = ['A', 'B', 'C'];
-const XYZ_OPTIONS = ['X', 'Y', 'Z'];
+// Anexa §A2: ABC/XYZ separate filters removed — CLASA (11 values) is already
+// their cartesian product and keeping both allowed contradictory selections.
 
 // Tri-state filters (true/false/unset) — contract §5 "Booleeni tri-state".
 // Keys must match TRI_STATE_FILTER_KEYS in minmax-engine-store.js.
-const TRI_STATE_FIELDS = [
+// Split per Anexa §A1: the four Warn* + the ERP flags are "advanced" (Nivel 3).
+const TRI_STATE_WARN_FIELDS = [
+  { key: 'warnVz26Zero', label: 'Warn VZ26=0' },
+  { key: 'warnStocNeg', label: 'Warn stoc negativ' },
+  { key: 'warnStocMort', label: 'Warn stoc mort' },
+  { key: 'warnGrupaMica', label: 'Warn grupa mica' }
+];
+
+const TRI_STATE_ERP_FIELDS = [
   { key: 'esteHq', label: 'HQ' },
   { key: 'hqCapAplicat', label: 'HQ cap aplicat' },
   { key: 'podeaAplicata', label: 'Podea aplicata' },
@@ -33,11 +41,7 @@ const TRI_STATE_FIELDS = [
   { key: 'discFlag', label: 'Discontinuat' },
   { key: 'flagLichidare', label: 'Lichidare' },
   { key: 'flagBlocat', label: 'Blocat' },
-  { key: 'flagExclus', label: 'Exclus' },
-  { key: 'warnVz26Zero', label: 'Warn VZ26=0' },
-  { key: 'warnStocNeg', label: 'Warn stoc negativ' },
-  { key: 'warnStocMort', label: 'Warn stoc mort' },
-  { key: 'warnGrupaMica', label: 'Warn grupa mica' }
+  { key: 'flagExclus', label: 'Exclus' }
 ];
 
 // Interval filters ({min,max}) — contract §5. Keys must match INTERVAL_FILTER_KEYS.
@@ -84,13 +88,31 @@ const RESULT_COLUMNS = [
 const FLAG_BADGE_CLASS = {
   DOWN: 'bg-danger',
   FARA_REFERINTA: 'bg-secondary',
-  MAJOR_UP: 'bg-warning text-dark',
+  MAJOR_UP: 'bg-warning',
   OK: 'bg-success',
-  SUPRASTOC: 'bg-info text-dark',
+  SUPRASTOC: 'bg-warning',
   UP: 'bg-primary'
 };
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
+
+// Anexa §A3: counts the draft filters that differ from the store's neutral
+// defaults, so the user sees how many filters are about to be applied.
+function _countActiveFilters (filters) {
+  if (!filters) return 0;
+  let count = 0;
+  const hasValue = (v) => v !== null && v !== undefined && v !== '' &&
+    !(Array.isArray(v) && v.length === 0);
+  for (const [key, value] of Object.entries(filters)) {
+    if (key === 'branches') continue; // default = all branches selected
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      if (hasValue(value.min) || hasValue(value.max)) count += 1;
+    } else if (hasValue(value)) {
+      count += 1;
+    }
+  }
+  return count;
+}
 
 export class MinmaxResultsTable extends LitElement {
   static get properties () {
@@ -329,10 +351,15 @@ export class MinmaxResultsTable extends LitElement {
   _formatCell (row, col) {
     const value = row[col.key];
     if (col.type === 'boolean') {
-      return value ? html`<span class="badge bg-success">Da</span>` : html`<span class="text-muted">-</span>`;
+      // Green dot instead of text/badge (see renderBool in constants).
+      return renderBool(value);
     }
     if (col.badge && value) {
-      return html`<span class="badge ${FLAG_BADGE_CLASS[value] || 'bg-secondary'}">${value}</span>`;
+      // SUPRASTOC and MAJOR_UP share the amber bg-warning (both WCAG-safe with
+      // white text) — differentiate by icon so they stay visually distinct.
+      const icon = value === 'SUPRASTOC' ? html`<i class="fas fa-boxes me-1"></i>`
+        : value === 'MAJOR_UP' ? html`<i class="fas fa-arrow-trend-up me-1"></i>` : '';
+      return html`<span class="badge ${FLAG_BADGE_CLASS[value] || 'bg-secondary'}">${icon}${value}</span>`;
     }
     if (col.type === 'number') {
       return (value === null || value === undefined) ? '-' : Number(value).toLocaleString('ro-RO', { maximumFractionDigits: 2 });
@@ -357,6 +384,7 @@ export class MinmaxResultsTable extends LitElement {
           ${this.error ? html`<div class="alert alert-danger py-2">${this.error}</div>` : ''}
 
           <div class="filters-panel border rounded p-2 mb-3 bg-light">
+            <!-- Nivel 1: mereu vizibil (Anexa §A1) -->
             <div class="row g-2 align-items-end mb-2">
               <div class="col-auto">
                 <div class="small text-muted mb-1">Cod (prefix)</div>
@@ -364,38 +392,56 @@ export class MinmaxResultsTable extends LitElement {
                        .value="${this._draftFilters.codeLike || ''}"
                        @change="${(e) => this._setCodeLike(e.target.value)}">
               </div>
-              ${this._renderIntListFilter('mtrl', 'MTRL')}
-              ${this._renderIntListFilter('mtrgroup', 'Grupa (MTRGROUP)')}
               ${this._renderBranchFilter()}
               ${this._renderEnumFilter('flagTxt', 'Flag', FLAG_TXT_OPTIONS)}
               ${this._renderEnumFilter('statusTrend', 'Trend', STATUS_TREND_OPTIONS)}
-              ${this._renderEnumFilter('lifecycle', 'Lifecycle', LIFECYCLE_OPTIONS)}
-              ${this._renderEnumFilter('abc', 'ABC', ABC_OPTIONS)}
-              ${this._renderEnumFilter('xyz', 'XYZ', XYZ_OPTIONS)}
               ${this._renderEnumFilter('clasa', 'Clasa', CLASA_OPTIONS)}
             </div>
 
-            <div class="row g-2 align-items-end mb-2">
-              ${TRI_STATE_FIELDS.map((f) => this._renderTriStateFilter(f))}
-            </div>
+            <!-- Nivel 2: Excepții de verificat (Anexa §A1) -->
+            <details class="mb-2" open>
+              <summary class="small fw-semibold text-primary" style="cursor:pointer;">
+                <i class="fas fa-exclamation-triangle me-1"></i>Excepții de verificat
+              </summary>
+              <div class="row g-2 align-items-end mt-1">
+                ${this._renderEnumFilter('lifecycle', 'Lifecycle', LIFECYCLE_OPTIONS)}
+                ${TRI_STATE_WARN_FIELDS.map((f) => this._renderTriStateFilter(f))}
+              </div>
+            </details>
 
-            <div class="row g-2 align-items-end mb-2">
-              ${INTERVAL_FIELDS.map((f) => this._renderIntervalFilter(f))}
-            </div>
+            <!-- Nivel 3: Filtre avansate (Anexa §A1) -->
+            <details class="mb-2">
+              <summary class="small fw-semibold text-muted" style="cursor:pointer;">
+                <i class="fas fa-sliders-h me-1"></i>Filtre avansate
+              </summary>
+              <div class="mt-2">
+                <div class="row g-2 align-items-end mb-2">
+                  ${this._renderIntListFilter('mtrl', 'MTRL')}
+                  ${this._renderIntListFilter('mtrgroup', 'Grupa (MTRGROUP)')}
+                  ${TRI_STATE_ERP_FIELDS.map((f) => this._renderTriStateFilter(f))}
+                </div>
+                <div class="row g-2 align-items-end">
+                  ${INTERVAL_FIELDS.map((f) => this._renderIntervalFilter(f))}
+                </div>
+              </div>
+            </details>
 
-            <div class="d-flex gap-2">
+            <div class="d-flex gap-2 align-items-center">
               <button class="btn btn-sm btn-primary" ?disabled="${this.loading}" @click="${this._applyFilters}">
                 <i class="fas fa-filter me-1"></i>Aplica filtre
               </button>
               <button class="btn btn-sm btn-outline-secondary" ?disabled="${this.loading}" @click="${this._resetFilters}">
                 <i class="fas fa-undo me-1"></i>Reseteaza
               </button>
+              ${_countActiveFilters(this._draftFilters) > 0
+                ? html`<span class="badge bg-primary ms-1">${_countActiveFilters(this._draftFilters)} filtre active</span>`
+                : ''}
             </div>
           </div>
 
           <div class="table-responsive">
             <table class="table table-sm table-hover align-middle mb-0">
-              <thead>
+              <thead class="sticky-top bg-white" style="z-index: 1;">
                 <tr>
                   ${RESULT_COLUMNS.map((col) => html`
                     <th style="${col.sortField ? 'cursor:pointer;' : ''}"

@@ -14,8 +14,12 @@ import { getAppTokenRoles } from '../../stores/app-auth.js';
 const STATUS_BADGE_CLASS = {
   DONE: 'bg-success',
   ERROR: 'bg-danger',
-  OPEN: 'bg-warning text-dark'
+  OPEN: 'bg-warning'
 };
+
+// Anexa §B7: only OPEN/ERROR render as coloured badges; DONE is plain muted
+// text so the three green "DONE" badges per row stop diluting the signal.
+const QUIET_STATUSES = new Set(['DONE']);
 
 export class MinmaxRunPanel extends LitElement {
   static get properties () {
@@ -137,6 +141,9 @@ export class MinmaxRunPanel extends LitElement {
 
   _statusBadge (status) {
     if (!status) return html`<span class="badge bg-secondary">-</span>`;
+    if (QUIET_STATUSES.has(status)) {
+      return html`<span class="text-muted small">${status}</span>`;
+    }
     const cls = STATUS_BADGE_CLASS[status] || 'bg-secondary';
     return html`<span class="badge ${cls}">${status}</span>`;
   }
@@ -204,8 +211,16 @@ export class MinmaxRunPanel extends LitElement {
             </label>
           </div>
 
-          <div class="table-responsive">
-            <table class="table table-sm table-hover align-middle mb-0">
+          <!-- Anexa §B6: the full history table collapses; the summary line keeps
+               the current session visible without permanent vertical cost. -->
+          <details>
+            <summary class="small text-muted" style="cursor:pointer;">
+              Istoric sesiuni (${this.runHistory.length})${this.resolvedRunId !== null
+                ? ` — curenta: RUNID ${this.resolvedRunId}`
+                : ''}
+            </summary>
+            <div class="table-responsive mt-2">
+              <table class="table table-sm table-hover align-middle mb-0">
               <thead>
                 <tr>
                   <th></th>
@@ -262,6 +277,7 @@ export class MinmaxRunPanel extends LitElement {
               </tbody>
             </table>
           </div>
+          </details>
         </div>
       </div>
     `;

@@ -17,12 +17,12 @@
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
 import { ContextConsumer } from 'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0/index.js';
 import { MinmaxEngineStoreContext } from '../../stores/minmax-engine-store.js';
-import { CLASA_OPTIONS } from './minmax-engine-constants.js';
+import { CLASA_OPTIONS, renderBool } from './minmax-engine-constants.js';
 
 // Enum options mirrored from GRP_COLUMNS/LIFECYCLE_VALUES etc. in minmax-engine.class.js.
 const LIFECYCLE_OPTIONS = ['STANDARD', 'NOU', 'OD'];
-const ABC_OPTIONS = ['A', 'B', 'C'];
-const XYZ_OPTIONS = ['X', 'Y', 'Z'];
+// Anexa §A2: ABC/XYZ separate filters removed — CLASA (11 values) is already
+// their cartesian product and keeping both allowed contradictory selections.
 
 // Columns rendered from CCCMINMAXGRP (subset, per 00b_persist.sql).
 const GROUP_COLUMNS = [
@@ -45,6 +45,9 @@ const GROUP_COLUMNS = [
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
 
 // Keys/order match the groupAbc() filter handling in minmax-engine.class.js.
+// Anexa §A2: `abc`/`xyz` keys are no longer editable from the UI (CLASA covers
+// the same dimension); the keys stay in the default object so the backend
+// contract (which still accepts them) keeps receiving empty lists.
 function getDefaultFilters () {
   return { abc: [], branches: [], clasa: [], esteHq: null, lifecycle: [], mtrgroup: [], xyz: [] };
 }
@@ -234,7 +237,8 @@ export class MinmaxGroupAbc extends LitElement {
   _formatCell (row, col) {
     const value = row[col.key];
     if (col.type === 'boolean') {
-      return value ? html`<span class="badge bg-success">Da</span>` : html`<span class="text-muted">-</span>`;
+      // Green dot instead of text/badge (see renderBool in constants).
+      return renderBool(value);
     }
     if (col.type === 'number') {
       return (value === null || value === undefined) ? '-' : Number(value).toLocaleString('ro-RO', { maximumFractionDigits: 2 });
@@ -259,8 +263,6 @@ export class MinmaxGroupAbc extends LitElement {
               ${this._renderIntListFilter('mtrgroup', 'Grupa (MTRGROUP)')}
               ${this._renderBranchFilter()}
               ${this._renderEnumFilter('lifecycle', 'Lifecycle', LIFECYCLE_OPTIONS)}
-              ${this._renderEnumFilter('abc', 'ABC', ABC_OPTIONS)}
-              ${this._renderEnumFilter('xyz', 'XYZ', XYZ_OPTIONS)}
               ${this._renderEnumFilter('clasa', 'Clasa', CLASA_OPTIONS)}
               ${this._renderTriStateFilter('esteHq', 'HQ')}
             </div>
@@ -277,7 +279,7 @@ export class MinmaxGroupAbc extends LitElement {
 
           <div class="table-responsive">
             <table class="table table-sm table-hover align-middle mb-0">
-              <thead>
+              <thead class="sticky-top bg-white" style="z-index: 1;">
                 <tr>
                   ${GROUP_COLUMNS.map((col) => html`<th>${col.label}</th>`)}
                 </tr>
