@@ -311,8 +311,29 @@ pe cazuri care nu exercită formula. Se construiește pe patru criterii:
 `STANDARD/NOU/OD`, 19 HQ + 12 non-HQ și serii explicite de câte 52 săptămâni. Ramura
 `N_PACK > 1` este indisponibilă (`N_PACK=1` pe toate rândurile). Recalculul independent al celor
 13 câmpuri din lanțul `SAFETY → BUY_QTY` este 31/31 PASS atât în generatorul Node, cât și într-o
-verificare separată Python `Decimal`. Compararea manuală cu valorile afișate în drawer rămâne de
-făcut, deci definiția de terminat și poarta de mai jos nu se bifează încă.
+verificare separată Python `Decimal`.
+
+**Verificare drawer 08.09.2026 — executată, două defecte găsite și remediate, Nivel B ÎNCHIS.**
+Cele 31 de triplete au fost deschise succesiv în aplicația live, exclusiv pe `RUNID=5`. Prima trecere
+a confirmat 31/31 request-uri reușite și zero diferențe de identitate, antet, lanț de calcul
+(16 câmpuri) sau winsorizare, dar a găsit două defecte în `MinmaxEngineService.explain()`, ambele
+de transport/proiecție, niciunul în datele persistate:
+
+- **Precizie pierdută pe `DECIMAL(10, 4)`.** `SSF` sosea rotunjit în 31/31 rânduri (`1.2800 → 1`) și
+  `COV_TGT` în 19/31 (`2.7500 → 3`, `0.5000 → 0`). Cauza: serializatorul de dataset al WSMCP rotunjește
+  declarația `DECIMAL(10, 4)` la întreg, în timp ce coloanele `DECIMAL(28, 8)` circulă intact —
+  de-asta lanțul calculat era corect, iar doar cele trei intrări `COV_TGT`/`SL`/`SSF` erau afectate.
+  Remediere: coloanele se recitesc `CONVERT(DECIMAL(28, 8), ...)` sub un alias și se pliază înapoi
+  peste numele reale, deci payload-ul rămâne numeric și frontend-ul nu se schimbă.
+- **Serie săptămânală decalată.** CTE-ul dens genera `1..52`, deși motorul persistă `0..51`
+  (`WEEK_INDEX = 0` este săptămâna lui `AZI`). Toate cele 31 de drawer-uri omiteau săptămâna 0 și
+  adăugau o săptămână 52 artificială; săptămâna omisă avea date nenule în 5/31 cazuri. Remediere:
+  ancora CTE-ului pornește de la 0 și se oprește la 51.
+
+Ambele remedieri au fost validate întâi read-only pe `RUNID=5` (`CONVERT` întoarce `2.75`/`1.28`;
+CTE-ul întoarce 52 de rânduri `0..51`, cu `QTY = 24` pe săptămâna 0 pentru `1000/2991011`), apoi
+acoperite cu teste unitare. După redeploy, **reverificarea celor 31 de triplete este 31/31 fără
+nicio diferență** — intrări, lanț, antet, winsorizare, structura randată și seria săptămânală.
 
 Pentru fiecare rând se consemnează: valoarea așteptată (calculată manual), valoarea afișată,
 diferența și verdictul. O diferență neexplicată blochează poarta.
@@ -336,7 +357,9 @@ review, cu context mic** *(model: Opus, agentul `Review`)*:
 - [x] pasul 8 nivel A: toate invariantele au verdict, abaterile sunt corectate sau documentate
       (08.09.2026: 8/9 PASS + calibrare FLAG 85,5%; `NR_SKU_GRP` documentat ca defect cosmetic în
       `ClassifyGroup`, fără efect asupra vreunei valori calculate);
-- [ ] pasul 8 nivel B: eșantionul înghețat e verificat, fără diferențe neexplicate;
+- [x] pasul 8 nivel B: eșantionul înghețat e verificat, fără diferențe neexplicate (08.09.2026:
+      31/31 triplete comparate în drawer, zero diferențe, după remedierea preciziei `DECIMAL(10, 4)`
+      și a intervalului săptămânal din `explain`);
 - [ ] **confirmarea beneficiarului pe formule**, nu doar pe cifre — este întrebarea a doua din pasul 8
       și singura care deschide Faza 4.
 

@@ -63,6 +63,20 @@ automat (pagina se reîncarcă), fără cod explicit de curățare.
 | `explain` | `CCCMINMAXDET`+`RUN`+`WINSOR`+`WEEK` | drill-down persistat, 4 interogări punctuale; serie de 52 săptămâni reconstruită dens (CTE recursiv) din `CCCMINMAXWEEK` rar |
 | `saveParams` | scriere pe `PARAMS/COV/BRANCH` | singura scriere, via `statements` (atomic, `BEGIN TRAN/COMMIT` server-side) |
 
+### Precizie și indexare în `explain` (găsite la verificarea Nivel B, 08.09.2026)
+
+- **`DECIMAL(10, 4)` nu supraviețuiește transportului.** WSMCP rotunjește la întreg coloanele
+  declarate `DECIMAL(10, 4)` (`2.7500 → 3`, `1.2800 → 1`), în timp ce `DECIMAL(28, 8)` circulă
+  intact. În `CCCMINMAXDET` doar `COV_TGT`, `SL` și `SSF` au acest tip, deci lanțul calculat era
+  corect și doar aceste intrări erau greșite. `results()` și `explain()` le recitesc acum
+  `CONVERT(DECIMAL(28, 8), ...)` sub aliasul `<COL>__EXACT`, iar `mergeExactDecimals()` le pliază
+  înapoi peste numele reale — clientul nu vede niciodată aliasul. **Nu reintroduce `SELECT *` simplu
+  pe `CCCMINMAXDET`**, și dacă apar coloane noi `DECIMAL(10, 4)`, adaugă-le în `EXACT_DECIMAL_COLUMNS`.
+- **`WEEK_INDEX` începe la 0.** Seria densă trebuie să acopere `0..51`, pentru că `0` este săptămâna
+  lui `AZI` și așa persistă `Classify` în `CCCMINMAXWEEK`. CTE-ul genera inițial `1..52`, deci omitea
+  săptămâna curentă (date nenule în 5 din cele 31 de triplete verificate) și adăuga o săptămână 52
+  artificială.
+
 „Sesiune curentă" se rezolvă **mereu** `ESTE_CURENT=1 AND SCOPE='FULL' AND SESSION_STATUS='DONE'
 AND COMPUTE_STATUS='DONE'` (`_resolveRunId`/`_resolveCurrentRunId`), niciodată `MAX(RUNID)`.
 

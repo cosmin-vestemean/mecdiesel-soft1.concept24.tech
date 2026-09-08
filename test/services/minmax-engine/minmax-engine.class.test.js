@@ -463,7 +463,7 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
         .reply(200, reply([{ RUNID: 5 }]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('PARAMSJSON'))
         .reply(200, reply([{ PARAMSJSON: '{}', RUNID: 5 }]))
-        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT * FROM CCCMINMAXDET'))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXDET d'))
         .reply(200, reply([{ BRANCH: 1000, ENG_MAX: 10, MTRL: 42, RUNID: 5 }]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXWINSOR'))
         .reply(200, reply([{ MTRL: 42, RUNID: 5 }]))
@@ -483,7 +483,7 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
         .reply(200, reply([{ RUNID: 5 }]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('PARAMSJSON'))
         .reply(200, reply([{ RUNID: 5 }]))
-        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT * FROM CCCMINMAXDET'))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXDET d'))
         .reply(200, reply([]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXWINSOR'))
         .reply(200, reply([]))
@@ -503,12 +503,12 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
         .reply(200, reply([{ RUNID: 5 }]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('PARAMSJSON'))
         .reply(200, reply([{ PARAMSJSON: '{}', RUNID: 5 }]))
-        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT * FROM CCCMINMAXDET'))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXDET d'))
         .reply(200, reply([{ BRANCH: 1000, ENG_MAX: 10, MTRL: 42, RUNID: 5 }]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXWINSOR'))
         .reply(200, reply([{ MTRL: 42, RUNID: 5 }]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('CCCMINMAXWEEK'))
-        .reply(200, reply([{ QTY: 3, WEEK_INDEX: 1 }]))
+        .reply(200, reply([{ QTY: 3, WEEK_INDEX: 0 }]))
 
       const service = makeService()
       const result = await service.explain({ branch: 1000, mtrl: 42, runId: 5, token: 'tok' })
@@ -516,7 +516,73 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
       assert.strictEqual(result.det.ENG_MAX, 10)
       assert.strictEqual(result.run.RUNID, 5)
       assert.strictEqual(result.winsor.MTRL, 42)
-      assert.deepStrictEqual(result.weeklySeries, [{ QTY: 3, WEEK_INDEX: 1 }])
+      assert.deepStrictEqual(result.weeklySeries, [{ QTY: 3, WEEK_INDEX: 0 }])
+    })
+
+    it('re-reads COV_TGT/SL/SSF exactly and merges them onto the column names', async () => {
+      let detSql
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('PARAMSJSON'))
+        .reply(200, reply([{ PARAMSJSON: '{}', RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => {
+          const isDet = body.sqlQuery.includes('FROM CCCMINMAXDET d')
+          if (isDet) detSql = body.sqlQuery
+          return isDet
+        })
+        // What WSMCP actually returns: the raw columns rounded, the aliases exact.
+        .reply(200, reply([{
+          BRANCH: 1000,
+          COV_TGT: 3,
+          COV_TGT__EXACT: 2.75,
+          MTRL: 42,
+          RUNID: 5,
+          SL: 95,
+          SL__EXACT: 95,
+          SSF: 1,
+          SSF__EXACT: 1.28
+        }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXWINSOR'))
+        .reply(200, reply([]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('CCCMINMAXWEEK'))
+        .reply(200, reply([]))
+
+      const service = makeService()
+      const result = await service.explain({ branch: 1000, mtrl: 42, runId: 5, token: 'tok' })
+
+      assert.ok(detSql.includes('CONVERT(DECIMAL(28, 8), d.COV_TGT) AS COV_TGT__EXACT'))
+      assert.strictEqual(result.det.COV_TGT, 2.75)
+      assert.strictEqual(result.det.SSF, 1.28)
+      assert.strictEqual(result.det.SL, 95)
+      assert.ok(!('COV_TGT__EXACT' in result.det))
+      assert.ok(!('SSF__EXACT' in result.det))
+      assert.ok(!('SL__EXACT' in result.det))
+    })
+
+    it('builds the dense weekly series over 0..51, matching CCCMINMAXWEEK', async () => {
+      let weekSql
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('PARAMSJSON'))
+        .reply(200, reply([{ PARAMSJSON: '{}', RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXDET d'))
+        .reply(200, reply([{ BRANCH: 1000, MTRL: 42, RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXWINSOR'))
+        .reply(200, reply([]))
+        .post(EXEC_SQL_PATH, (body) => {
+          const isWeek = body.sqlQuery.includes('CCCMINMAXWEEK')
+          if (isWeek) weekSql = body.sqlQuery
+          return isWeek
+        })
+        .reply(200, reply([]))
+
+      const service = makeService()
+      await service.explain({ branch: 1000, mtrl: 42, runId: 5, token: 'tok' })
+
+      assert.ok(weekSql.includes('SELECT 0 UNION ALL'))
+      assert.ok(weekSql.includes('WEEK_INDEX < 51'))
     })
   })
 

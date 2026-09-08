@@ -64,6 +64,17 @@ const DET_COLUMNS = {
   val52s: 'd.VAL_52S'
 }
 
+// CCCMINMAXDET declares COV_TGT/SL/SSF as DECIMAL(10, 4), and WSMCP's dataset
+// serializer rounds that declaration to whole numbers (2.7500 -> 3, 1.2800 -> 1)
+// while DECIMAL(28, 8) columns round-trip intact. They are therefore re-read
+// under an alias and merged back over the rounded originals. Verified live
+// 08.09.2026 on RUNID=5; the stored values themselves are correct.
+const EXACT_DECIMAL_COLUMNS = ['COV_TGT', 'SL', 'SSF']
+const EXACT_DECIMAL_ALIAS_SUFFIX = '__EXACT'
+const EXACT_DECIMAL_SELECT = EXACT_DECIMAL_COLUMNS
+  .map((column) => `CONVERT(DECIMAL(28, 8), d.${column}) AS ${column}${EXACT_DECIMAL_ALIAS_SUFFIX}`)
+  .join(', ')
+
 // Same idea for CCCMINMAXGRP (groupAbc) — a different table, different grain.
 const GRP_COLUMNS = {
   branch: 'g.BRANCH',
@@ -277,6 +288,21 @@ function extractRows (response) {
   return []
 }
 
+// Folds the exact-decimal aliases back onto their column names, so callers
+// never see the transport-only suffix.
+function mergeExactDecimals (rows) {
+  for (const row of rows) {
+    for (const column of EXACT_DECIMAL_COLUMNS) {
+      const alias = `${column}${EXACT_DECIMAL_ALIAS_SUFFIX}`
+      if (Object.prototype.hasOwnProperty.call(row, alias)) {
+        row[column] = row[alias]
+        delete row[alias]
+      }
+    }
+  }
+  return rows
+}
+
 export class MinmaxEngineService {
   constructor (options, app) {
     this.options = options || {}
@@ -445,7 +471,7 @@ export class MinmaxEngineService {
     const pageParams = filterParams.slice()
     const paging = buildPaging(data.page, data.pageSize)
 
-    const sql = `SELECT d.* FROM CCCMINMAXDET d WHERE ${whereSql} ORDER BY ${orderBy} ${paging.sql}`
+    const sql = `SELECT d.*, ${EXACT_DECIMAL_SELECT} FROM CCCMINMAXDET d WHERE ${whereSql} ORDER BY ${orderBy} ${paging.sql}`
     const response = await this._execSql(sql, pageParams, token)
 
     let total
@@ -502,7 +528,7 @@ export class MinmaxEngineService {
       total = countRows.length ? Number(countRows[0].TOTAL) : 0
     }
 
-    return { page: paging.page, pageSize: paging.pageSize, rows: extractRows(response), runId, total }
+    return { page: paging.page, pageSize: paging.pageSize, rows: mergeExactDecimals(extractRows(response)), runId, total }
   }
 
   /** CCCMINMAXPARAMS + CCCMINMAXCOV + CCCMINMAXBRANCH — current config. */
@@ -543,7 +569,8 @@ export class MinmaxEngineService {
         [runId], token
       ),
       this._execSql(
-        'SELECT * FROM CCCMINMAXDET WHERE RUNID = :1 AND BRANCH = :2 AND MTRL = :3',
+        `SELECT d.*, ${EXACT_DECIMAL_SELECT} FROM CCCMINMAXDET d ` +
+        'WHERE d.RUNID = :1 AND d.BRANCH = :2 AND d.MTRL = :3',
         [runId, branch, mtrl], token
       ),
       this._execSql(
@@ -551,8 +578,10 @@ export class MinmaxEngineService {
         [runId, mtrl], token
       ),
       this._execSql(
+        // WEEK_INDEX 0 is the week of AZI, so the dense series spans 0..51 to
+        // line up with what Classify persists in CCCMINMAXWEEK.
         'WITH weeks (WEEK_INDEX) AS (' +
-        'SELECT 1 UNION ALL SELECT WEEK_INDEX + 1 FROM weeks WHERE WEEK_INDEX < 52' +
+        'SELECT 0 UNION ALL SELECT WEEK_INDEX + 1 FROM weeks WHERE WEEK_INDEX < 51' +
         ') ' +
         'SELECT w.WEEK_INDEX, ISNULL(k.QTY, 0) AS QTY, ISNULL(k.SALES_VALUE, 0) AS SALES_VALUE, k.LAST_POSITIVE_SALE ' +
         'FROM weeks w ' +
@@ -563,7 +592,7 @@ export class MinmaxEngineService {
       )
     ])
 
-    const rows = extractRows(rowRes)
+    const rows = mergeExactDecimals(extractRows(rowRes))
     if (!rows.length) {
       throw new Error(`No CCCMINMAXDET row for RUNID=${runId}, BRANCH=${branch}, MTRL=${mtrl}.`)
     }
