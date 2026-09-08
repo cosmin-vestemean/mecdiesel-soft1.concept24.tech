@@ -19,6 +19,10 @@
   deschide sincron sesiunea prin endpoint-ul AJS `startRun`, apoi lansează `runPhases`
   (`Classify → ClassifyGroup → Compute → FinishRun`) fără a ține socket-ul UI blocat; browserul
   urmărește starea persistentă prin `history()`.
+- **Estimarea de ~2 minute pentru o sesiune nu este o limită operațională garantată.** La prima
+  lansare completă din UI, `RUNID=6` a rămas `OPEN/RUNNING` deoarece `runPhases` a primit de la S1
+  `Ole Error 80040E31: Query timeout expired`. Sesiunea a fost închisă explicit prin `AbandonRun`, iar
+  `RUNID=5` a rămas `DONE` și `ESTE_CURENT=1`; o sesiune eșuată nu se reia prin același `RUNID`.
 - **O singură sesiune `OPEN` per companie.** `StartRun` verifică sub `UPDLOCK, HOLDLOCK` și aruncă
   `50039` înainte de insert; UI-ul blochează dublu-click-ul, iar backend-ul traduce conflictul într-o
   stare „deja în curs”. O rulare eșuată rămâne descriptibilă și se închide explicit cu
