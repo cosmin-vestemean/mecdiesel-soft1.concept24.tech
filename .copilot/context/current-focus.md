@@ -1,16 +1,16 @@
 # Current Focus
 
 ## Last Updated
-- 08.09.2026 (sesiunea 43)
+- 08.09.2026 (sesiunea 44)
 
 ## Current Goal
-- Faza 6 are pașii 1-11 implementați/executați și este deployată; scrierile nu sunt încă activate.
+- Faza 6 are pașii 1-11 implementați/executați, deployați și instalați; scrierile nu sunt încă activate.
 - Baseline-ul Nivel B pentru `RUNID=5` este înghețat: 31 triplete, 35 criterii și 31/31
   recalculări independente PASS; nu s-a pornit `RUNID=6`.
 - Nivel B este ÎNCHIS: cele 31 de triplete au fost reverificate live după redeploy, fără diferențe.
 - `runEngine`, lifecycle-ul, auditul și butonul UI sunt acoperite de 139 teste; scrierile rămân oprite.
 - Artefactele legacy `RUNID 1-4` au fost șterse complet; toate cele cinci tabele verificate au zero rânduri.
-- `NewMinMax/setup` a reușit după separarea procedurilor lifecycle în batch-uri distincte.
+- `NewMinMax/setup` a reușit; procedurile lifecycle, indexul și retenția au fost verificate în S1.
 - Fazele 0-3 sunt deployate, `RUNID=5` rămâne sesiunea curentă, iar scrierile sunt oprite.
 
 ## Active Area
@@ -44,8 +44,7 @@
 - Validarea endpoint-urilor cu kill-switch oprit, apoi activarea deliberată și prima rulare din UI.
 - Suita de teste are un eșec preexistent, fără legătură cu MIN/MAX: `mec-item-producer-relation`
   are test, dar niciun serviciu în `src/`. Blochează bifa „suită unit/component verde" din poartă.
-- Confirmarea beneficiarului pe formule și pe butonul de lansare din Faza 6.
-- Fixul `NR_SKU_GRP` este implementat local în pachetul Fazei 6 și așteaptă deploy-ul unic.
+- Confirmarea beneficiarului pe formule și pe comportamentul butonului după prima rulare reală din UI.
 
 ## Next Step
 - Validează că operațiile de scriere răspund 403 cu kill-switch-ul oprit; apoi activează deliberat

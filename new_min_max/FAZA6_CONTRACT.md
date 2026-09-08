@@ -41,9 +41,10 @@ e păstrată de politica de retenție (`DET` curentă + precedenta) — prin reg
 
 ### Curățarea sesiunilor de test — operație unică, nu retenție
 
-`RUNID 1–4` sunt artefacte de dezvoltare: 1–3 au câte 14 rânduri (smoke tests pe un singur articol),
-4 are 713.818 rânduri și `GROUP` lipsă. Toate au `SESSION_STATUS = NULL` — legacy prin construcție,
-dinaintea modelului de sesiune. Curățarea lor eliberează ~700 MB, practic doar `RUNID=4`.
+`RUNID 1–4` au fost artefacte de dezvoltare: 1–3 aveau câte 14 rânduri (smoke tests pe un singur
+articol), iar 4 avea 713.818 rânduri și `GROUP` lipsă. Toate aveau `SESSION_STATUS = NULL` — legacy
+prin construcție, dinaintea modelului de sesiune. Curățarea completă a fost executată după închiderea
+Nivelului B; verificarea read-only a confirmat zero rânduri în `RUN/DET/WEEK/WINSOR/GRP` pentru 1–4.
 
 **Nu confunda asta cu `PurgeRun`.** Sunt operații diferite, cu reguli diferite:
 
@@ -57,9 +58,8 @@ Antetele lui 1–4 nu aparțin registrului operațional — ar apărea pentru to
 istoric al beneficiarului, deasupra primei rulări reale, fără să însemne nimic. `IDENTITY` nu se
 resetează, deci `RUNID=6` rămâne 6; golul e onest și preferabil unei renumerotări.
 
-> **De confirmat înainte de execuție:** dacă vrei ca antetele lui 1–4 să rămână ca urmă istorică a
-> dezvoltării, se șterge doar detaliul. Implicit în acest contract: **ștergere completă**, pentru un
-> ecran de istoric curat la predare.
+Decizia executată: **ștergere completă**, inclusiv antetele, pentru un ecran de istoric curat la
+predare. `IDENTITY` nu a fost resetat; următoarea sesiune rămâne `RUNID=6`.
 
 Eșantionul de nivel B nu blochează purjarea ulterioară a lui `RUNID=5`: verdictele se consemnează în
 `new_min_max/analiza/` ca valori așteptate, deci comparația „înainte/după" se face față de fișier, nu
