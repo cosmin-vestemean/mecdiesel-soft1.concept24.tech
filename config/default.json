@@ -20,9 +20,10 @@
     }
   },
   "minmaxEngine": {
-    "writesEnabled": false,
+    "_WARNING": "writesEnabled permite doar saveParams/runEngine/abandonRun/purgeRun (tabele CCCMINMAX*). NU exista inca applyToErp (Faza 4) - A NU SE SALVA IN ERP DATELE MIN/MAX PANA NU AVEM APROBARE DE LA BENEFICIAR (vezi new_min_max/FAZA4_CONTRACT.md).",
+    "writesEnabled": true,
     "readers": "*",
-    "editors": []
+    "editors": "*"
   },
   "mssql": {
     "client": "mssql",

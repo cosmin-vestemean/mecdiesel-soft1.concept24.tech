@@ -10,6 +10,7 @@ import assert from 'assert'
 import nock from 'nock'
 import { MinmaxEngineService, getOptions } from '../../../src/services/minmax-engine/minmax-engine.class.js'
 import { classifySql } from '../../../src/services/minmax-engine/sql-guard.js'
+import { logger } from '../../../src/logger.js'
 
 const FAKE_BASE_URL = 'http://fake-s1.test'
 const EXEC_SQL_PATH = '/JS/WSMCP/execSql'
@@ -694,6 +695,38 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
         /Too many covUpdates rows in one save \(501 > 500\)/
       )
     })
+
+    it('audits changed logical keys without leaking the new values (FAZA5_CONTRACT §12.8)', async () => {
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => Array.isArray(body.statements))
+        .reply(200, () => reply([{ affected: 1 }]))
+
+      const logged = []
+      const originalInfo = logger.info
+      logger.info = (message, ...args) => { logged.push(args[0] || message) }
+      try {
+        const service = makeService({ writesEnabled: true })
+        await service.saveParams({
+          branchUpdates: [{ branch: 1000, estePodea: true, inclus: true, marime: 'MARE' }],
+          covUpdates: [{ clasa: 'AX', cov: 1.75, marime: 'MIC' }],
+          paramsUpdates: [{ paramKey: 'SSF', paramValue: 'top-secret-value', scope: 'GLOBAL' }],
+          token: 'tok'
+        }, { authentication: { payload: { sub: 42 } } })
+      } finally {
+        logger.info = originalInfo
+      }
+
+      const auditLine = logged.find((line) => typeof line === 'string' && line.includes('"operation":"saveParams"'))
+      assert.ok(auditLine, 'saveParams audit entry was logged')
+      const entry = JSON.parse(auditLine)
+      assert.strictEqual(entry.refid, 42)
+      assert.ok(entry.timestamp, 'timestamp is present')
+      assert.deepStrictEqual(entry.changedKeys.branchUpdates, [{ branch: 1000 }])
+      assert.deepStrictEqual(entry.changedKeys.covUpdates, [{ clasa: 'AX', marime: 'MIC' }])
+      assert.deepStrictEqual(entry.changedKeys.paramsUpdates, [{ paramKey: 'SSF', scope: 'GLOBAL', scopeKey: '' }])
+      assert.ok(!auditLine.includes('top-secret-value'), 'audit must not log the new PARAMVALUE')
+      assert.ok(!auditLine.includes('1.75'), 'audit must not log the new COV value')
+    })
   })
 
   describe('_execStatements() transaction result interpretation (§12.1)', () => {
@@ -752,6 +785,57 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
       await assert.rejects(
         service._execStatements([{ params: ['x'], sql: 'UPDATE CCCMINMAXCOV SET COV = :1' }], 'tok'),
         /S1 execSql returned no result for the transaction\./
+      )
+    })
+  })
+
+  describe('SoftOne platform error classification (shared with branch-replenishment-container.js)', () => {
+    it('annotates a session-expired execSql response (code -1) as retryable', async () => {
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery === 'SELECT 1')
+        .reply(200, { code: -1, error: 'Invalid request. Please login first', success: false })
+
+      const service = makeService()
+      await assert.rejects(
+        service._execSql('SELECT 1', [], 'tok'),
+        (err) => err.softOneErrorCode === -1 && err.softOneRetryable === true &&
+          err.softOneDescription === 'Invalid request. Please login first'
+      )
+    })
+
+    it('annotates a non-retryable execSql response (code -8) accordingly', async () => {
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery === 'SELECT 1')
+        .reply(200, { code: -8, error: 'Invalid request. User account is not active!', success: false })
+
+      const service = makeService()
+      await assert.rejects(
+        service._execSql('SELECT 1', [], 'tok'),
+        (err) => err.softOneErrorCode === -8 && err.softOneRetryable === false
+      )
+    })
+
+    it('leaves softOneErrorCode unset when the response carries no recognizable code', async () => {
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery === 'SELECT 1')
+        .reply(200, { error: 'Blocked SQL: some guard reason', success: false })
+
+      const service = makeService()
+      await assert.rejects(
+        service._execSql('SELECT 1', [], 'tok'),
+        (err) => err.softOneErrorCode === undefined
+      )
+    })
+
+    it('annotates a rolled-back transaction reported via top-level success:false (e.g. session expired mid-batch)', async () => {
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => Array.isArray(body.statements))
+        .reply(200, { code: -101, error: 'Invalid Request, session has expired!', success: false })
+
+      const service = makeService()
+      await assert.rejects(
+        service._execStatements([{ params: ['x'], sql: 'UPDATE CCCMINMAXCOV SET COV = :1' }], 'tok'),
+        (err) => err.softOneErrorCode === -101 && err.softOneRetryable === true
       )
     })
   })

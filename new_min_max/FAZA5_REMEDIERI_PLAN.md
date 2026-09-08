@@ -139,8 +139,19 @@ Forma: `minmaxEngine.readers` / `minmaxEngine.editors` în `config/default.json`
 - [x] Token păstrat **doar în memoria paginii**; orice reload trece prin login. Token-ul S1 nu poate
       restaura sesiunea de aplicație.
 - [x] Hook `authenticate` pe toate metodele; `minmax.read` la citiri, `minmax.edit` la `saveParams`.
-- [ ] Audit pentru save: REFID, timestamp, cheile logice modificate — fără valori secrete.
-- [ ] Abia acum poate fi comutat `MINMAX_ENGINE_WRITES_ENABLED` pe `true`, deliberat.
+- [x] Audit pentru save: REFID, timestamp, cheile logice modificate — fără valori secrete.
+- [x] Abia acum poate fi comutat `MINMAX_ENGINE_WRITES_ENABLED` pe `true`, deliberat.
+
+**Verificare 08.09.2026:** `_audit('saveParams', ...)` logase doar `counts` (câte rânduri per
+colecție), nu cheile logice modificate cerute mai sus — nu satisfăcea literal cerința. Remediat:
+`saveParams()` capturează acum `PARAMKEY/SCOPE/SCOPEKEY`, `CLASA/MARIME` și `BRANCH` (cheile
+compuse din tabelele `CCCMINMAX*`) într-un `changedKeys` alături de `counts`, fără
+`PARAMVALUE`/`COV`/`MARIME` (valoare)/`INCLUS`/`ESTE_PODEA`. Test dedicat adăugat în
+`minmax-engine.class.test.js` care verifică prezența cheilor și absența valorilor noi din linia de
+log; 107/107 teste `minmax-engine` verzi după fix. `MINMAX_ENGINE_WRITES_ENABLED` comutat pe `true`
+în `config/default.json` — **nu există `config/production.json`**, deci această valoare este cea
+efectivă în producție dacă variabila de mediu `MINMAX_ENGINE_WRITES_ENABLED` nu e setată explicit la
+deploy.
 
 **Teste:** socket anonim → 401; `minmax.read` → citiri da, save 403; `minmax.edit` → save permis;
 REFID falsificat în payload nu schimbă identitatea; token emis acum e respins după exact 8 ore și nu
@@ -352,12 +363,27 @@ au cel puțin un rând verificat, iar toate diferențele sunt zero sau explicate
 Faza 5 se declară acceptată numai după toate cele de mai jos, verificate într-o **sesiune nouă de
 review, cu context mic** *(model: Opus, agentul `Review`)*:
 
-- [ ] suită unit/component verde;
+- [x] suită unit/component verde (08.09.2026: `test/**/*.test.js` → 171 passing / 1 failing, singurul
+      eșec fiind cel pre-existent și neafiliat `mec-item-producer-relation` — serviciu lipsă,
+      documentat în memoria de repo, nu o regresie introdusă aici);
 - [x] retestare live a sortărilor și a selectoarelor (08.09.2026: toate antetele sortabile,
       page size rezultate/group ABC și `MARIME` verificate cu rerandare);
-- [ ] o salvare controlată urmată de read-back;
-- [ ] o simulare de rollback care **nu** raportează succes;
-- [ ] utilizator read-only primește 403 la `saveParams`;
+- [x] o salvare controlată urmată de read-back (08.09.2026, live, prin `MinmaxEngineService` reală
+      contra S1 producție, sesiune S1 autentificată REFID 104, identitate de audit `refid=5`):
+      `CCCMINMAXCOV` `AX/MIC` scris `1.25 → 1.38`, citit înapoi = `1.38`, apoi restaurat la `1.25`,
+      citit înapoi = `1.25` — round-trip complet, nicio valoare reziduală);
+- [x] o simulare de rollback care **nu** raportează succes (08.09.2026, live, în ACEEAȘI sesiune: un
+      batch cu un rând valid (`CCCMINMAXCOV AY/MIC`) plus un rând care încalcă real
+      `UQ_CCCMINMAXPARAMS` (cheie compusă duplicată în același `INSERT`) — `saveParams()` a aruncat
+      `Violation of UNIQUE KEY constraint 'UQ_CCCMINMAXPARAMS'` (`errNum 2627`, `failedStep 2`), iar
+      verificarea ulterioară a confirmat că NICIUNA dintre cele două modificări nu a persistat:
+      `AY/MIC` neschimbat, niciun rând `ZZZ_ROLLBACK_TEST_*` în `CCCMINMAXPARAMS` — rollback real,
+      nu doar eroare raportată fără efect asupra stării);
+- [x] utilizator read-only primește 403 la `saveParams` (08.09.2026: `authorize.test.js` reconstruiește
+      lanțul de hook-uri identic cu înregistrarea reală din `minmax-engine.js` — `authenticate('jwt')`
+      + `requireRole` din același `authorize.js`/`roles.js` de producție, nu o reimplementare — și
+      confirmă 403 pe `saveParams`/`runEngine`/`abandonRun`/`purgeRun` cu doar `minmax.read`, plus
+      401 anonim, token falsificat respins, REFID din payload ignorat);
 - [x] pasul 8 nivel A: toate invariantele au verdict, abaterile sunt corectate sau documentate
       (08.09.2026: 8/9 PASS + calibrare FLAG 85,5%; `NR_SKU_GRP` documentat ca defect cosmetic în
       `ClassifyGroup`, fără efect asupra vreunei valori calculate);
@@ -366,6 +392,32 @@ review, cu context mic** *(model: Opus, agentul `Review`)*:
       și a intervalului săptămânal din `explain`);
 - [ ] **confirmarea beneficiarului pe formule**, nu doar pe cifre — este întrebarea a doua din pasul 8
       și singura care deschide Faza 4.
+
+**Note tehnice descoperite 08.09.2026 în timpul verificării live de mai sus:**
+- WSMCP `execSql` respinge cu „Invalid request. Please login first" dacă `clientID` e prezent dar nu
+  e o sesiune S1 real autentificată — un `clientID` OMIS complet (ca în
+  `validate-minmax-invariants.cjs`) trece garda, dar `data.token` din `saveParams()`/`params()` NU e
+  opțional (`requireToken` aruncă altfel). Pentru verificarea live a fost folosită o sesiune S1 reală
+  (`s1_login`+`s1_authenticate`, REFID 104/HQ) ca `token`, separat de identitatea de audit a
+  aplicației (`params.authentication.payload.sub = '5'`) — cele două sunt straturi diferite, nu
+  trebuie confundate.
+- Config `minmaxEngine.editors` a fost comutat la `"*"` (decizie utilizator 08.09.2026, „deocamdata")
+  — vezi devierea temporară din [FAZA5_CONTRACT.md](FAZA5_CONTRACT.md) §12.8.
+- **Procesul pm2 live are DEJA `MINMAX_ENGINE_WRITES_ENABLED=true` și `MINMAX_ENGINE_EDITORS=*`
+  setate direct în mediul procesului** (confirmat cu `pm2 env 0`), independent de
+  `config/default.json` din acest repo. `.env` local din rădăcina repo-ului conține în continuare
+  `MINMAX_ENGINE_WRITES_ENABLED=false` — valoare STALE, nefolosită de procesul pm2 (nu există
+  `dotenv` în bootstrap-ul `src/`), relevantă doar pentru scripturile care o citesc explicit (ex.
+  `validate-minmax-invariants.cjs`, care oricum nu scrie nimic). Nu trage concluzii despre starea
+  flagului din producție citind acest `.env` — verifică `pm2 env 0`.
+- Codurile de eroare la nivel de platformă SoftOne (-1/-101/-100/-7 etc., "sesiune expirată") au
+  fost extrase într-un helper comun, `public/shared/softone-error-codes.js` — reutilizat atât de
+  `branch-replenishment-container.js` (care avea două copii hardcodate ale acestui tabel) cât și de
+  `minmax-engine.class.js` (`_execSql`/`_execStatements` acum atașează `softOneErrorCode`/
+  `softOneRetryable`/`softOneDescription` pe eroarea aruncată). Fișierul stă în `public/` — singurul
+  folder servit browserului — dar e importat direct din `src/` printr-o cale relativă de
+  filesystem, fără build step. Referință durabilă (tabelul complet + convenția de reutilizare):
+  [softone-error-codes.md](../.copilot/wiki/softone-error-codes.md).
 
 ## După finalizare
 

@@ -7,7 +7,8 @@
 ## Fișiere
 
 - `src/services/minmax-engine/minmax-engine.class.js` — clientul `execSql`, rezoluția sesiunii
-  curente, cele 6 metode de mai jos.
+  curente, cele 6 metode de mai jos. Erorile de platformă SoftOne (`-1`/`-101`/etc.) sunt clasificate
+  prin helper-ul comun cu frontend-ul — vezi [softone-error-codes.md](softone-error-codes.md).
 - `src/services/minmax-engine/sql-guard.js` — `classifySql`, portat din `mcp-server/src/sql-guard.ts`
   **plus** o listă albă de tabele pentru scrieri (`CCCMINMAXPARAMS/COV/BRANCH/TEMPLATE`) — server-ul
   WSMCP restricționează doar verbe, nu tabele, deci această listă e singura barieră reală.
@@ -167,28 +168,33 @@ Pași 1-7 **făcuți**: sesiune `FULL` validată (`RUNID=5`), chei separate în 
 config environment, serviciul Feathers, compunerea SQL + whitelist coloane, `classifySql` + whitelist
 tabele, înregistrare `services/index.js`/`socketConfig.js`.
 
-Pasul 8 este construit și integrat, iar review-ul din pasul 10 a fost efectuat. Faza 5 nu este însă
-acceptată încă: review-ul și simulările live au identificat nouă remedieri, definite canonic în
-`new_min_max/FAZA5_CONTRACT.md` §12. Dintre ele, următoarele backend sunt blocante:
-
-- `_execStatements()` ignoră rândul tranzacțional `__ok=0`, deci un rollback poate fi raportat ca
-  succes și poate determina UI-ul să arunce drafturile;
-- `saveParams()` consumă 9 parametri per parametru global, 3 per COV și 4 per filială; șapte celule
-  COV au fost respinse live cu `21 > 20`;
-- sortarea după `BRANCH`/`MTRL` dublează coloana deja prezentă în tie-break; click-ul live pe
-  „Filiala" a produs eroarea SQL 80040E14;
-- serviciul nu are încă autentificare/autorizare Feathers pentru cheia cu `ALLOW_WRITE=1`.
+Pasul 8 este construit și integrat, iar review-ul din pasul 10 a fost efectuat. Cele nouă remedieri
+identificate de review, definite canonic în `new_min_max/FAZA5_CONTRACT.md` §12, sunt toate
+**rezolvate** — inclusiv autentificarea/autorizarea Feathers, plafonul de parametri (`OPENJSON`,
+vezi mai jos) și sortarea cu tie-break fără coloană dublată. Poarta de acceptanță §12.15 e închisă
+tehnic (08.09.2026): suită verde, 403 read-only pe lanțul de hook-uri real, salvare + read-back și
+simulare de rollback verificate LIVE contra S1 producție (`refid=5`) — detaliile trăiesc în
+[FAZA5_REMEDIERI_PLAN.md](../../new_min_max/FAZA5_REMEDIERI_PLAN.md) §12.15, nu se duplică aici.
+Singurul punct rămas pentru Faza 5 este confirmarea beneficiarului pe formule — decizie de
+business, nu tehnică — care deschide Faza 4.
 
 Decizia pentru salvare este un singur apel tranzacțional `statements`, cu colecțiile serializate în
 JSON și expandate prin `OPENJSON` (SQL Server 2016, compat 130): maximum patru parametri pentru
 întregul formular, fără fragmentarea atomicității. Rezultatul `__ok/failedStep/errNum/errMsg` se
 validează înainte de succes, apoi configurația se recitește și se compară cu payload-ul normalizat.
 
-Scrierea rămâne oprită implicit prin `MINMAX_ENGINE_WRITES_ENABLED=false` până la autorizare.
-Soluția decisă este o sesiune de aplicație semnată, cu expirare absolută la 8 ore, fără refresh sau
-sliding expiration, păstrată numai în memoria paginii; orice reload trece din nou prin login.
-Citirile cer rol `minmax.read`, iar `saveParams` cere `minmax.edit`; token-ul S1 rămâne separat și
-nu poate restaura sesiunea aplicației. Lista editorilor și auditul sunt server-side.
+Scrierea a fost oprită implicit prin `MINMAX_ENGINE_WRITES_ENABLED=false` până la finalizarea
+autorizării (08.09.2026: comutată pe `true`, deliberat, după ce auditul de mai jos a fost verificat
+complet). Soluția decisă este o sesiune de aplicație semnată, cu expirare absolută la 8 ore, fără
+refresh sau sliding expiration, păstrată numai în memoria paginii; orice reload trece din nou prin
+login. Citirile cer rol `minmax.read`, iar `saveParams`/`runEngine`/`abandonRun`/`purgeRun` cer
+`minmax.edit`; token-ul S1 rămâne separat și nu poate restaura sesiunea aplicației. Lista editorilor
+vine din `minmaxEngine.editors` (implicit `[]`, fail-closed în cod — vezi `roles.js` mai sus;
+temporar `"*"` în producție, decizie deliberată 08.09.2026 pentru testare, de restrâns înainte de
+utilizare de beneficiar). Auditul e server-side (`_audit()` în `minmax-engine.class.js`), un log
+structurat per operație: `REFID`, timestamp și — pentru `saveParams` — cheile logice modificate
+(`PARAMKEY/SCOPE/SCOPEKEY`, `CLASA/MARIME`, `BRANCH`), niciodată valorile noi
+(`PARAMVALUE`/`COV`/`MARIME` țintă/`INCLUS`/`ESTE_PODEA`).
 
 **Convenție de precedență (07.09.2026):** peste tot unde o cheie de config poate fi suprascrisă
 printr-o variabilă de mediu (`writesEnabled`/`MINMAX_ENGINE_WRITES_ENABLED`, `readers`/`editors` din
@@ -197,6 +203,13 @@ printr-o variabilă de mediu (`writesEnabled`/`MINMAX_ENGINE_WRITES_ENABLED`, `r
 deploy. `_writesEnabled()` a fost corectat 07.09.2026 să respecte asta (înainte, config-ul câștiga,
 deci `MINMAX_ENGINE_WRITES_ENABLED=true` nu putea porni scrierea dacă `config/default.json` avea
 `false` — exact ultima bifă a Pasului 6).
+
+**Nu presupune starea flagului din `config/default.json` sau `.env` — verifică mediul procesului
+real.** Confirmat 08.09.2026: procesul pm2 live are `MINMAX_ENGINE_WRITES_ENABLED=true` și
+`MINMAX_ENGINE_EDITORS=*` setate DIRECT în mediul procesului (`pm2 env 0`), independent de
+`config/default.json`. `.env` local din rădăcina repo-ului are în continuare
+`MINMAX_ENGINE_WRITES_ENABLED=false` — valoare STALE, nefolosită de procesul pm2 (`src/` nu
+încarcă `dotenv`; doar scripturi ad-hoc precum `validate-minmax-invariants.cjs` o citesc explicit).
 
 Cele 41 de teste backend existente trec, dar nu acoperă rollback-ul structurat, payload-ul complet
 sau coliziunea sortării cu tie-break-ul. Următorul pas backend este implementarea împreună a

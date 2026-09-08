@@ -543,6 +543,13 @@ utilizator cu `minmax.edit` → save permis; REFID falsificat în payload nu sch
 token; flag-ul de producție oprește scrierea indiferent de rol. Un token emis acum este respins
 după exact 8 ore și nu își modifică expirarea prin activitate. Reload-ul paginii, inclusiv înainte
 de expirare, deschide login-ul și nu poate recupera sesiunea din token-ul S1 sau din browser
+
+**DEVIERE TEMPORARĂ 08.09.2026 (decizie utilizator, „deocamdata"):** `editors` a fost comutat de la
+`[]` (fail-closed) la `"*"` — orice REFID autentificat contra S1 primește acum `minmax.edit`, nu
+doar `minmax.read`. Motivul este validarea live a poarții §12.15 (salvare + read-back, simulare de
+rollback) fără a administra încă o listă de editori reali. Rămâne o relaxare deliberată a
+raționamentului de mai sus, nu o revizuire a lui — de restrâns la o listă explicită (sau revenit la
+`[]`) înainte de a considera Faza 5 utilizabilă de beneficiar, nu doar de echipa de dezvoltare.
 storage; numai un login reușit emite o sesiune de aplicație nouă.
 
 ### 12.9. Datele se încarcă la prima activare a tabului, nu la pornirea aplicației

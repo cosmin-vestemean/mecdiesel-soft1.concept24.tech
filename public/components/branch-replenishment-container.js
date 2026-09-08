@@ -3,6 +3,7 @@ import { ContextProvider } from 'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0
 import { connectToS1 } from '../dataFetching.js';
 import { client } from '../socketConfig.js';
 import { columnConfig } from '../config/table-column-config.js'; // Import column config
+import { isSoftOneErrorRetryable, formatSoftOneErrorMessage } from '../shared/softone-error-codes.js';
 
 // Import store
 import { replenishmentStore, ReplenishmentStoreContext } from '../stores/replenishment-store.js';
@@ -620,61 +621,14 @@ export class BranchReplenishmentContainer extends LitElement {
 
   /**
    * Determine if a SoftOne error code indicates a retryable error
-   * Based on SoftOne documentation error codes
+   * Based on SoftOne documentation error codes (see public/shared/softone-error-codes.js)
    */
   _isSoftOneErrorRetryable(errorCode) {
-    // Retryable errors (session, authentication, temporary issues)
-    const retryableErrors = [
-      -101, // Invalid Request, session has expired! (Web Account time expiration)
-      -100, // Invalid Request, session has expired! (Deep linking smart command)
-      -7,   // Session has expired (Web Account "FinalDate" expired)
-      -1,   // Invalid request. Please login first
-      11,   // Internal error
-      20,   // Internal error
-      99,   // Internal error
-      13,   // Invalid request, "reqID" expired
-      213,  // Invalid request, "reqID" expired
-      102   // "ReqId" not found on Server!
-    ];
-    
-    // Non-retryable errors (business logic, validation, permanent issues)
-    const nonRetryableErrors = [
-      -12,  // Invalid Web Service call
-      -11,  // Invalid Request. Licence must include a "Web Service Connector" module
-      -10,  // Login fails. Username contains illegal characters
-      -9,   // Invalid Request. Ensure that your request is valid
-      -8,   // Invalid request. User account is not active!
-      -6,   // Invalid AppId. Ensure that your request includes a valid AppId
-      -5,   // Web Services Licenses Exceeded!
-      -4,   // Number of registered devices exceeded!
-      -3,   // Access denied. Selected module not activated!
-      -2,   // Authenticate fails due to invalid credentials
-      0,    // Business error
-      12,   // Deprecated service
-      14,   // Invalid request.(WS)
-      101,  // Invalid request. Insufficient access rights to perform the operation!
-      112,  // Invalid editor
-      1001, // Please ensure :Username, Password, User is Active and has Administrator right
-      1002, // Invalid domain ('DOMAIN') or already in use
-      1010, // General Web Account Error
-      2001  // Invalid request, Data does not exist
-    ];
-    
-    // Check if explicitly retryable
-    if (retryableErrors.includes(errorCode)) {
-      console.log(`🔄 SoftOne error ${errorCode} is retryable (session/auth/temporary)`);
-      return true;
-    }
-    
-    // Check if explicitly non-retryable
-    if (nonRetryableErrors.includes(errorCode)) {
-      console.log(`🚫 SoftOne error ${errorCode} is not retryable (business/validation/permanent)`);
-      return false;
-    }
-    
-    // Unknown error codes - default to non-retryable for safety
-    console.log(`⚠️  Unknown SoftOne error code ${errorCode} - defaulting to non-retryable`);
-    return false;
+    const retryable = isSoftOneErrorRetryable(errorCode);
+    console.log(retryable
+      ? `🔄 SoftOne error ${errorCode} is retryable (session/auth/temporary)`
+      : `🚫 SoftOne error ${errorCode} is not retryable (business/validation/permanent, or unknown)`);
+    return retryable;
   }
 
   /**
@@ -1530,188 +1484,12 @@ export class BranchReplenishmentContainer extends LitElement {
 
   /**
    * Lookup SoftOne error code in documentation with enhanced descriptions
+   * (see public/shared/softone-error-codes.js)
    * @param {number|string} errorCode - The SoftOne error code
    * @returns {string} Enhanced error description with documentation links
    */
   async _lookupSoftOneErrorCode(errorCode) {
-    // Common SoftOne error codes with enhanced descriptions and solutions
-    const commonErrors = {
-      '-101': {
-        description: 'Invalid Request, session has expired! (Web Account time expiration)',
-        solution: 'Sesiunea a expirat. Aplicația va încerca să se reconecteze automat.',
-        category: 'Authentication'
-      },
-      '-100': {
-        description: 'Invalid Request, session has expired! (Deep linking smart command)',
-        solution: 'Sesiunea a expirat în timpul execuției comenzii. Reîncercați operația.',
-        category: 'Authentication'
-      },
-      '-12': {
-        description: 'Invalid Web Service call',
-        solution: 'Apelul serviciului web este invalid. Verificați parametrii transmisi.',
-        category: 'Request Validation'
-      },
-      '-11': {
-        description: 'Invalid Request. Licence must include a "Web Service Connector" module',
-        solution: 'Licența SoftOne nu include modulul "Web Service Connector". Contactați administratorul.',
-        category: 'Licensing'
-      },
-      '-10': {
-        description: 'Login fails. Username contains illegal characters',
-        solution: 'Numele de utilizator conține caractere invalide. Verificați configurația.',
-        category: 'Authentication'
-      },
-      '-9': {
-        description: 'Invalid Request. Ensure that your request is valid',
-        solution: 'Cererea este invalidă. Verificați formatul și conținutul datelor transmise.',
-        category: 'Request Validation'
-      },
-      '-8': {
-        description: 'Invalid request. User account is not active!',
-        solution: 'Contul de utilizator nu este activ. Contactați administratorul.',
-        category: 'Authentication'
-      },
-      '-7': {
-        description: 'Session has expired (Web Account "FinalDate" expired)',
-        solution: 'Sesiunea a expirat. Aplicația va încerca să se reconecteze automat.',
-        category: 'Authentication'
-      },
-      '-6': {
-        description: 'Invalid AppId. Ensure that your request includes a valid AppId',
-        solution: 'AppId invalid. Verificați configurația aplicației.',
-        category: 'Configuration'
-      },
-      '-5': {
-        description: 'Web Services Licenses Exceeded!',
-        solution: 'S-a depășit numărul de licențe pentru servicii web. Contactați administratorul.',
-        category: 'Licensing'
-      },
-      '-4': {
-        description: 'Number of registered devices exceeded!',
-        solution: 'S-a depășit numărul de dispozitive înregistrate. Contactați administratorul.',
-        category: 'Licensing'
-      },
-      '-3': {
-        description: 'Access denied. Selected module not activated!',
-        solution: 'Modulul selectat nu este activat în licență. Contactați administratorul.',
-        category: 'Licensing'
-      },
-      '-2': {
-        description: 'Authenticate fails due to invalid credentials',
-        solution: 'Autentificare eșuată - credențiale invalide. Verificați username/password.',
-        category: 'Authentication'
-      },
-      '-1': {
-        description: 'Invalid request. Please login first',
-        solution: 'Cerere invalidă - este necesară autentificarea. Aplicația va încerca să se reconecteze.',
-        category: 'Authentication'
-      },
-      '0': {
-        description: 'Business error',
-        solution: 'Eroare de business logic. Verificați datele introduse și regulile de validare.',
-        category: 'Business Logic'
-      },
-      '11': {
-        description: 'Internal error',
-        solution: 'Eroare internă SoftOne. Reîncercați operația sau contactați suportul.',
-        category: 'Internal'
-      },
-      '12': {
-        description: 'Deprecated service',
-        solution: 'Serviciul este depreciat. Contactați echipa de dezvoltare pentru actualizare.',
-        category: 'Deprecated'
-      },
-      '13': {
-        description: 'Invalid request, "reqID" expired',
-        solution: 'ID-ul cererii a expirat. Reîncercați operația.',
-        category: 'Request Validation'
-      },
-      '14': {
-        description: 'Invalid request.(WS)',
-        solution: 'Cerere invalidă pentru serviciul web. Verificați formatul datelor.',
-        category: 'Request Validation'
-      },
-      '20': {
-        description: 'Internal error',
-        solution: 'Eroare internă SoftOne. Reîncercați operația sau contactați suportul.',
-        category: 'Internal'
-      },
-      '99': {
-        description: 'Internal error',
-        solution: 'Eroare internă SoftOne. Reîncercați operația sau contactați suportul.',
-        category: 'Internal'
-      },
-      '101': {
-        description: 'Invalid request. Insufficient access rights to perform the operation!',
-        solution: 'Drepturi de acces insuficiente. Contactați administratorul pentru permisiuni.',
-        category: 'Authorization'
-      },
-      '102': {
-        description: '"ReqId" not found on Server!',
-        solution: 'ID-ul cererii nu a fost găsit pe server. Reîncercați operația.',
-        category: 'Request Validation'
-      },
-      '112': {
-        description: 'Invalid editor',
-        solution: 'Editor invalid. Verificați configurația editorului folosit.',
-        category: 'Configuration'
-      },
-      '213': {
-        description: 'Invalid request, "reqID" expired',
-        solution: 'ID-ul cererii a expirat. Reîncercați operația.',
-        category: 'Request Validation'
-      },
-      '1001': {
-        description: 'Please ensure :Username, Password, User is Active and has Administrator right',
-        solution: 'Verificați: username, password, utilizatorul este activ și are drepturi de administrator.',
-        category: 'Authentication'
-      },
-      '1002': {
-        description: 'Invalid domain (\'DOMAIN\') or already in use',
-        solution: 'Domeniul este invalid sau deja în folosire. Verificați configurația.',
-        category: 'Configuration'
-      },
-      '1010': {
-        description: 'General Web Account Error',
-        solution: 'Eroare generală de cont web. Verificați configurația contului.',
-        category: 'Authentication'
-      },
-      '2001': {
-        description: 'Invalid request, Data does not exist',
-        solution: 'Datele solicitate nu există. Verificați că înregistrările sunt valide.',
-        category: 'Data Validation'
-      }
-    };
-
-    const codeStr = errorCode.toString();
-    const errorInfo = commonErrors[codeStr];
-    
-    if (errorInfo) {
-      return `🔍 ${errorInfo.description}
-
-💡 Soluție: ${errorInfo.solution}
-
-📂 Categorie: ${errorInfo.category}
-
-📖 Pentru mai multe detalii, consultați documentația oficială SoftOne la:
-https://www.softone.gr/ws/#errorcodes`;
-    }
-
-    // For unknown error codes, provide general guidance with more helpful info
-    return `⚠️ Cod de eroare necunoscut: ${errorCode}
-
-Acest cod de eroare nu este recunoscut în baza de date comună de erori SoftOne.
-
-💡 Recomandări:
-• Verificați că toate câmpurile obligatorii sunt completate corect
-• Asigurați-vă că datele respectă formatul așteptat
-• Verificați că utilizatorul are permisiunile necesare
-• Consultați logurile SoftOne pentru detalii suplimentare
-
-📖 Pentru documentația completă și coduri de eroare actualizate:
-https://www.softone.gr/ws/#errorcodes
-
-🆘 Dacă problema persistă, contactați echipa de suport cu codul ${errorCode}.`;
+    return formatSoftOneErrorMessage(errorCode);
   }
 }
 

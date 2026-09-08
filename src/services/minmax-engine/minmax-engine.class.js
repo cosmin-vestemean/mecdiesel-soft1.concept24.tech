@@ -8,11 +8,19 @@
 // gateway, never SQL text built here. authKey (execSql transport) lives only
 // in server config (env-backed), never in the browser; the AJS transport
 // needs no shared secret, only the caller's own S1 session token.
+//
+// ATENTIE: niciuna dintre operatiile de mai sus scrie in ERP. applyToErp (Faza 4,
+// new_min_max/FAZA4_CONTRACT.md) NU e implementat aici, deliberat: A NU SE SALVA
+// IN ERP DATELE MIN/MAX PANA NU AVEM APROBARE DE LA BENEFICIAR.
 
 import { Forbidden } from '@feathersjs/errors'
 import rp from 'request-promise'
 import { classifySql } from './sql-guard.js'
 import { logger } from '../../logger.js'
+// Shared with public/components/branch-replenishment-container.js — lives
+// under public/ (the only tree served to the browser) and is reached here
+// via a plain relative filesystem import, not a bundler alias.
+import { isSoftOneErrorRetryable, describeSoftOneError } from '../../../public/shared/softone-error-codes.js'
 
 const DEFAULT_S1_BASE_URL = 'https://mecdiesel.oncloud.gr/s1services'
 const DEFAULT_S1_APP_ID = '2002'
@@ -331,6 +339,33 @@ function ajsErrorCode (response) {
   return (typeof code === 'number' && Number.isFinite(code)) ? code : null
 }
 
+// SoftOne WS platform-level error code (https://www.softone.gr/ws/#errorcodes,
+// e.g. -1 "Please login first", -101/-100/-7 "session expired"), distinct
+// from the SQL/AJS codes above. Field name varies by transport/response
+// shape across this codebase (`code` in src/app.js's setData responses,
+// `errorcode` in mcp-server/src/softone-client.ts) — tried in that order.
+function softOneErrorCode (response) {
+  if (!response) return null
+  const candidate = response.code !== undefined ? response.code : response.errorcode
+  const code = Number(candidate)
+  return Number.isFinite(code) ? code : null
+}
+
+// Attaches the SoftOne platform error code (when present) plus its retryable
+// classification (public/shared/softone-error-codes.js) to an Error, so a
+// caller can distinguish "session expired, re-login and retry" from a
+// permanent failure — same classification branch-replenishment-container.js
+// uses, without duplicating the code/description table.
+function annotateSoftOneError (err, response) {
+  const code = softOneErrorCode(response)
+  if (code === null) return err
+  err.softOneErrorCode = code
+  err.softOneRetryable = isSoftOneErrorRetryable(code)
+  const details = describeSoftOneError(code)
+  if (details) err.softOneDescription = details.description
+  return err
+}
+
 export class MinmaxEngineService {
   constructor (options, app) {
     this.options = options || {}
@@ -460,7 +495,7 @@ export class MinmaxEngineService {
       uri: `${baseUrl}/JS/WSMCP/execSql`
     })
     if (response && response.success === false) {
-      throw new Error(response.error || 'S1 execSql call failed.')
+      throw annotateSoftOneError(new Error(response.error || 'S1 execSql call failed.'), response)
     }
     return response
   }
@@ -497,7 +532,7 @@ export class MinmaxEngineService {
   // result as success either (FAZA5_CONTRACT.md §12.1).
   _checkTransactionResult (response) {
     if (response && response.success === false) {
-      const err = new Error(response.error || 'S1 execSql transaction failed.')
+      const err = annotateSoftOneError(new Error(response.error || 'S1 execSql transaction failed.'), response)
       err.failedStep = response.failedStep
       err.errNum = response.errorNumber
       throw err
@@ -719,6 +754,12 @@ export class MinmaxEngineService {
     }
     const token = requireToken(data)
     const statements = []
+    // Logical keys touched per collection, captured for _audit() below —
+    // composite PK fields only, never PARAMVALUE/COV/MARIME/INCLUS/ESTE_PODEA
+    // (FAZA5_CONTRACT.md §12.8: audit logs what changed, not the new values).
+    let paramsKeys = []
+    let covKeys = []
+    let branchKeys = []
 
     const paramsUpdates = data.paramsUpdates || []
     validateRowCount(paramsUpdates, 'paramsUpdates')
@@ -730,6 +771,7 @@ export class MinmaxEngineService {
         SCOPE: p.scope ? requireString(p.scope, 'scope') : 'GLOBAL',
         SCOPEKEY: typeof p.scopeKey === 'string' ? p.scopeKey.trim() : ''
       }))
+      paramsKeys = rows.map((r) => ({ paramKey: r.PARAMKEY, scope: r.SCOPE, scopeKey: r.SCOPEKEY }))
       const json = JSON.stringify(rows)
       // Table immediately after UPDATE (no alias), per §12.2: referencedTable()
       // in sql-guard.js extracts the alias otherwise and blocks the statement.
@@ -759,6 +801,7 @@ export class MinmaxEngineService {
         COV: sqlNumber(c.cov, 'cov'),
         MARIME: requireString(c.marime, 'marime')
       }))
+      covKeys = rows.map((r) => ({ clasa: r.CLASA, marime: r.MARIME }))
       statements.push({
         params: [JSON.stringify(rows)],
         sql: 'UPDATE CCCMINMAXCOV SET COV = j.COV, UPDATEDAT = GETDATE() ' +
@@ -776,6 +819,7 @@ export class MinmaxEngineService {
         INCLUS: sqlBit(b.inclus),
         MARIME: requireString(b.marime, 'marime')
       }))
+      branchKeys = rows.map((r) => ({ branch: r.BRANCH }))
       statements.push({
         params: [JSON.stringify(rows)],
         sql: 'UPDATE CCCMINMAXBRANCH SET MARIME = j.MARIME, INCLUS = j.INCLUS, ESTE_PODEA = j.ESTE_PODEA, UPDATEDAT = GETDATE() ' +
@@ -790,6 +834,11 @@ export class MinmaxEngineService {
 
     await this._execStatements(statements, token)
     this._audit('saveParams', params, {
+      changedKeys: {
+        branchUpdates: branchKeys,
+        covUpdates: covKeys,
+        paramsUpdates: paramsKeys
+      },
       counts: {
         branchUpdates: branchUpdates.length,
         covUpdates: covUpdates.length,

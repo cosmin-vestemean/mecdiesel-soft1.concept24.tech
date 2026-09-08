@@ -1,5 +1,10 @@
 # Faza 4 — contract `applyToErp`
 
+> **⚠️ A NU SE SALVA ÎN ERP DATELE MIN/MAX PÂNĂ NU AVEM APROBARE DE LA BENEFICIAR.** Scrierea în ERP
+> este pasul ireversibil al întregului proiect; nu se implementează, nu se testează live și nu se
+> activează niciun flag pentru `applyToErp` înaintea confirmării explicite a beneficiarului pe
+> formule (poarta §12.15 din [FAZA5_REMEDIERI_PLAN.md](FAZA5_REMEDIERI_PLAN.md)).
+
 > **Status: confirmat, amânat.** Contractul este închis și acceptat (03.09.2026), dar
 > implementarea este împinsă **după Faza 5 (UI)**. Motivul este de ordine, nu de conținut:
 > beneficiarul are nevoie întâi de o interfață prin care să confirme ce calculăm deja.
