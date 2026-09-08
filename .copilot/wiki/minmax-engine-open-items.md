@@ -21,12 +21,11 @@
   filialele inactive și cele cu depozite inactive **nu prezintă interes**. Cele 7,25 mil RON (5,7%
   valoare 52S) atribuite lor nu sunt o pierdere de corectat, ci o graniță de perimetru asumată;
   `INNER JOIN #ActiveBranches` din `sp_MinMaxEngine_Classify` este specificația, nu un defect.
-  Consecință rămasă, pur tehnică: `sp_MinMaxEngine_ClassifyGroup` construiește `#ItemGroups` din
-  `#SalesLines` nefiltrat, deci `NR_SKU_GRP` numără articole din afara perimetrului (468/559 rânduri
-  de grupă pe RUNID=5). Vânzările de grupă (`VZ_52S`/`VAL_52S`) coincid exact cu `CCCMINMAXDET`, iar
-  `NR_SKU_GRP` nu intră în niciun calcul — defect de afișare, de aliniat la următoarea atingere a
-  procedurilor. Detalii în [FAZA5_REMEDIERI_PLAN.md](../../new_min_max/FAZA5_REMEDIERI_PLAN.md)
-  Pasul 8.
+  Consecința tehnică (`sp_MinMaxEngine_ClassifyGroup` construia `#ItemGroups` din `#SalesLines`
+  nefiltrat, deci `NR_SKU_GRP` număra articole din afara perimetrului — 468/559 rânduri de grupă pe
+  RUNID=5) a fost **remediată în Faza 6**: reverificarea invariantelor pe RUNID=7 (08.09.2026,
+  `validate-minmax-invariants.cjs`) arată 0 abateri pe `NR_SKU_GRP`. Detalii în
+  [FAZA5_REMEDIERI_PLAN.md](../../new_min_max/FAZA5_REMEDIERI_PLAN.md) Pasul 8.
 - **Faza 2b — agregare ABC pe grupă:** formula exactă rămâne de confirmat (§3.3.1). Implementarea
   curentă partiționează cumulativul pe `BRANCH`, ordonare secundară deterministă pe
   `MTRGROUP_CODE`.

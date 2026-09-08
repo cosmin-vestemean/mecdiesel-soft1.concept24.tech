@@ -1,39 +1,44 @@
 # Current Focus
 
 ## Last Updated
-- 08.09.2026 (sesiunea 47)
+- 08.09.2026 (sesiunea 48)
 
 ## Current Goal
-- Deploy-ul AJS și `NewMinMax/setup` pentru hardening-ul SQL Server Agent din Faza 6 sunt finalizate.
-- Starea live confirmată: `RUNID=5` este `DONE`/`ESTE_CURENT=1`; `RUNID=6` este
-  `ABANDONED`/`ERROR`; zero sesiuni `OPEN`; jobul `MEC_MinMaxEngine_RunPhases_1000` este enabled,
-  valid și inactiv, iar SQL Server Agent este `Running`/`Automatic`.
+- Faza 6 (motor pe SQL Server Agent) e finalizată și confirmată live (vezi
+  [minmax-engine-model.md](../wiki/minmax-engine-model.md)); focusul revine la poarta de acceptanță
+  a Fazei 5.
+- Pasul 8 Nivel A este acum complet bifat: toate cele 9 invariante PASS, reverificate live pe
+  `RUNID=7` (708.876 rânduri, 50.634 itemi × 14 filiale), inclusiv `NR_SKU_GRP` (0 abateri — fixul
+  Fazei 6 confirmat). Calibrare FLAG: 85,3% în bandă.
 
 ## Active Area
-- Codul local finalizat mută `Classify → ClassifyGroup → Compute → FinishRun` în SQL Server Agent,
-  eliminând plafonul AJS de 60s. Revizia post-review este instalată în producție; `setup()` păstrează
-  acum jobul valid prin early-return, evitând eroarea de realiniere a unui job raportat de Agent ca
-  provenit de la MSX. Vezi [minmax-engine-model.md](../wiki/minmax-engine-model.md).
+- [FAZA5_REMEDIERI_PLAN.md](../../new_min_max/FAZA5_REMEDIERI_PLAN.md) rămâne sursa de adevăr pentru
+  pașii rămași ai Fazei 5.
+- Ce mai blochează poarta §12.15: Pasul 6 (audit de save — REFID, timestamp, chei logice modificate
+  — abia apoi comutarea `MINMAX_ENGINE_WRITES_ENABLED` pe `true`) și patru puncte de acceptanță:
+  suită unit/component verde, o salvare cu read-back, o simulare de rollback fără succes fals, 403
+  pentru utilizator read-only, plus confirmarea beneficiarului pe formule (singura care deschide
+  Faza 4).
 
 ## Relevant Files
-- [FAZA6_CONTRACT.md](../../new_min_max/FAZA6_CONTRACT.md) — contract, ordine de livrare și criterii de readiness.
-- [minmax-engine-model.md](../wiki/minmax-engine-model.md) — arhitectura durabilă, timeout-ul confirmat și lifecycle-ul.
-- [00i_run_phases.sql](../../new_min_max/sql/00i_run_phases.sql) — wrapperul Agent pentru unica sesiune `OPEN`.
-- [00j_ensure_agent_job.sql](../../new_min_max/sql/00j_ensure_agent_job.sql) — recrearea tranzacțională a jobului per companie.
-- [NewMinMax.js](../../S1-MEC/AJS/NewMinMax.js) — installer, readiness, lansare Agent și protecția abandonului.
-- [minmax-engine.class.js](../../src/services/minmax-engine/minmax-engine.class.js) — lansare sincronă și traducerea erorilor AJS.
-- [minmax-engine-store.js](../../public/stores/minmax-engine-store.js) / [minmax-run-panel.js](../../public/components/minmax-engine/minmax-run-panel.js) — polling, erori și protecția UI.
+- [FAZA5_REMEDIERI_PLAN.md](../../new_min_max/FAZA5_REMEDIERI_PLAN.md) — planul de execuție pas cu
+  pas, sursă de adevăr pentru ce rămâne.
+- [validate-minmax-invariants.cjs](../../new_min_max/tools/validate-minmax-invariants.cjs) —
+  scriptul de invariante Nivel A, rulabil pe orice `RUNID`.
+- [minmax-engine-model.md](../wiki/minmax-engine-model.md) — arhitectura durabilă a motorului.
+- [minmax-engine-open-items.md](../wiki/minmax-engine-open-items.md) — întrebările de business încă
+  deschise.
 
 ## Confirmed Decisions
-- `X.RUNSQL`/`X.GETSQLDATASET` au un CommandTimeout ADO fix de 60s; SQL Server Agent este remedierea aleasă, nu fragmentarea procedurii `Classify`.
-- `runEngine` așteaptă doar lansarea rapidă a jobului. Baza de date rămâne sursa de adevăr pentru progres, iar UI face polling.
-- `sp_MinMaxEngine_RunPhases` identifică strict unica sesiune `OPEN`; rezoluția sesiunii curente nu folosește niciodată `MAX(RUNID)`.
-- Setup-ul nu realiniază jobul activ; start-ul cere readiness complet înainte de a crea un `RUNID`; abandonul este blocat cât jobul este activ sau cerut.
-- `sync-check.cjs` confirmă 13/13 perechi SQL/AJS. `node --check` și suita focalizată au trecut cu 144 teste.
+- Faza 6 e finalizată: `Classify → ClassifyGroup → Compute → FinishRun` rulează în SQL Server Agent.
+- Pasul 8 Nivel A al Fazei 5 e închis: 9/9 invariante PASS, verificate live pe `RUNID=7`, nu doar pe
+  SQL-ul generat.
+- Faza 4 (`applyToErp`) rămâne deliberat amânată până trece poarta §12.15 a Fazei 5.
 
 ## Open Questions
-- Statusul deploy-ului aplicației Feathers/UI pentru protecțiile de polling și abandon trebuie confirmat înainte de primul run UI.
-- Execuția Agent completă pe producție nu este încă validată; scriptul AJS diagnostic temporar trebuie eliminat din S1.
+- Niciuna nouă; vezi [FAZA5_REMEDIERI_PLAN.md](../../new_min_max/FAZA5_REMEDIERI_PLAN.md) §12.15
+  pentru lista de blocaje rămase.
 
 ## Next Step
-- Confirmă deploy-ul Feathers/UI, apoi pornește primul run complet din UI și urmărește polling-ul până la `DONE`; nu lansa manual procedura Agent.
+- Pasul 6: implementează auditul de save (REFID, timestamp, chei logice modificate), apoi comută
+  `MINMAX_ENGINE_WRITES_ENABLED` pe `true`.

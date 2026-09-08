@@ -194,11 +194,11 @@ Ieftin, fără UI, fără eșantion; prinde erorile sistematice. Se scrie ca scr
 **Regula de aur:** invariante, niciodată numere fixe de rânduri. Fereastra vine din `MAX(TRNDATE)` pe
 date vii, deci populația crește în aceeași zi (vezi thread-ul `criterii-numerice-nereproductibile`).
 
-- [ ] **Structurale:** `TOTAL_ROWS = DISTINCT_ITEMS × DISTINCT_BRANCHES`; `DISTINCT_BRANCHES = 14`;
+- [x] **Structurale:** `TOTAL_ROWS = DISTINCT_ITEMS × DISTINCT_BRANCHES`; `DISTINCT_BRANCHES = 14`;
       `HQ_ROWS = DISTINCT_ITEMS`.
-- [ ] **Ordine și domeniu:** `MIN_GT_MAX = 0` (`ENG_MIN <= ENG_MAX` pe toate rândurile);
+- [x] **Ordine și domeniu:** `MIN_GT_MAX = 0` (`ENG_MIN <= ENG_MAX` pe toate rândurile);
       `ENG_MIN >= 0`; `BUY_QTY >= 0`.
-- [ ] **Rotunjire la ambalaj:** pentru `N_PACK > 1`,
+- [x] **Rotunjire la ambalaj:** pentru `N_PACK > 1`,
       `BUY_QTY - FLOOR(BUY_QTY / N_PACK) * N_PACK = 0`. **Nu** folosi `%` — modulo pe `DECIMAL` nu
       există în T-SQL.
 - [x] **Plafon HQ:** unde `HQ_CAP_APLICAT = 1`, `ENG_MAX` este exact plafonul; unde este `0`, `ENG_MAX`
@@ -220,6 +220,10 @@ date vii, deci populația crește în aceeași zi (vezi thread-ul `criterii-nume
 **Rezultate măsurate 08.09.2026 (`node new_min_max/tools/validate-minmax-invariants.cjs 5`, RUNID=5,
 706.734 = 50.481 × 14 rânduri):** toate invariantele PASS cu o singură excepție — `NR_SKU_GRP`.
 Calibrare FLAG: 15.115/17.682 = 85,5% în bandă (peste pragul de 80% al clientului).
+
+**Reverificare live 08.09.2026 (`node new_min_max/tools/validate-minmax-invariants.cjs`, RUNID=7,
+708.876 = 50.634 × 14 rânduri, după fixul `ClassifyGroup` din Faza 6):** 9/9 invariante PASS, inclusiv
+`NR_SKU_GRP` (0 abateri). Calibrare FLAG: 15.123/17.730 = 85,3% în bandă.
 
 #### Singura abatere: `NR_SKU_GRP` — defect cosmetic în `ClassifyGroup`, nu întrebare de business
 
