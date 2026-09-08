@@ -20,6 +20,7 @@ const pairs = [
     ['getPersistTablesSql', 'new_min_max/sql/00b_persist.sql'],
     ['getStartRunSql', 'new_min_max/sql/00e_start_run.sql'],
     ['getFinishRunSql', 'new_min_max/sql/00f_finish_run.sql'],
+    ['getLifecycleSql', 'new_min_max/sql/00g_lifecycle.sql'],
     ['getSalesLinesFunctionSql', 'new_min_max/sql/00c_sales_lines.sql'],
     ['getPrepareProcedureSql', 'new_min_max/sql/00d_prepare.sql'],
     ['getClassifyProcedureSql', 'new_min_max/sql/01_classify.sql'],

@@ -105,35 +105,7 @@ BEGIN
         THROW 50001, 'sp_MinMaxEngine_ClassifyGroup: no eligible sales lines were found.', 1;
 
     -- ---------------------------------------------------------------
-    -- 3. Maparea articol -> grupă (E18: grupa lipsă devine NEDEFINIT)
-    -- ---------------------------------------------------------------
-    SELECT
-        m.MTRL,
-        COALESCE(m.MTRGROUP, 0) AS MTRGROUP,
-        COALESCE(g.CODE, 'NEDEFINIT') AS MTRGROUP_CODE,
-        COALESCE(g.NAME, 'NEDEFINIT') AS MTRGROUP_NAME
-    INTO #ItemGroups
-    FROM MTRL m
-    LEFT JOIN MTRGROUP g ON g.MTRGROUP = m.MTRGROUP AND g.COMPANY = m.COMPANY
-    WHERE m.MTRL IN (SELECT DISTINCT MTRL FROM #SalesLines);
-
-    CREATE CLUSTERED INDEX IX_ItemGroups_Mtrl ON #ItemGroups (MTRL);
-
-    SELECT
-        MTRGROUP,
-        MAX(MTRGROUP_CODE) AS MTRGROUP_CODE,
-        MAX(MTRGROUP_NAME) AS MTRGROUP_NAME,
-        COUNT(*) AS NR_SKU_GRP
-    INTO #Groups
-    FROM #ItemGroups
-    WHERE @Mtrgroup IS NULL OR MTRGROUP = @Mtrgroup
-    GROUP BY MTRGROUP;
-
-    IF NOT EXISTS (SELECT 1 FROM #Groups)
-        THROW 50003, 'sp_MinMaxEngine_ClassifyGroup: no product groups matched the requested filter.', 1;
-
-    -- ---------------------------------------------------------------
-    -- 4. Filiale active incluse
+    -- 3. Filiale active incluse
     -- HQ este un rand virtual (stratul de companie), deci nu se testeaza contra WHOUSE.
     -- ---------------------------------------------------------------
     SELECT b.BRANCH, b.MARIME, b.ESTE_HQ, b.ESTE_PODEA
@@ -153,6 +125,41 @@ BEGIN
 
     IF NOT EXISTS (SELECT 1 FROM #ActiveBranches)
         THROW 50002, 'sp_MinMaxEngine_ClassifyGroup: no included branches with an active warehouse were found.', 1;
+
+    -- ---------------------------------------------------------------
+    -- 4. Maparea articol -> grupă (E18: grupa lipsă devine NEDEFINIT)
+    --    Populatia trebuie sa coincida cu #IncludedLines; altfel NR_SKU_GRP
+    --    numara articole vandute exclusiv in filiale scoase din perimetru.
+    -- ---------------------------------------------------------------
+    SELECT
+        m.MTRL,
+        COALESCE(m.MTRGROUP, 0) AS MTRGROUP,
+        COALESCE(g.CODE, 'NEDEFINIT') AS MTRGROUP_CODE,
+        COALESCE(g.NAME, 'NEDEFINIT') AS MTRGROUP_NAME
+    INTO #ItemGroups
+    FROM MTRL m
+    LEFT JOIN MTRGROUP g ON g.MTRGROUP = m.MTRGROUP AND g.COMPANY = m.COMPANY
+    WHERE m.MTRL IN (
+        SELECT DISTINCT sl.MTRL
+        FROM #SalesLines sl
+        INNER JOIN #ActiveBranches b ON b.BRANCH = sl.BRANCH
+        WHERE b.ESTE_HQ = 0 OR @HqDinAgregatCompanie = 0
+    );
+
+    CREATE CLUSTERED INDEX IX_ItemGroups_Mtrl ON #ItemGroups (MTRL);
+
+    SELECT
+        MTRGROUP,
+        MAX(MTRGROUP_CODE) AS MTRGROUP_CODE,
+        MAX(MTRGROUP_NAME) AS MTRGROUP_NAME,
+        COUNT(*) AS NR_SKU_GRP
+    INTO #Groups
+    FROM #ItemGroups
+    WHERE @Mtrgroup IS NULL OR MTRGROUP = @Mtrgroup
+    GROUP BY MTRGROUP;
+
+    IF NOT EXISTS (SELECT 1 FROM #Groups)
+        THROW 50003, 'sp_MinMaxEngine_ClassifyGroup: no product groups matched the requested filter.', 1;
 
     -- ---------------------------------------------------------------
     -- 5. Winsorizare p95 per SKU (identică cu Faza 2 — plafonarea e definită pe linie de SKU)

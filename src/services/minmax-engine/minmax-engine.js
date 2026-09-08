@@ -24,7 +24,12 @@ export const minmaxEngine = (app) => {
     around: {
       // §12.8: fiecare metoda cere un JWT valid + rol minmax.read; saveParams
       // cere in plus minmax.edit (verificat DUPA minmax.read, din acelasi token).
+      // runEngine/abandonRun/purgeRun sunt gardate identic — cine scrie
+      // parametrii poate si lansa/opri/purja o sesiune (FAZA6_CONTRACT.md §8).
       all: [authenticate('jwt'), requireRole(ROLE_READ)],
+      abandonRun: [requireRole(ROLE_EDIT)],
+      purgeRun: [requireRole(ROLE_EDIT)],
+      runEngine: [requireRole(ROLE_EDIT)],
       saveParams: [requireRole(ROLE_EDIT)]
     }
   })

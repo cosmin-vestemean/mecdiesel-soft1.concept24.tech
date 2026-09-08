@@ -1,10 +1,7 @@
 /**
- * MIN/MAX Run Panel (Faza 5 — UI de confirmare)
+ * MIN/MAX Run Panel (Faza 6 — sesiuni si lansare)
  *
- * Session selection + history — deliberately NO launch button. FAZA5_CONTRACT.md
- * §3 excludes `runEngine` from iteration 1: sessions are opened/closed manually
- * in S1, this panel only lets the user look at CCCMINMAXRUN and pick which
- * closed FULL session's results to view.
+ * Session selection, history and guarded launch of the next FULL session.
  *
  * @element minmax-run-panel
  */
@@ -12,6 +9,7 @@
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
 import { ContextConsumer } from 'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0/index.js';
 import { MinmaxEngineStoreContext } from '../../stores/minmax-engine-store.js';
+import { getAppTokenRoles } from '../../stores/app-auth.js';
 
 const STATUS_BADGE_CLASS = {
   DONE: 'bg-success',
@@ -23,11 +21,14 @@ export class MinmaxRunPanel extends LitElement {
   static get properties () {
     return {
       historyError: { type: String },
+      canEdit: { type: Boolean },
       loading: { type: Boolean },
       loadingHistory: { type: Boolean },
+      runLaunch: { type: Object },
       resolvedRunId: { type: Number },
       runHistory: { type: Array },
-      runId: { type: Number }
+      runId: { type: Number },
+      writesEnabled: { type: Boolean }
     };
   }
 
@@ -35,11 +36,14 @@ export class MinmaxRunPanel extends LitElement {
     super();
 
     this.historyError = '';
+    this.canEdit = false;
     this.loading = false;
     this.loadingHistory = false;
+    this.runLaunch = { error: '', polling: false, runId: null, starting: false };
     this.resolvedRunId = null;
     this.runHistory = [];
     this.runId = null;
+    this.writesEnabled = false;
 
     this._storeConsumer = new ContextConsumer(this, {
       callback: (store) => {
@@ -80,6 +84,9 @@ export class MinmaxRunPanel extends LitElement {
     this.loadingHistory = state.loadingHistory;
     this.historyError = state.historyError;
     this.loading = state.loading;
+    this.runLaunch = state.runLaunch;
+    this.writesEnabled = Boolean(state.params && state.params.writesEnabled);
+    this.canEdit = getAppTokenRoles().includes('minmax.edit');
   }
 
   // --- Actions ---
@@ -98,8 +105,24 @@ export class MinmaxRunPanel extends LitElement {
     this._store.loadResults({ withTotal: true });
   }
 
+  _isReadableRun (run) {
+    return run && run.SESSION_STATUS === 'DONE' && run.COMPUTE_STATUS === 'DONE';
+  }
+
   _refreshHistory () {
     if (this._store) this._store.loadHistory();
+  }
+
+  _startRun () {
+    if (!this._store) return;
+    if (!window.confirm('Pornesti o sesiune MIN/MAX noua pentru toate filialele?')) return;
+    this._store.runEngine();
+  }
+
+  _abandonRun (runId) {
+    if (!this._store) return;
+    if (!window.confirm(`Abandonezi sesiunea RUNID ${runId}?`)) return;
+    this._store.abandonRun(runId);
   }
 
   // --- Rendering Helpers ---
@@ -120,20 +143,45 @@ export class MinmaxRunPanel extends LitElement {
 
   render () {
     const isCurrentSelected = this.runId === null;
+    const openRun = this.runHistory.find((run) => run.SESSION_STATUS === 'OPEN');
+    const runDisabled = !this.writesEnabled || !this.canEdit || Boolean(openRun) || this.runLaunch.starting || this.runLaunch.polling;
 
     return html`
       <div class="minmax-run-panel card mb-3">
         <div class="card-header d-flex align-items-center justify-content-between">
           <span><i class="fas fa-history me-2"></i>Sesiuni MIN/MAX</span>
-          <button
-            class="btn btn-sm btn-outline-secondary"
-            ?disabled="${this.loadingHistory}"
-            @click="${this._refreshHistory}"
-          >
-            <i class="fas fa-sync-alt ${this.loadingHistory ? 'fa-spin' : ''}"></i> Reincarca
-          </button>
+          <div class="d-flex gap-2">
+            <button
+              class="btn btn-sm btn-primary"
+              title="Porneste o sesiune MIN/MAX noua"
+              ?disabled="${runDisabled}"
+              @click="${this._startRun}"
+            >
+              <i class="fas ${this.runLaunch.starting || this.runLaunch.polling ? 'fa-spinner fa-spin' : 'fa-play'}"></i>
+              ${this.runLaunch.starting ? 'Pornire...' : (this.runLaunch.polling ? `RUNID ${this.runLaunch.runId} in curs` : 'Ruleaza')}
+            </button>
+            ${openRun && this.writesEnabled && this.canEdit
+              ? html`<button
+                  class="btn btn-sm btn-outline-danger"
+                  title="Abandoneaza sesiunea blocata"
+                  ?disabled="${this.runLaunch.starting}"
+                  @click="${() => this._abandonRun(openRun.RUNID)}"
+                ><i class="fas fa-ban"></i> Abandoneaza RUNID ${openRun.RUNID}</button>`
+              : ''}
+            <button
+              class="btn btn-sm btn-outline-secondary"
+              title="Reincarca istoricul"
+              ?disabled="${this.loadingHistory}"
+              @click="${this._refreshHistory}"
+            >
+              <i class="fas fa-sync-alt ${this.loadingHistory ? 'fa-spin' : ''}"></i>
+            </button>
+          </div>
         </div>
         <div class="card-body">
+          ${this.runLaunch.error
+            ? html`<div class="alert alert-danger py-2 mb-2">${this.runLaunch.error}</div>`
+            : ''}
           ${this.historyError
             ? html`<div class="alert alert-danger py-2 mb-2">${this.historyError}</div>`
             : ''}
@@ -184,15 +232,15 @@ export class MinmaxRunPanel extends LitElement {
                 ${this.runHistory.map((run) => html`
                   <tr
                     class="${this.runId === run.RUNID ? 'table-primary' : ''}"
-                    style="cursor: pointer;"
-                    @click="${() => this._selectRun(run.RUNID)}"
+                    style="cursor: ${this._isReadableRun(run) ? 'pointer' : 'default'};"
+                    @click="${() => this._isReadableRun(run) && this._selectRun(run.RUNID)}"
                   >
                     <td>
                       <input
                         type="radio"
                         name="minmax-run-selection"
                         ?checked="${this.runId === run.RUNID}"
-                        ?disabled="${this.loading}"
+                        ?disabled="${this.loading || !this._isReadableRun(run)}"
                         @click="${(e) => e.stopPropagation()}"
                         @change="${() => this._selectRun(run.RUNID)}"
                       />

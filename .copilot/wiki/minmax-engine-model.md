@@ -16,7 +16,13 @@
   **Recalcularea înseamnă sesiune nouă, nu rescriere** — ramurile de re-rulare au fost eliminate din
   `Classify`/`ClassifyGroup`, zero `DELETE` pe tabele persistate. Fără scenarii what-if (decizie de
   business). Risc real: coerența parametrilor *în interiorul* unei sesiuni — de-asta `runEngine`
-  execută `StartRun → Classify → ClassifyGroup → Compute → FinishRun` într-un singur apel.
+  deschide sincron sesiunea prin endpoint-ul AJS `startRun`, apoi lansează `runPhases`
+  (`Classify → ClassifyGroup → Compute → FinishRun`) fără a ține socket-ul UI blocat; browserul
+  urmărește starea persistentă prin `history()`.
+- **O singură sesiune `OPEN` per companie.** `StartRun` verifică sub `UPDLOCK, HOLDLOCK` și aruncă
+  `50039` înainte de insert; UI-ul blochează dublu-click-ul, iar backend-ul traduce conflictul într-o
+  stare „deja în curs”. O rulare eșuată rămâne descriptibilă și se închide explicit cu
+  `AbandonRun`; nu există abandon automat după timeout.
 - **Rezoluția „sesiune curentă" e mereu `ESTE_CURENT=1 AND SCOPE='FULL' AND SESSION_STATUS='DONE'
   AND COMPUTE_STATUS='DONE'`, niciodată `MAX(RUNID)`.** Precedent de evitat: `#LatestAbcData` din
   `reumplere/sp_GetMtrlsDat.sql` ia `MAX(DATACALCUL)` per rând și compune un colaj din rulări
@@ -75,6 +81,10 @@ e fereastra de backup, nu discul.
 mișcat înainte de a decide dacă aplici. Purjarea la `FinishRun` ar șterge reperul exact când e cerut.
 Regula se auto-întreține într-o buclă de reglaj: fiecare rulare o împinge afară pe cea mai veche, dar
 toate își păstrează parametrii și randamentul.
+
+`PurgeRun` este mecanismul explicit: refuză sesiunea curentă (`50042`), orice sesiune `OPEN`
+(`50043`) și ultimele `RETENTIE_DET_SESIUNI` sesiuni `FULL/DONE` (`50044`), apoi șterge în loturi
+numai `WEEK`/`WINSOR`/`DET`. Antetul `RUN` și agregatul `GRP` rămân; nicio fază nu purjează implicit.
 
 **De ce nu „fixăm" sesiunile aplicate:** `CCCMINMAXAPPLY` ([FAZA4_CONTRACT.md](../../new_min_max/FAZA4_CONTRACT.md) §7)
 păstrează deja `OLD_*`/`NEW_*`/`ENG_MIN`/`ENG_MAX` per poziție scrisă, cu `RUNID` și autor — ~78.000

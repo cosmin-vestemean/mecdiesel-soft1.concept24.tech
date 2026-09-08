@@ -175,6 +175,109 @@ describe('minmax-engine-store — population cache (§12.6+§12.10+§12.11)', ()
   });
 });
 
+describe('minmax-engine-store — Phase 6 run lifecycle', () => {
+  let MinmaxEngineStore;
+
+  before(async () => {
+    global.sessionStorage = global.window.sessionStorage;
+    global.sessionStorage.setItem('s1Token', 'test-token');
+    ({ MinmaxEngineStore } = await import('../../public/stores/minmax-engine-store.js'));
+  });
+
+  it('starts a FULL run and records its RUNID without exposing credentials', async () => {
+    const store = new MinmaxEngineStore();
+    let payload;
+    store._getService = () => ({
+      runEngine: async (data) => {
+        payload = data;
+        return { runId: 6 };
+      }
+    });
+
+    const ok = await store.runEngine({ poll: false });
+
+    assert.strictEqual(ok, true);
+    assert.strictEqual(payload.scope, 'FULL');
+    assert.strictEqual(payload.token, 'test-token');
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(payload, 'authKey'), false);
+    assert.strictEqual(store.getState().runLaunch.runId, 6);
+    assert.strictEqual(store.getState().runId, null, 'an OPEN run must not become the result selector');
+  });
+
+  it('turns the already-open code into a stable user-facing state and refreshes history', async () => {
+    const store = new MinmaxEngineStore();
+    let historyCalls = 0;
+    store._getService = () => ({
+      history: async () => {
+        historyCalls += 1;
+        return { rows: [{ RUNID: 6, SESSION_STATUS: 'OPEN' }] };
+      },
+      runEngine: async () => {
+        const err = new Error('already open');
+        err.code = 'SESSION_ALREADY_OPEN';
+        throw err;
+      }
+    });
+
+    const ok = await store.runEngine({ poll: false });
+
+    assert.strictEqual(ok, false);
+    assert.strictEqual(historyCalls, 1);
+    assert.strictEqual(store.getState().runLaunch.error, 'Exista deja o sesiune MIN/MAX in curs.');
+    assert.strictEqual(store.getState().runHistory[0].SESSION_STATUS, 'OPEN');
+  });
+
+  it('finishes polling on DONE, follows current again and reloads results', async () => {
+    const store = new MinmaxEngineStore();
+    let resultsCalls = 0;
+    store._getService = () => ({
+      history: async () => ({ rows: [{ RUNID: 6, SESSION_STATUS: 'DONE', STATUS: 'DONE' }] }),
+      results: async () => {
+        resultsCalls += 1;
+        return { page: 1, pageSize: 100, rows: [], runId: 6, total: 0 };
+      }
+    });
+    store.dispatch({ type: 'SET_RUN_LAUNCH', payload: { polling: true, runId: 6 } });
+    store.setRunId(6);
+    const seq = store._beginRequest('run');
+
+    await store._pollRun(6, seq);
+
+    assert.strictEqual(resultsCalls, 1);
+    assert.strictEqual(store.getState().runLaunch.polling, false);
+    assert.strictEqual(store.getState().runId, null);
+    assert.strictEqual(store.getState().resolvedRunId, 6);
+  });
+
+  it('abandons an OPEN run, stops polling and refreshes history', async () => {
+    const store = new MinmaxEngineStore();
+    const calls = [];
+    store._getService = () => ({
+      abandonRun: async (payload) => calls.push({ method: 'abandonRun', payload }),
+      history: async () => ({ rows: [{ RUNID: 6, SESSION_STATUS: 'ABANDONED' }] })
+    });
+    store.dispatch({ type: 'SET_RUN_LAUNCH', payload: { polling: true, runId: 6 } });
+
+    const ok = await store.abandonRun(6);
+
+    assert.strictEqual(ok, true);
+    assert.strictEqual(calls[0].payload.runId, 6);
+    assert.strictEqual(store.getState().runLaunch.polling, false);
+    assert.strictEqual(store.getState().runHistory[0].SESSION_STATUS, 'ABANDONED');
+  });
+
+  it('counts a history failure as a retryable polling error', async () => {
+    const store = new MinmaxEngineStore();
+    store._getService = () => ({ history: async () => { throw new Error('network blip'); } });
+    const seq = store._beginRequest('run');
+
+    await store._pollRun(6, seq, 99, 2);
+
+    assert.strictEqual(store.getState().runLaunch.polling, false);
+    assert.strictEqual(store.getState().runLaunch.error, 'network blip');
+  });
+});
+
 // Store test for FAZA5_REMEDIERI_PLAN.md Pasul 5 (§12.7): a monotonic request
 // sequence per async flow, so a stale response resolved AFTER a newer one for
 // the same flow never overwrites fresher state. Every test drives the race

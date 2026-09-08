@@ -29,6 +29,19 @@ BEGIN
     IF @Scope <> 'SKU' AND @Mtrl IS NOT NULL
         THROW 50032, 'sp_MinMaxEngine_StartRun: @Mtrl is only allowed when @Scope = SKU.', 1;
 
+    BEGIN TRANSACTION;
+
+    IF EXISTS (
+        SELECT 1
+        FROM CCCMINMAXRUN WITH (UPDLOCK, HOLDLOCK)
+        WHERE COMPANY = @Company
+            AND SESSION_STATUS = 'OPEN'
+    )
+    BEGIN
+        ROLLBACK TRANSACTION;
+        THROW 50039, 'sp_MinMaxEngine_StartRun: a session is already OPEN for this company.', 1;
+    END;
+
     INSERT INTO CCCMINMAXRUN (
         COMPANY, FAZA, STATUS, SESSION_STATUS, SCOPE, MTRL, STARTEDAT, CREATEDBY
     )
@@ -37,6 +50,8 @@ BEGIN
     );
 
     SET @RunId = CONVERT(INT, SCOPE_IDENTITY());
+
+    COMMIT TRANSACTION;
 
     SELECT RUNID, COMPANY, SCOPE, SESSION_STATUS, MTRL, STARTEDAT, CREATEDBY
     FROM CCCMINMAXRUN

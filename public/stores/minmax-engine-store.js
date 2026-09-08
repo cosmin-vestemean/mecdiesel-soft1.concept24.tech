@@ -27,6 +27,8 @@ export const MinmaxEngineStoreContext = createContext('minmax-engine-store');
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 500;
 const DEFAULT_HISTORY_LIMIT = 20;
+const MAX_RUN_POLL_ATTEMPTS = 100;
+const MAX_RUN_POLL_ERRORS = 3;
 
 // VZ_26S is DECIMAL(28,8) and the service only supports >=/<= intervals, so
 // the contract's "VZ_26S > 0" default is approximated with its smallest unit.
@@ -188,7 +190,8 @@ export class MinmaxEngineStore {
     // resolves after a newer one can never clobber fresher state. `explain`
     // is also incremented on drawer close, so a response for an already-
     // closed drawer is discarded too.
-    this._sequences = { explain: 0, groupAbc: 0, history: 0, params: 0, results: 0 };
+    this._sequences = { explain: 0, groupAbc: 0, history: 0, params: 0, results: 0, run: 0 };
+    this._runPollTimer = null;
 
     this.subscribe = this.subscribe.bind(this);
     this.unsubscribe = this.unsubscribe.bind(this);
@@ -212,6 +215,7 @@ export class MinmaxEngineStore {
 
       // Params/COV/branches (CCCMINMAXPARAMS et al.) — contract §7
       params: { branches: [], cov: [], error: '', params: [], saveError: '', saving: false, writesEnabled: false },
+      runLaunch: { error: '', polling: false, runId: null, starting: false },
       resolvedRunId: null, // actual RUNID the last successful results() call used
       rows: [],
 
@@ -323,6 +327,10 @@ export class MinmaxEngineStore {
         newState.runHistory = Array.isArray(action.payload) ? action.payload : [];
         break;
 
+      case 'SET_RUN_LAUNCH':
+        newState.runLaunch = { ...newState.runLaunch, ...(action.payload || {}) };
+        break;
+
       case 'SET_GROUP_ABC_LOADING':
         newState.groupAbc = { ...newState.groupAbc, loading: Boolean(action.payload) };
         break;
@@ -403,6 +411,7 @@ export class MinmaxEngineStore {
         break;
 
       case 'RESET_ALL':
+        this._stopRunPolling();
         this._state = this._getInitialState();
         this._resultsCache = { key: null, resolvedRunId: null };
         this._groupAbcCache = { key: null, resolvedRunId: null };
@@ -439,6 +448,13 @@ export class MinmaxEngineStore {
   }
 
   reset () { this.dispatch({ type: 'RESET_ALL' }); }
+
+  _stopRunPolling () {
+    if (this._runPollTimer !== null) {
+      clearTimeout(this._runPollTimer);
+      this._runPollTimer = null;
+    }
+  }
 
   // --- Request Sequencing (\u00a712.7) ---
   // Call at the start of an async flow to obtain this request's sequence
@@ -538,12 +554,106 @@ export class MinmaxEngineStore {
       const response = await service.history({ limit, token: this._token() });
       if (!this._isCurrent('history', seq)) return;
       this.dispatch({ type: 'SET_RUN_HISTORY', payload: response.rows });
+      return response.rows;
     } catch (err) {
       if (!this._isCurrent('history', seq)) return;
       console.error('minmax-engine-store: loadHistory failed', err);
       this.dispatch({ type: 'SET_HISTORY_ERROR', payload: (err && err.message) || 'Nu s-a putut incarca istoricul.' });
     } finally {
       if (this._isCurrent('history', seq)) this.dispatch({ type: 'SET_LOADING_HISTORY', payload: false });
+    }
+  }
+
+  async runEngine ({ poll = true } = {}) {
+    const seq = this._beginRequest('run');
+    this._stopRunPolling();
+    this.dispatch({ type: 'SET_RUN_LAUNCH', payload: { error: '', polling: false, runId: null, starting: true } });
+    try {
+      const service = await this._authenticatedService();
+      const response = await service.runEngine({ scope: 'FULL', token: this._token() });
+      if (!this._isCurrent('run', seq)) return false;
+      const runId = Number(response.runId);
+      this.dispatch({ type: 'SET_RUN_LAUNCH', payload: { polling: poll, runId, starting: false } });
+      if (poll) this._pollRun(runId, seq, 0, 0);
+      return true;
+    } catch (err) {
+      if (!this._isCurrent('run', seq)) return false;
+      const alreadyRunning = err && err.code === 'SESSION_ALREADY_OPEN';
+      this.dispatch({
+        type: 'SET_RUN_LAUNCH',
+        payload: {
+          error: alreadyRunning ? 'Exista deja o sesiune MIN/MAX in curs.' : ((err && err.message) || 'Sesiunea nu a putut fi pornita.'),
+          polling: false,
+          starting: false
+        }
+      });
+      await this.loadHistory();
+      return false;
+    }
+  }
+
+  async _pollRun (runId, seq, attempt = 0, errors = 0) {
+    if (!this._isCurrent('run', seq)) return;
+    if (attempt >= MAX_RUN_POLL_ATTEMPTS) {
+      this.dispatch({
+        type: 'SET_RUN_LAUNCH',
+        payload: { error: 'Monitorizarea automata s-a oprit. Verifica istoricul si abandoneaza sesiunea daca a ramas OPEN.', polling: false }
+      });
+      return;
+    }
+    try {
+      const rows = await this.loadHistory();
+      if (!this._isCurrent('run', seq)) return;
+      if (!Array.isArray(rows)) {
+        throw new Error(this._state.historyError || 'Starea sesiunii nu a putut fi citita.');
+      }
+      const history = Array.isArray(rows) ? rows : this._state.runHistory;
+      const run = history.find((row) => Number(row.RUNID) === Number(runId));
+      const terminal = run && (run.SESSION_STATUS === 'DONE' || run.SESSION_STATUS === 'ABANDONED' || run.STATUS === 'ERROR');
+      if (!terminal) {
+        this._runPollTimer = setTimeout(() => this._pollRun(runId, seq, attempt + 1, 0), 3000);
+        return;
+      }
+
+      this.dispatch({ type: 'SET_RUN_LAUNCH', payload: { polling: false } });
+      if (run.SESSION_STATUS === 'DONE') {
+        this.setRunId(null);
+        await this.loadResults({ withTotal: true });
+      } else {
+        this.dispatch({
+          type: 'SET_RUN_LAUNCH',
+          payload: { error: run.ERRORMSG || 'Rularea MIN/MAX nu s-a finalizat cu succes.' }
+        });
+      }
+    } catch (err) {
+      if (!this._isCurrent('run', seq)) return;
+      if (errors + 1 < MAX_RUN_POLL_ERRORS) {
+        this._runPollTimer = setTimeout(() => this._pollRun(runId, seq, attempt + 1, errors + 1), 3000);
+        return;
+      }
+      this.dispatch({
+        type: 'SET_RUN_LAUNCH',
+        payload: { error: (err && err.message) || 'Starea sesiunii nu a putut fi citita.', polling: false }
+      });
+    }
+  }
+
+  async abandonRun (runId) {
+    this.dispatch({ type: 'SET_RUN_LAUNCH', payload: { error: '', starting: true } });
+    try {
+      const service = await this._authenticatedService();
+      await service.abandonRun({ runId, token: this._token() });
+      this._sequences.run += 1;
+      this._stopRunPolling();
+      this.dispatch({ type: 'SET_RUN_LAUNCH', payload: { polling: false, runId: null, starting: false } });
+      await this.loadHistory();
+      return true;
+    } catch (err) {
+      this.dispatch({
+        type: 'SET_RUN_LAUNCH',
+        payload: { error: (err && err.message) || 'Sesiunea nu a putut fi abandonata.', starting: false }
+      });
+      return false;
     }
   }
 

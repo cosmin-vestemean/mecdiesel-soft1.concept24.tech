@@ -97,6 +97,11 @@ Mapate în `config/custom-environment-variables.json` → `minmaxEngine.{s1BaseU
 `S1_APP_WS_SHARED_SECRET` lipsește, în loc să reutilizeze tăcut cheia MCP (bug de review corectat
 07.09.2026, nu reintroduce fallback-ul).
 
+Din Faza 6, aceeași cheie de aplicație este trimisă server-side către endpoint-urile fixe
+`/JS/NewMinMax/startRun|runPhases|abandonRun|purgeRun`. Fiecare endpoint verifică direct în
+`CCC_WSMCP_AUTH` că cheia este activă și are `ALLOW_WRITE=1`; un `clientID` S1 singur nu autorizează
+operații lifecycle. Cheia nu este expusă browserului.
+
 ## Verificat live pe producție (07.09.2026)
 
 - Forma răspunsului `execSql` confirmată: `{success:true, data:[...], total:N}` pentru `SELECT`;

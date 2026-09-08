@@ -1,6 +1,6 @@
 # Faza 6 — contract: orchestrare și ciclul de viață al sesiunii
 
-> **Status: propunere, neconfirmată de beneficiar.** Faza s-a format din patru fire deschise în
+> **Status: implementare locală în curs, confirmată pentru execuție la 08.09.2026.** Faza s-a format din patru fire deschise în
 > sesiunea 40 (08.09.2026), grupate pentru că împart aceeași proprietate: **toate cer atingerea
 > procedurilor stocate și un deploy AJS**. Separat, fiecare ar fi o vizită la aceleași fișiere.
 >
@@ -95,6 +95,11 @@ Un endpoint AJS e un punct de intrare cu **nume și formă fixă** — poate fac
 lui. Zero parsing, zero regex. Și e mai puțin de lucru: o funcție în `NewMinMax.js` față de un
 parser plus un whitelist în Node.
 
+Endpoint-urile cer suplimentar cheia aplicației din `CCC_WSMCP_AUTH`, activă și cu
+`ALLOW_WRITE=1`. Cheia este adăugată numai de transportul Feathers și nu ajunge în browser;
+astfel un utilizator cu simplu `clientID` S1 nu poate ocoli rolul `minmax.edit` sau kill-switch-ul
+apelând direct AJS.
+
 ## 4. `runEngine` — două endpoint-uri, nu unul
 
 Un singur apel sincron de ~2 minute e o capcană: timeout de socket, tab închis, proces repornit.
@@ -113,6 +118,8 @@ Metoda de serviciu `runEngine()`:
 
 UI-ul face poll pe `history()`. Coloanele de fază există deja, deci **progresul se afișează fără
 nicio coloană nouă**. Dacă apelul cade, sesiunea rămâne `OPEN` și intră pe calea de abandon (§5).
+Polling-ul browser este limitat la 100 încercări la 3 secunde, tolerează trei erori tranzitorii și
+oferă explicit „Abandonează RUNID” pentru recuperarea unei sesiuni rămase `OPEN`.
 
 Separarea în două endpoint-uri nu e cosmetică: fără ea, clientul n-ar afla `RUNID`-ul decât la final,
 deci n-ar avea ce să interogheze cât timp rularea e în curs.
@@ -157,9 +164,9 @@ Politica e decisă și documentată în [minmax-engine-model.md](../.copilot/wik
 secțiunea „Retenția sesiunilor". Rezumat: `DET` curentă + precedenta, `WEEK`/`WINSOR` doar curenta,
 antet + `PARAMSJSON` + `GRP` pentru totdeauna. Măsurat: **~730 MB per sesiune**, din care `DET` e 96%.
 
-**Mecanism separat de politică.** `sp_MinMaxEngine_PurgeRun @RunId` execută, nu decide. Politica —
-câte sesiuni se păstrează — stă în `CCCMINMAXPARAMS` ca `RETENTIE_DET_SESIUNI` (implicit `2`), iar
-alegerea `RUNID`-urilor de purjat e a apelantului.
+**Mecanism separat de politică.** `sp_MinMaxEngine_PurgeRun @RunId` execută, iar
+`RETENTIE_DET_SESIUNI` (implicit `2`) impune în procedură podeaua de retenție: cele mai recente N
+sesiuni `FULL/DONE` nu pot fi purjate. Apelantul alege doar dintre sesiunile mai vechi eligibile.
 
 Gărzi, exact două, ambele împotriva distrugerii setului de lucru:
 
@@ -232,6 +239,7 @@ Continuă alocarea din [minmax-engine-model.md](../.copilot/wiki/minmax-engine-m
 | `50041` | `PurgeRun` | `RUNID` inexistent |
 | `50042` | `PurgeRun` | refuz pe `ESTE_CURENT = 1` |
 | `50043` | `PurgeRun` | refuz pe `SESSION_STATUS = 'OPEN'` |
+| `50044` | `PurgeRun` | refuz pentru una dintre ultimele `RETENTIE_DET_SESIUNI` sesiuni FULL/DONE |
 
 ## 10. Formă și localizare
 
@@ -268,17 +276,17 @@ uitat nu poate diverge tăcut. **De rulat după fiecare editare de SQL**, fără
 
 ## 13. Todo list, cu model recomandat
 
-- [ ] 1. `AbandonRun` + `PurgeRun` în `00g_lifecycle.sql` *(model: Sonnet)*
-- [ ] 2. Garda `50039` în `StartRun` *(model de bază)*
-- [ ] 3. Fixul `ClassifyGroup` — reordonare + filtru *(model: Sonnet; verificare grupă dispărută întâi)*
-- [ ] 4. `getLifecycleSql()` + perechi în `sync-check.cjs` *(model de bază)*
-- [ ] 5. Endpoint-uri AJS `startRun`/`runPhases`/`abandonRun`/`purgeRun` *(model: Sonnet)*
-- [ ] 6. Transport AJS în serviciul Feathers, separat de `execSql` *(model: Sonnet)*
-- [ ] 7. `runEngine`/`abandonRun`/`purgeRun` ca metode, cu `_writesEnabled()` + `minmax.edit` *(model: Sonnet)*
-- [ ] 8. Audit app-side, acoperind și `saveParams` *(model: Sonnet)*
-- [ ] 9. UI: buton de lansare, poll pe `history()`, traducerea lui `50039` *(model: Sonnet)*
-- [ ] 10. Seed `RETENTIE_DET_SESIUNI` în `00_params.sql` *(model de bază)*
-- [ ] 11. Curățarea `RUNID 1–4` — script unic, versionat, rulat **după** nivelul B *(model de bază)*
+- [x] 1. `AbandonRun` + `PurgeRun` în `00g_lifecycle.sql` *(model: Sonnet)*
+- [x] 2. Garda `50039` în `StartRun` *(model de bază)*
+- [x] 3. Fixul `ClassifyGroup` — reordonare + filtru *(model: Sonnet; verificarea read-only a confirmat 43/43 grupe cu populație inclusă)*
+- [x] 4. `getLifecycleSql()` + perechi în `sync-check.cjs` *(model de bază)*
+- [x] 5. Endpoint-uri AJS `startRun`/`runPhases`/`abandonRun`/`purgeRun` *(model: Sonnet)*
+- [x] 6. Transport AJS în serviciul Feathers, separat de `execSql` *(model: Sonnet)*
+- [x] 7. `runEngine`/`abandonRun`/`purgeRun` ca metode, cu `_writesEnabled()` + `minmax.edit` *(model: Sonnet)*
+- [x] 8. Audit app-side, acoperind și `saveParams` *(model: Sonnet)*
+- [x] 9. UI: buton de lansare, poll pe `history()`, traducerea lui `50039` *(model: Sonnet)*
+- [x] 10. Seed `RETENTIE_DET_SESIUNI` în `00_params.sql` *(model de bază)*
+- [x] 11. Curățarea `RUNID 1–4` — executată după Nivel B; `RUN/DET/WEEK/WINSOR/GRP=0`, `RUNID=5` păstrat curent *(model de bază)*
 - [ ] 12. Validare live conform §12 *(model: Opus, agentul `Review`, context mic)*
 
 ## 14. Constrângeri de respectat

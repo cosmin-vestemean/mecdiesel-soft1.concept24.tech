@@ -20,6 +20,29 @@ export function clearAppToken () {
   connectionAuth = null;
 }
 
+// Decodes ONLY the JWT payload, no signature check — for UI gating (which
+// button to show), never for authorization: the server re-checks the real,
+// signed token on every call (minmax.edit hook, FAZA6_CONTRACT.md §8).
+function decodeJwtPayload (token) {
+  try {
+    const base64Url = token.split('.')[1];
+    if (!base64Url) return null;
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+    return JSON.parse(atob(padded));
+  } catch (err) {
+    return null;
+  }
+}
+
+// Roles claimed by the current app token (see src/app.js's appToken mint),
+// read-only/UI-only per the comment above.
+export function getAppTokenRoles () {
+  if (!appToken) return [];
+  const payload = decodeJwtPayload(appToken);
+  return (payload && Array.isArray(payload.roles)) ? payload.roles : [];
+}
+
 // Clientul socket trimite din `params` doar `query`, deci un `params.authentication`
 // atasat per apel se pierde pe drum: sesiunea se stabileste O SINGURA DATA pe
 // conexiune, iar serverul o retine in `connection.authentication`.

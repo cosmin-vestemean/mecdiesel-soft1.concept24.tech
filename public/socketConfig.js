@@ -108,7 +108,10 @@ client.use("minmax-engine", socketClient.service("minmax-engine"), {
     "groupAbc",
     "params",
     "explain",
-    "saveParams"
+    "saveParams",
+    "runEngine",
+    "abandonRun",
+    "purgeRun"
   ],
 });
 

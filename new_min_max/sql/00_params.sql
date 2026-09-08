@@ -114,7 +114,10 @@ CREATE INDEX IX_CCCMINMAXTEMPLATE_PREFIX ON CCCMINMAXTEMPLATE(PREFIX);
 
         -- Fallback per prefix cod articol; randurile SCOPE='PREFIX' se adauga din UI
         ('LT_ZILE',                '30',              'NUM',  'GLOBAL', '', 'FALLBACK lead time (zile). De suprascris per prefix cod articol - valoare de confirmat cu clientul'),
-        ('FRECVENTA_ZILE',         '14',              'NUM',  'GLOBAL', '', 'FALLBACK frecventa de comanda (zile). De suprascris per prefix cod articol - valoare de confirmat cu clientul')
+        ('FRECVENTA_ZILE',         '14',              'NUM',  'GLOBAL', '', 'FALLBACK frecventa de comanda (zile). De suprascris per prefix cod articol - valoare de confirmat cu clientul'),
+
+        -- Retentie (Faza 6 §6): politica separata de mecanismul PurgeRun
+        ('RETENTIE_DET_SESIUNI',   '2',               'NUM',  'GLOBAL', '', 'Numarul de sesiuni pentru care se pastreaza CCCMINMAXDET/WEEK/WINSOR; alegerea RUNID-urilor de purjat e a apelantului')
     ) v (PARAMKEY, PARAMVALUE, PARAMTYPE, SCOPE, SCOPEKEY, DESCRIERE)
 )
 INSERT INTO CCCMINMAXPARAMS (PARAMKEY, PARAMVALUE, PARAMTYPE, SCOPE, SCOPEKEY, DESCRIERE)

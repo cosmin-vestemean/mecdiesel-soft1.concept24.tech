@@ -13,9 +13,10 @@
   idempotentă (`loadHistory`/`loadParams`/`loadResults`/`loadGroupAbc` în paralel), montează toate cele 6
   componente din contract în ordine (run-panel, results-table, group-abc, explain-drawer,
   params-panel).
-- `public/components/minmax-engine/minmax-run-panel.js` — primul `ContextConsumer` real, cablat în
-  container. Selecție sesiune + istoric (`CCCMINMAXRUN`), **fără buton de lansare** — `runEngine`
-  e exclus din iterația 1 (contract §3).
+- `public/components/minmax-engine/minmax-run-panel.js` — selecție sesiune + istoric și, din Faza 6,
+  butonul „Rulează”. Butonul este dezactivat când kill-switch-ul este oprit, lipsește rolul
+  `minmax.edit`, există o sesiune `OPEN` sau lansarea este deja în curs. Store-ul face polling pe
+  `history()` și reîncarcă sesiunea curentă după `DONE`; autorizarea reală rămâne server-side.
 - `public/components/minmax-engine/minmax-results-table.js` — al doilea `ContextConsumer`, cablat
   în container. Filtre server-side complete (contract §5: liste, tri-state, intervale, `codeLike`,
   `mtrl`/`mtrgroup` ca liste text), sortare (whitelist + click pe antet, tie-break implicit din

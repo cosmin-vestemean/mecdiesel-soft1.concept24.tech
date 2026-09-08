@@ -1,15 +1,18 @@
 // For more information about this file see https://dove.feathersjs.com/guides/cli/service.class.html
 //
-// Read-only (except saveParams) window onto the MIN/MAX v5 engine's persisted
-// runs. Per FAZA5_CONTRACT.md, this service NEVER executes a stored procedure
-// and NEVER touches MTRTRN/FINDOC/MTRL — it composes plain SELECT (and, for
-// saveParams, whitelisted INSERT/UPDATE) statements and sends them to
-// /JS/WSMCP/execSql. authKey lives only in server config (env-backed), never
-// in the browser.
+// Read-only (except saveParams/runEngine/abandonRun/purgeRun) window onto the
+// MIN/MAX v5 engine. Two transports, kept deliberately separate (FAZA6_CONTRACT.md
+// §3): plain SELECT (and, for saveParams, whitelisted INSERT/UPDATE) statements
+// go to /JS/WSMCP/execSql; the four state-changing operations instead call
+// fixed-shape /JS/NewMinMax/<endpoint> AJS functions — never a generic EXEC
+// gateway, never SQL text built here. authKey (execSql transport) lives only
+// in server config (env-backed), never in the browser; the AJS transport
+// needs no shared secret, only the caller's own S1 session token.
 
 import { Forbidden } from '@feathersjs/errors'
 import rp from 'request-promise'
 import { classifySql } from './sql-guard.js'
+import { logger } from '../../logger.js'
 
 const DEFAULT_S1_BASE_URL = 'https://mecdiesel.oncloud.gr/s1services'
 const DEFAULT_S1_APP_ID = '2002'
@@ -303,6 +306,31 @@ function mergeExactDecimals (rows) {
   return rows
 }
 
+// The AJS transport's own endpoint returns a JSON.stringify()'d string as its
+// result; depending on how S1 relays it, `request-promise`'s `json: true` may
+// already have parsed that outer layer, or the body may still be a JSON
+// string one level in (confirmed pattern in zero-minmax.class.js). Handles
+// both without assuming either shape.
+function parseAjsResponse (raw) {
+  if (raw === null || raw === undefined) return null
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw)
+    } catch (e) {
+      return null
+    }
+  }
+  return raw
+}
+
+// SQL error number (50039 etc.), when the AJS endpoint's catch block managed
+// to recover one (see sqlErrorCode() in S1-MEC/AJS/NewMinMax.js) — best
+// effort, not guaranteed present.
+function ajsErrorCode (response) {
+  const code = response && response.errorCode
+  return (typeof code === 'number' && Number.isFinite(code)) ? code : null
+}
+
 export class MinmaxEngineService {
   constructor (options, app) {
     this.options = options || {}
@@ -328,11 +356,70 @@ export class MinmaxEngineService {
 
   // Variabila de mediu, cand e definita, are prioritate peste config/default.json:
   // altfel cheia din fisier ar face override-ul de deploy imposibil (vezi roles.js).
+  //
+  // MINMAX_ENGINE_WRITES_ENABLED gardeaza ASTAZI orice operatie care schimba
+  // starea in S1: saveParams, runEngine, abandonRun si purgeRun deopotriva
+  // (FAZA6_CONTRACT.md §8) — nu doar saveParams ca la introducerea flagului.
   _writesEnabled () {
     const cfg = (this.app && this.app.get('minmaxEngine')) || {}
     const fromEnv = process.env.MINMAX_ENGINE_WRITES_ENABLED
     const flagStr = fromEnv !== undefined ? fromEnv : cfg.writesEnabled
     return flagStr === true || flagStr === 'true'
+  }
+
+  // Fixed AJS endpoints require the same server-held application key with
+  // ALLOW_WRITE=1. The key never reaches the browser; the S1 session token
+  // still supplies company/session context.
+  _ajsConfig () {
+    return this._config()
+  }
+
+  // Dedicated transport to a fixed-shape /JS/NewMinMax/<endpoint> AJS function
+  // — never a generic EXEC gateway (FAZA6_CONTRACT.md §3). Separate from
+  // _execSql()/_execStatements(), which only ever compose SELECT/whitelisted
+  // INSERT/UPDATE text for /JS/WSMCP/execSql.
+  async _callAjs (endpoint, payload, token) {
+    const { baseUrl, appId, authKey } = this._ajsConfig()
+    const raw = await rp({
+      body: { appId, authKey, clientID: token, JSONDATA: JSON.stringify(payload || {}) },
+      gzip: true,
+      json: true,
+      method: 'POST',
+      uri: `${baseUrl}/JS/NewMinMax/${endpoint}`
+    })
+    return parseAjsResponse(raw)
+  }
+
+  // Turns an AJS {success:false, error, errorCode} response into an Error the
+  // caller can inspect programmatically. 50039 ("a session is already OPEN")
+  // gets a stable `.code` — the UI is meant to show the running session, not
+  // a red generic error (FAZA6_CONTRACT.md §5).
+  _translateAjsError (response) {
+    const message = (response && response.error) || 'S1 AJS call failed.'
+    const code = ajsErrorCode(response)
+    const err = new Error(message)
+    if (code === 50039 || /already OPEN/i.test(message)) {
+      err.code = 'SESSION_ALREADY_OPEN'
+    }
+    if (code !== null) {
+      err.sqlErrorCode = code
+    }
+    return err
+  }
+
+  // App-side structured audit (FAZA6_CONTRACT.md §8): logged by the process,
+  // never by a CCC table a compromised write path could falsify itself.
+  // Covers saveParams (restanta din Faza 5 Pasul 6) plus the three new
+  // state-changing operations.
+  _audit (operation, params, extra) {
+    const payload = params && params.authentication && params.authentication.payload
+    const refid = (payload && payload.sub) || null
+    logger.info('minmax-engine audit: %s', JSON.stringify({
+      operation,
+      refid,
+      timestamp: new Date().toISOString(),
+      ...(extra || {})
+    }))
   }
 
   async _execSql (sql, sqlParams, token) {
@@ -612,7 +699,7 @@ export class MinmaxEngineService {
    * positional-parameter cost stays constant (<= 4) regardless of how many
    * rows are edited. See FAZA5_CONTRACT.md §7, §12.2.
    */
-  async saveParams (data) {
+  async saveParams (data, params) {
     if (!this._writesEnabled()) {
       throw new Forbidden('Scrierea parametrilor MIN/MAX este dezactivata (MINMAX_ENGINE_WRITES_ENABLED).')
     }
@@ -688,7 +775,98 @@ export class MinmaxEngineService {
     }
 
     await this._execStatements(statements, token)
+    this._audit('saveParams', params, {
+      counts: {
+        branchUpdates: branchUpdates.length,
+        covUpdates: covUpdates.length,
+        paramsUpdates: paramsUpdates.length
+      }
+    })
     return { success: true }
+  }
+
+  /**
+   * Orchestrates startRun + runPhases (FAZA6_CONTRACT.md §4, §11): opens a
+   * session synchronously and returns its RUNID immediately, then launches
+   * the ~2 minute Classify/ClassifyGroup/Compute/FinishRun pipeline WITHOUT
+   * awaiting it. The kill-switch is checked first, before token/role work.
+   * The UI is expected to poll history() for progress — no socket wait.
+   */
+  async runEngine (data, params) {
+    if (!this._writesEnabled()) {
+      throw new Forbidden('Lansarea unei sesiuni MIN/MAX este dezactivata (MINMAX_ENGINE_WRITES_ENABLED).')
+    }
+    const token = requireToken(data)
+    const authPayload = params && params.authentication && params.authentication.payload
+    const createdBy = authPayload && authPayload.sub !== undefined
+      ? sqlInt(authPayload.sub, 'authenticated REFID')
+      : null
+
+    const startResponse = await this._callAjs('startRun', {
+      createdBy,
+      mtrl: data.mtrl,
+      scope: data.scope || 'FULL'
+    }, token)
+
+    if (!startResponse || startResponse.success === false) {
+      throw this._translateAjsError(startResponse)
+    }
+
+    const runId = startResponse.runId !== undefined
+      ? startResponse.runId
+      : (startResponse.data && startResponse.data.runId)
+    if (runId === undefined || runId === null) {
+      throw new Error('startRun did not return a runId.')
+    }
+
+    // Fire-and-forget: only a .catch, never awaited (§4) — a failure here
+    // leaves the session OPEN, recoverable via abandonRun(), never silent.
+    this._callAjs('runPhases', { runId }, token)
+      .then((response) => {
+        if (!response || response.success === false) {
+          throw this._translateAjsError(response)
+        }
+      })
+      .catch((err) => {
+        logger.error('minmax-engine: runPhases failed for RUNID=%s: %s', runId, (err && err.message) || err)
+      })
+
+    this._audit('runEngine', params, { runId })
+    return { runId }
+  }
+
+  /** Marks an OPEN session ABANDONED (FAZA6_CONTRACT.md §5). Zero DELETE. */
+  async abandonRun (data, params) {
+    if (!this._writesEnabled()) {
+      throw new Forbidden('Operatiile de ciclu de viata MIN/MAX sunt dezactivate (MINMAX_ENGINE_WRITES_ENABLED).')
+    }
+    const token = requireToken(data)
+    const runId = sqlInt(data.runId, 'runId')
+
+    const response = await this._callAjs('abandonRun', { runId }, token)
+    if (!response || response.success === false) {
+      throw this._translateAjsError(response)
+    }
+
+    this._audit('abandonRun', params, { runId })
+    return { runId, ...(response.data || {}) }
+  }
+
+  /** Purges CCCMINMAXDET/WEEK/WINSOR for a finished, non-current session (FAZA6_CONTRACT.md §6). */
+  async purgeRun (data, params) {
+    if (!this._writesEnabled()) {
+      throw new Forbidden('Operatiile de ciclu de viata MIN/MAX sunt dezactivate (MINMAX_ENGINE_WRITES_ENABLED).')
+    }
+    const token = requireToken(data)
+    const runId = sqlInt(data.runId, 'runId')
+
+    const response = await this._callAjs('purgeRun', { batchSize: data.batchSize, runId }, token)
+    if (!response || response.success === false) {
+      throw this._translateAjsError(response)
+    }
+
+    this._audit('purgeRun', params, { runId })
+    return { runId, ...(response.data || {}) }
   }
 }
 

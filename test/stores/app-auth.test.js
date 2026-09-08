@@ -88,4 +88,19 @@ describe('app-auth (in-memory app token)', () => {
     assert.strictEqual(await mod.ensureConnectionAuth(), true);
     assert.strictEqual(attempt, 2);
   });
+
+  it('getAppTokenRoles() decodes the roles claim from the current app token payload', () => {
+    const payload = Buffer.from(JSON.stringify({ roles: ['minmax.read', 'minmax.edit'], sub: '1234' })).toString('base64url');
+    mod.setAppToken(`header.${payload}.signature`);
+    assert.deepStrictEqual(mod.getAppTokenRoles(), ['minmax.read', 'minmax.edit']);
+  });
+
+  it('getAppTokenRoles() returns an empty array when there is no token', () => {
+    assert.deepStrictEqual(mod.getAppTokenRoles(), []);
+  });
+
+  it('getAppTokenRoles() returns an empty array for a malformed token instead of throwing', () => {
+    mod.setAppToken('not-a-real-jwt');
+    assert.deepStrictEqual(mod.getAppTokenRoles(), []);
+  });
 });

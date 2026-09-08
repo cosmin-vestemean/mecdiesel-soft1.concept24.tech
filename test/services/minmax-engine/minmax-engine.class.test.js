@@ -10,6 +10,7 @@ import assert from 'assert'
 import nock from 'nock'
 import { MinmaxEngineService, getOptions } from '../../../src/services/minmax-engine/minmax-engine.class.js'
 import { classifySql } from '../../../src/services/minmax-engine/sql-guard.js'
+import { logger } from '../../../src/logger.js'
 
 const FAKE_BASE_URL = 'http://fake-s1.test'
 const EXEC_SQL_PATH = '/JS/WSMCP/execSql'
@@ -753,6 +754,169 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
         service._execStatements([{ params: ['x'], sql: 'UPDATE CCCMINMAXCOV SET COV = :1' }], 'tok'),
         /S1 execSql returned no result for the transaction\./
       )
+    })
+  })
+
+  // AJS transport dedicated to /JS/NewMinMax/<endpoint> (FAZA6_CONTRACT.md §3-5):
+  // a separate HTTP surface from /JS/WSMCP/execSql, never a generic EXEC gateway.
+  describe('AJS transport — runEngine/abandonRun/purgeRun (FAZA6_CONTRACT.md §3-5)', () => {
+    function ajsReply (data) {
+      return JSON.stringify(data)
+    }
+
+    describe('kill-switch (writesEnabled=false) checked before token/network', () => {
+      it('rejects runEngine with Forbidden, no network call registered', async () => {
+        const service = makeService({ writesEnabled: false })
+        await assert.rejects(service.runEngine({ token: 'tok' }), (err) => err.name === 'Forbidden')
+      })
+
+      it('rejects abandonRun with Forbidden, no network call registered', async () => {
+        const service = makeService({ writesEnabled: false })
+        await assert.rejects(service.abandonRun({ runId: 6, token: 'tok' }), (err) => err.name === 'Forbidden')
+      })
+
+      it('rejects purgeRun with Forbidden, no network call registered', async () => {
+        const service = makeService({ writesEnabled: false })
+        await assert.rejects(service.purgeRun({ runId: 6, token: 'tok' }), (err) => err.name === 'Forbidden')
+      })
+    })
+
+    describe('runEngine()', () => {
+      it('starts a run, fires runPhases without awaiting it, and returns {runId} immediately', async () => {
+        let startBody
+        nock(FAKE_BASE_URL)
+          .post('/JS/NewMinMax/startRun', (body) => {
+            startBody = body
+            return true
+          })
+          .reply(200, ajsReply({ runId: 6, success: true }))
+          .post('/JS/NewMinMax/runPhases')
+          .reply(200, ajsReply({ runId: 6, success: true }))
+
+        const service = makeService({ writesEnabled: true })
+        const result = await service.runEngine(
+          { createdBy: 999, token: 'tok' },
+          { authentication: { payload: { sub: '104' } } }
+        )
+
+        // runEngine() resolves as soon as startRun answers — it never awaits
+        // runPhases (registering its interceptor with disableNetConnect proves
+        // the call still happens, just not on this promise chain).
+        assert.deepStrictEqual(result, { runId: 6 })
+        assert.strictEqual(startBody.authKey, 'unit-test-secret')
+        assert.strictEqual(JSON.parse(startBody.JSONDATA).createdBy, 104, 'CREATEDBY must come from the signed JWT, not request data')
+      })
+
+      it('translates 50039 (session already OPEN) into a stable code instead of a generic error', async () => {
+        nock(FAKE_BASE_URL)
+          .post('/JS/NewMinMax/startRun')
+          .reply(200, ajsReply({
+            error: 'sp_MinMaxEngine_StartRun: a session is already OPEN for this company.',
+            errorCode: 50039,
+            success: false
+          }))
+
+        const service = makeService({ writesEnabled: true })
+        await assert.rejects(
+          service.runEngine({ token: 'tok' }),
+          (err) => err.code === 'SESSION_ALREADY_OPEN' && err.sqlErrorCode === 50039
+        )
+      })
+
+      it('rejects when startRun succeeds but returns no runId', async () => {
+        nock(FAKE_BASE_URL)
+          .post('/JS/NewMinMax/startRun')
+          .reply(200, ajsReply({ success: true }))
+
+        const service = makeService({ writesEnabled: true })
+        await assert.rejects(service.runEngine({ token: 'tok' }), /did not return a runId/)
+      })
+
+      it('logs (does not throw) when the fire-and-forget runPhases call itself rejects', async () => {
+        nock(FAKE_BASE_URL)
+          .post('/JS/NewMinMax/startRun')
+          .reply(200, ajsReply({ runId: 7, success: true }))
+          .post('/JS/NewMinMax/runPhases')
+          .replyWithError('network blip')
+
+        const loggedErrors = []
+        const originalError = logger.error
+        logger.error = (...args) => loggedErrors.push(args)
+        try {
+          const service = makeService({ writesEnabled: true })
+          const result = await service.runEngine({ token: 'tok' })
+          assert.deepStrictEqual(result, { runId: 7 })
+
+          // Give the fire-and-forget promise's .catch a turn to run (nock's
+          // replyWithError() resolves over more than one microtask tick).
+          await new Promise((resolve) => setTimeout(resolve, 10))
+          assert.strictEqual(loggedErrors.length, 1)
+          assert.ok(String(loggedErrors[0][0]).includes('runPhases failed'))
+        } finally {
+          logger.error = originalError
+        }
+      })
+    })
+
+    describe('abandonRun()', () => {
+      it('marks the session ABANDONED and returns its RUNID', async () => {
+        nock(FAKE_BASE_URL)
+          .post('/JS/NewMinMax/abandonRun')
+          .reply(200, ajsReply({ data: { finishedAt: '2026-09-08', sessionStatus: 'ABANDONED', status: 'ERROR' }, success: true }))
+
+        const service = makeService({ writesEnabled: true })
+        const result = await service.abandonRun({ runId: 6, token: 'tok' })
+        assert.strictEqual(result.runId, 6)
+        assert.strictEqual(result.sessionStatus, 'ABANDONED')
+      })
+
+      it('surfaces a 50040 failure with its recovered error code', async () => {
+        nock(FAKE_BASE_URL)
+          .post('/JS/NewMinMax/abandonRun')
+          .reply(200, ajsReply({
+            error: 'sp_MinMaxEngine_AbandonRun: RUNID does not exist for this company or is not OPEN.',
+            errorCode: 50040,
+            success: false
+          }))
+
+        const service = makeService({ writesEnabled: true })
+        await assert.rejects(
+          service.abandonRun({ runId: 999, token: 'tok' }),
+          (err) => err.sqlErrorCode === 50040
+        )
+      })
+    })
+
+    describe('purgeRun()', () => {
+      it('purges DET/WEEK/WINSOR and returns the deleted counts', async () => {
+        nock(FAKE_BASE_URL)
+          .post('/JS/NewMinMax/purgeRun')
+          .reply(200, ajsReply({
+            data: { deletedDet: 706734, deletedWeek: 12345, deletedWinsor: 100 },
+            success: true
+          }))
+
+        const service = makeService({ writesEnabled: true })
+        const result = await service.purgeRun({ runId: 3, token: 'tok' })
+        assert.strictEqual(result.runId, 3)
+        assert.strictEqual(result.deletedDet, 706734)
+      })
+
+      it('surfaces a 50042 refusal (ESTE_CURENT=1) with its recovered error code', async () => {
+        nock(FAKE_BASE_URL)
+          .post('/JS/NewMinMax/purgeRun')
+          .reply(200, ajsReply({
+            error: 'sp_MinMaxEngine_PurgeRun: the current session cannot be purged.',
+            errorCode: 50042,
+            success: false
+          }))
+
+        const service = makeService({ writesEnabled: true })
+        await assert.rejects(
+          service.purgeRun({ runId: 5, token: 'tok' }),
+          (err) => err.sqlErrorCode === 50042
+        )
+      })
     })
   })
 })
