@@ -85,6 +85,8 @@ toate își păstrează parametrii și randamentul.
 `PurgeRun` este mecanismul explicit: refuză sesiunea curentă (`50042`), orice sesiune `OPEN`
 (`50043`) și ultimele `RETENTIE_DET_SESIUNI` sesiuni `FULL/DONE` (`50044`), apoi șterge în loturi
 numai `WEEK`/`WINSOR`/`DET`. Antetul `RUN` și agregatul `GRP` rămân; nicio fază nu purjează implicit.
+Installerul AJS execută `AbandonRun` și `PurgeRun` în batch-uri `X.RUNSQL` separate: SQL Server cere
+ca fiecare `CREATE OR ALTER PROCEDURE` să fie primul statement al batch-ului.
 
 **De ce nu „fixăm" sesiunile aplicate:** `CCCMINMAXAPPLY` ([FAZA4_CONTRACT.md](../../new_min_max/FAZA4_CONTRACT.md) §7)
 păstrează deja `OLD_*`/`NEW_*`/`ENG_MIN`/`ENG_MAX` per poziție scrisă, cu `RUNID` și autor — ~78.000

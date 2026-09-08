@@ -1,6 +1,6 @@
 # Faza 6 — contract: orchestrare și ciclul de viață al sesiunii
 
-> **Status: implementare locală în curs, confirmată pentru execuție la 08.09.2026.** Faza s-a format din patru fire deschise în
+> **Status: deployată și instalată în S1 la 08.09.2026; validarea live fără pornirea `RUNID=6` este în curs.** Faza s-a format din patru fire deschise în
 > sesiunea 40 (08.09.2026), grupate pentru că împart aceeași proprietate: **toate cer atingerea
 > procedurilor stocate și un deploy AJS**. Separat, fiecare ar fi o vizită la aceleași fișiere.
 >
@@ -245,7 +245,9 @@ Continuă alocarea din [minmax-engine-model.md](../.copilot/wiki/minmax-engine-m
 
 Aceeași structură ca fazele 1–4:
 
-- `sp_MinMaxEngine_AbandonRun` și `sp_MinMaxEngine_PurgeRun` în `new_min_max/sql/00g_lifecycle.sql`;
+- `sp_MinMaxEngine_AbandonRun` în `new_min_max/sql/00g_lifecycle.sql` și
+  `sp_MinMaxEngine_PurgeRun` în `new_min_max/sql/00h_purge_run.sql`; fiecare `CREATE OR ALTER
+  PROCEDURE` trebuie trimis printr-un apel `X.RUNSQL` separat, fiind primul statement din batch;
 - modificările la `StartRun` în `00e_start_run.sql`, la `ClassifyGroup` în `02_classify_group.sql`;
 - fiecare oglindită într-un `get*Sql()` din `NewMinMax.js`, înregistrată în `setup()`;
 - **pereche nouă în [tools/sync-check.cjs](tools/sync-check.cjs)** pentru fiecare fișier SQL nou.
