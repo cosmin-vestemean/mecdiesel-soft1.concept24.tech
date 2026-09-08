@@ -227,6 +227,77 @@ describe('minmax-engine-store — Phase 6 run lifecycle', () => {
     assert.strictEqual(store.getState().runHistory[0].SESSION_STATUS, 'OPEN');
   });
 
+  it('maps RUNNER_SETUP_MISSING to a Romanian message pointing at NewMinMax/setup', async () => {
+    const store = new MinmaxEngineStore();
+    store._getService = () => ({
+      history: async () => ({ rows: [] }),
+      runEngine: async () => {
+        const err = new Error("Agent job 'MEC_MinMaxEngine_RunPhases_1000' does not exist; run NewMinMax/setup.")
+        err.code = 'RUNNER_SETUP_MISSING';
+        throw err;
+      }
+    });
+
+    const ok = await store.runEngine({ poll: false });
+
+    assert.strictEqual(ok, false);
+    assert.ok(store.getState().runLaunch.error.includes('NewMinMax/setup'));
+  });
+
+  it('maps AGENT_UNAVAILABLE to a message naming SQL Server Agent', async () => {
+    const store = new MinmaxEngineStore();
+    store._getService = () => ({
+      history: async () => ({ rows: [] }),
+      runEngine: async () => {
+        const err = new Error('SQL Server Agent is not running.')
+        err.code = 'AGENT_UNAVAILABLE';
+        throw err;
+      }
+    });
+
+    const ok = await store.runEngine({ poll: false });
+
+    assert.strictEqual(ok, false);
+    assert.ok(/SQL Server Agent/.test(store.getState().runLaunch.error));
+  });
+
+  it('maps RUNNER_LAUNCH_FAILED to a concise message, leaving the OPEN session recoverable', async () => {
+    const store = new MinmaxEngineStore();
+    store._getService = () => ({
+      history: async () => ({ rows: [{ RUNID: 9, SESSION_STATUS: 'OPEN' }] }),
+      runEngine: async () => {
+        const err = new Error('The MIN/MAX runner job is already active for this company.')
+        err.code = 'RUNNER_LAUNCH_FAILED';
+        throw err;
+      }
+    });
+
+    const ok = await store.runEngine({ poll: false });
+
+    assert.strictEqual(ok, false);
+    assert.ok(store.getState().runLaunch.error.length > 0);
+    assert.strictEqual(store.getState().runHistory[0].SESSION_STATUS, 'OPEN');
+  });
+
+  it('maps RUNNER_ALREADY_ACTIVE without inviting the user to abandon the executing session', async () => {
+    const store = new MinmaxEngineStore();
+    store._getService = () => ({
+      history: async () => ({ rows: [{ RUNID: 9, SESSION_STATUS: 'OPEN' }] }),
+      runEngine: async () => {
+        const err = new Error('The MIN/MAX runner job is already active for this company.');
+        err.code = 'RUNNER_ALREADY_ACTIVE';
+        throw err;
+      }
+    });
+
+    const ok = await store.runEngine({ poll: false });
+
+    assert.strictEqual(ok, false);
+    assert.ok(store.getState().runLaunch.error.includes('deja in curs'));
+    assert.ok(!store.getState().runLaunch.error.includes('sesiunea a ramas deschisa'));
+    assert.ok(store.getState().runLaunch.error.includes('nu poate fi abandonata'));
+  });
+
   it('finishes polling on DONE, follows current again and reloads results', async () => {
     const store = new MinmaxEngineStore();
     let resultsCalls = 0;
@@ -247,6 +318,48 @@ describe('minmax-engine-store — Phase 6 run lifecycle', () => {
     assert.strictEqual(store.getState().runLaunch.polling, false);
     assert.strictEqual(store.getState().runId, null);
     assert.strictEqual(store.getState().resolvedRunId, 6);
+  });
+
+  it('stops polling immediately on a Compute error and shows its phase message', async () => {
+    const store = new MinmaxEngineStore();
+    store._getService = () => ({
+      history: async () => ({ rows: [{
+        RUNID: 7,
+        SESSION_STATUS: 'OPEN',
+        STATUS: 'DONE',
+        GROUP_STATUS: 'DONE',
+        COMPUTE_STATUS: 'ERROR',
+        COMPUTE_ERRORMSG: 'Compute failed on live stock.'
+      }] })
+    });
+    store.dispatch({ type: 'SET_RUN_LAUNCH', payload: { polling: true, runId: 7 } });
+    const seq = store._beginRequest('run');
+
+    await store._pollRun(7, seq);
+
+    assert.strictEqual(store.getState().runLaunch.polling, false);
+    assert.strictEqual(store.getState().runLaunch.error, 'Compute failed on live stock.');
+  });
+
+  it('stops polling on a wrapper ERRORMSG even when phase statuses are not ERROR', async () => {
+    const store = new MinmaxEngineStore();
+    store._getService = () => ({
+      history: async () => ({ rows: [{
+        RUNID: 8,
+        SESSION_STATUS: 'OPEN',
+        STATUS: 'DONE',
+        GROUP_STATUS: 'DONE',
+        COMPUTE_STATUS: 'DONE',
+        ERRORMSG: 'FinishRun precondition failed.'
+      }] })
+    });
+    store.dispatch({ type: 'SET_RUN_LAUNCH', payload: { polling: true, runId: 8 } });
+    const seq = store._beginRequest('run');
+
+    await store._pollRun(8, seq);
+
+    assert.strictEqual(store.getState().runLaunch.polling, false);
+    assert.strictEqual(store.getState().runLaunch.error, 'FinishRun precondition failed.');
   });
 
   it('abandons an OPEN run, stops polling and refreshes history', async () => {

@@ -18,7 +18,7 @@ describe('minmax-run-panel — Phase 6 launch button', () => {
     return `header.${payload}.signature`;
   }
 
-  function mount ({ open = false, writesEnabled = true } = {}) {
+  function mount ({ open = false, polling = false, writesEnabled = true } = {}) {
     const element = new MinmaxRunPanel();
     const calls = [];
     element._store = {
@@ -28,6 +28,7 @@ describe('minmax-run-panel — Phase 6 launch button', () => {
     };
     element.writesEnabled = writesEnabled;
     element.canEdit = true;
+    element.runLaunch = { error: '', polling, runId: polling ? 6 : null, starting: false };
     element.runHistory = open ? [{ RUNID: 6, SESSION_STATUS: 'OPEN' }] : [];
     document.body.appendChild(element);
     return { calls, element };
@@ -84,6 +85,17 @@ describe('minmax-run-panel — Phase 6 launch button', () => {
     } finally {
       window.confirm = originalConfirm;
     }
+  });
+
+  it('disables abandon while the Agent job is being polled', async () => {
+    setAppToken(jwtWithRoles(['minmax.edit']));
+    const { calls, element } = mount({ open: true, polling: true });
+
+    await element.updateComplete;
+    const button = element.querySelector('button[title="Abandoneaza sesiunea blocata"]');
+    assert.strictEqual(button.disabled, true);
+    button.click();
+    assert.deepStrictEqual(calls, []);
   });
 
   it('does not allow an OPEN history row to become the results selector', async () => {

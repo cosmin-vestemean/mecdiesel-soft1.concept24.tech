@@ -10,7 +10,6 @@ import assert from 'assert'
 import nock from 'nock'
 import { MinmaxEngineService, getOptions } from '../../../src/services/minmax-engine/minmax-engine.class.js'
 import { classifySql } from '../../../src/services/minmax-engine/sql-guard.js'
-import { logger } from '../../../src/logger.js'
 
 const FAKE_BASE_URL = 'http://fake-s1.test'
 const EXEC_SQL_PATH = '/JS/WSMCP/execSql'
@@ -782,16 +781,20 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
     })
 
     describe('runEngine()', () => {
-      it('starts a run, fires runPhases without awaiting it, and returns {runId} immediately', async () => {
+      it('starts a run, awaits the runPhases job-launch call, and returns {runId}', async () => {
         let startBody
+        let phasesBody
         nock(FAKE_BASE_URL)
           .post('/JS/NewMinMax/startRun', (body) => {
             startBody = body
             return true
           })
           .reply(200, ajsReply({ runId: 6, success: true }))
-          .post('/JS/NewMinMax/runPhases')
-          .reply(200, ajsReply({ runId: 6, success: true }))
+          .post('/JS/NewMinMax/runPhases', (body) => {
+            phasesBody = body
+            return true
+          })
+          .reply(200, ajsReply({ jobStarted: true, runId: 6, success: true }))
 
         const service = makeService({ writesEnabled: true })
         const result = await service.runEngine(
@@ -799,12 +802,13 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
           { authentication: { payload: { sub: '104' } } }
         )
 
-        // runEngine() resolves as soon as startRun answers — it never awaits
-        // runPhases (registering its interceptor with disableNetConnect proves
-        // the call still happens, just not on this promise chain).
+        // runEngine() now awaits runPhases (a fast Agent-job launch, not the
+        // ~2 minute pipeline) before resolving, so a launch failure would
+        // reach the caller instead of being logged silently.
         assert.deepStrictEqual(result, { runId: 6 })
         assert.strictEqual(startBody.authKey, 'unit-test-secret')
         assert.strictEqual(JSON.parse(startBody.JSONDATA).createdBy, 104, 'CREATEDBY must come from the signed JWT, not request data')
+        assert.strictEqual(JSON.parse(phasesBody.JSONDATA).runId, 6)
       })
 
       it('translates 50039 (session already OPEN) into a stable code instead of a generic error', async () => {
@@ -832,29 +836,117 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
         await assert.rejects(service.runEngine({ token: 'tok' }), /did not return a runId/)
       })
 
-      it('logs (does not throw) when the fire-and-forget runPhases call itself rejects', async () => {
+      it('propagates a runPhases launch failure instead of swallowing it — the OPEN session stays recoverable via abandonRun', async () => {
         nock(FAKE_BASE_URL)
           .post('/JS/NewMinMax/startRun')
           .reply(200, ajsReply({ runId: 7, success: true }))
           .post('/JS/NewMinMax/runPhases')
           .replyWithError('network blip')
 
-        const loggedErrors = []
-        const originalError = logger.error
-        logger.error = (...args) => loggedErrors.push(args)
-        try {
-          const service = makeService({ writesEnabled: true })
-          const result = await service.runEngine({ token: 'tok' })
-          assert.deepStrictEqual(result, { runId: 7 })
+        const service = makeService({ writesEnabled: true })
+        await assert.rejects(service.runEngine({ token: 'tok' }), /network blip/)
+      })
 
-          // Give the fire-and-forget promise's .catch a turn to run (nock's
-          // replyWithError() resolves over more than one microtask tick).
-          await new Promise((resolve) => setTimeout(resolve, 10))
-          assert.strictEqual(loggedErrors.length, 1)
-          assert.ok(String(loggedErrors[0][0]).includes('runPhases failed'))
-        } finally {
-          logger.error = originalError
-        }
+      it('translates 50045 (runner setup missing) into a stable code', async () => {
+        nock(FAKE_BASE_URL)
+          .post('/JS/NewMinMax/startRun')
+          .reply(200, ajsReply({
+            error: "Agent job 'MEC_MinMaxEngine_RunPhases_1000' does not exist; run NewMinMax/setup.",
+            errorCode: 50045,
+            success: false
+          }))
+
+        const service = makeService({ writesEnabled: true })
+        await assert.rejects(
+          service.runEngine({ token: 'tok' }),
+          (err) => err.code === 'RUNNER_SETUP_MISSING' && err.sqlErrorCode === 50045
+        )
+      })
+
+      it('translates 50046 (SQL Server Agent unavailable) into a stable code', async () => {
+        nock(FAKE_BASE_URL)
+          .post('/JS/NewMinMax/startRun')
+          .reply(200, ajsReply({
+            error: 'SQL Server Agent is not running.',
+            errorCode: 50046,
+            success: false
+          }))
+
+        const service = makeService({ writesEnabled: true })
+        await assert.rejects(
+          service.runEngine({ token: 'tok' }),
+          (err) => err.code === 'AGENT_UNAVAILABLE' && err.sqlErrorCode === 50046
+        )
+      })
+
+      it('translates 50047 (no/ambiguous OPEN session) from runPhases into a stable code', async () => {
+        nock(FAKE_BASE_URL)
+          .post('/JS/NewMinMax/startRun')
+          .reply(200, ajsReply({ runId: 8, success: true }))
+          .post('/JS/NewMinMax/runPhases')
+          .reply(200, ajsReply({
+            error: 'runId does not match the sole OPEN session for this company.',
+            errorCode: 50047,
+            success: false
+          }))
+
+        const service = makeService({ writesEnabled: true })
+        await assert.rejects(
+          service.runEngine({ token: 'tok' }),
+          (err) => err.code === 'NO_OPEN_SESSION' && err.sqlErrorCode === 50047
+        )
+      })
+
+      it('translates 50048 (runner already active) from runPhases into a stable code', async () => {
+        nock(FAKE_BASE_URL)
+          .post('/JS/NewMinMax/startRun')
+          .reply(200, ajsReply({ runId: 9, success: true }))
+          .post('/JS/NewMinMax/runPhases')
+          .reply(200, ajsReply({
+            error: 'The MIN/MAX runner job is already active for this company.',
+            errorCode: 50048,
+            success: false
+          }))
+
+        const service = makeService({ writesEnabled: true })
+        await assert.rejects(
+          service.runEngine({ token: 'tok' }),
+          (err) => err.code === 'RUNNER_ALREADY_ACTIVE' && err.sqlErrorCode === 50048
+        )
+      })
+
+      it('translates 50049 (runner launch failed) from runPhases into a stable code', async () => {
+        nock(FAKE_BASE_URL)
+          .post('/JS/NewMinMax/startRun')
+          .reply(200, ajsReply({ runId: 10, success: true }))
+          .post('/JS/NewMinMax/runPhases')
+          .reply(200, ajsReply({
+            error: 'Failed to launch MIN/MAX phases job.',
+            errorCode: 50049,
+            success: false
+          }))
+
+        const service = makeService({ writesEnabled: true })
+        await assert.rejects(
+          service.runEngine({ token: 'tok' }),
+          (err) => err.code === 'RUNNER_LAUNCH_FAILED' && err.sqlErrorCode === 50049
+        )
+      })
+
+      it('translates 50050 (runner readiness check failed) without calling runPhases', async () => {
+        nock(FAKE_BASE_URL)
+          .post('/JS/NewMinMax/startRun')
+          .reply(200, ajsReply({
+            error: 'Failed to check MIN/MAX runner readiness.',
+            errorCode: 50050,
+            success: false
+          }))
+
+        const service = makeService({ writesEnabled: true })
+        await assert.rejects(
+          service.runEngine({ token: 'tok' }),
+          (err) => err.code === 'RUNNER_READINESS_FAILED' && err.sqlErrorCode === 50050
+        )
       })
     })
 

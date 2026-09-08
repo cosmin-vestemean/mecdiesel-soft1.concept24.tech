@@ -16,13 +16,33 @@
   **Recalcularea înseamnă sesiune nouă, nu rescriere** — ramurile de re-rulare au fost eliminate din
   `Classify`/`ClassifyGroup`, zero `DELETE` pe tabele persistate. Fără scenarii what-if (decizie de
   business). Risc real: coerența parametrilor *în interiorul* unei sesiuni — de-asta `runEngine`
-  deschide sincron sesiunea prin endpoint-ul AJS `startRun`, apoi lansează `runPhases`
-  (`Classify → ClassifyGroup → Compute → FinishRun`) fără a ține socket-ul UI blocat; browserul
-  urmărește starea persistentă prin `history()`.
+  deschide sincron sesiunea prin endpoint-ul AJS `startRun`, apoi **așteaptă** endpoint-ul AJS
+  `runPhases`, care sub arhitectura SQL Server Agent doar validează sesiunea și pornește jobul
+  companiei (`msdb.dbo.sp_start_job`), în milisecunde — nu mai e un apel fire-and-forget de ~2
+  minute. Execuția reală (`Classify → ClassifyGroup → Compute → FinishRun`) rulează în jobul Agent,
+  ca `dbo.sp_MinMaxEngine_RunPhases @Company`; browserul urmărește starea persistentă prin
+  `history()`, la fel ca înainte.
 - **Estimarea de ~2 minute pentru o sesiune nu este o limită operațională garantată.** La prima
   lansare completă din UI, `RUNID=6` a rămas `OPEN/RUNNING` deoarece `runPhases` a primit de la S1
   `Ole Error 80040E31: Query timeout expired`. Sesiunea a fost închisă explicit prin `AbandonRun`, iar
   `RUNID=5` a rămas `DONE` și `ESTE_CURENT=1`; o sesiune eșuată nu se reia prin același `RUNID`.
+- **Cauza confirmată (08.09.2026): AJS `X.RUNSQL`/`X.GETSQLDATASET` au un ADO CommandTimeout fix de
+  60 secunde**, la nivelul runtime-ului S1 — nu e configurabil din cod (niciun apel din acest repo nu
+  expune un parametru de timeout). Reprodus izolat, cu un script AJS throwaway (`WAITFOR DELAY`): 45s
+  reușește, 90s cerute eșuează la exact 60009ms, cu același text de eroare ca `RUNID=6`.
+  `sp_MinMaxEngine_Classify` are nevoie de ~90-93s pe date de producție (măsurat pe `RUNID=5`, rulat
+  manual în dbexplorer, care nu are acest plafon) — deci depășește mereu cele 60s când rulează *prin*
+  `X.RUNSQL`. **Remediere aleasă: SQL Server Agent, nu spargerea lui `Classify` în batch-uri.**
+  Executarea fazelor grele s-a mutat complet în afara procesului care răspunde la request-ul AJS:
+  `dbo.sp_MinMaxEngine_RunPhases @Company` rulează ca job Agent (creat/aliniat idempotent de
+  `dbo.sp_MinMaxEngine_EnsureAgentJob`, pornit de `runPhases` via `sp_start_job`), deci nu trece
+  niciodată prin ADO și nu are niciun plafon de 60s. Alternativa evaluată — spargerea lui `Classify`
+  în 2-3 batch-uri `X.RUNSQL` secvențiale sub 60s, folosind faptul confirmat că un `#temp` supraviețuiește
+  peste apeluri separate în aceeași invocare AJS — a fost respinsă: ar fi cerut o restructurare
+  fragilă a unei proceduri de producție doar ca să ocolească o limită de transport, în timp ce
+  SQL Server Agent e infrastructură deja disponibilă (Agent rulează, login AJS e `sa`/sysadmin) și
+  păstrează procedurile de fază neschimbate ca formă.
+
 - **O singură sesiune `OPEN` per companie.** `StartRun` verifică sub `UPDLOCK, HOLDLOCK` și aruncă
   `50039` înainte de insert; UI-ul blochează dublu-click-ul, iar backend-ul traduce conflictul într-o
   stare „deja în curs”. O rulare eșuată rămâne descriptibilă și se închide explicit cu
@@ -36,7 +56,11 @@
   consumă. E doar oracolul de validare din Faza 1b; cei ~180s ai ei nu intră în costul unei sesiuni.
 - **Codurile `THROW` alocate:** `50004/50007/50008` Classify sesiune, `50005/50006/50015`
   ClassifyGroup, `50017` Compute sesiune, `50030-50032` StartRun, `50033-50038` FinishRun,
-  `50020-50024` rezervate pentru Faza 4 (`applyToErp`).
+  `50020-50024` rezervate pentru Faza 4 (`applyToErp`), `50039-50044` ciclul de viață
+  (StartRun/AbandonRun/PurgeRun, FAZA6_CONTRACT.md §9), `50045-50051` arhitectura SQL Server Agent
+  (job/setup lipsă, Agent oprit, sesiune OPEN absentă/ambiguă, runner activ, launch eșuat,
+  readiness neverificabil, setup refuzat cât jobul rulează — detaliat în
+  FAZA6_CONTRACT.md §4.1/§9).
 - **`AZI` rămâne pe rândurile copil**, antetul rulării nu stochează un `AZI` autoritar (Opțiunea A,
   confirmată). Fereastra de analiză vine din `MAX(TRNDATE)` pe date vii, deci populația poate crește
   în aceeași zi — **numărul de rânduri nu e criteriu de acceptanță**; se verifică invariantele

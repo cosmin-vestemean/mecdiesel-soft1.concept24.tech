@@ -393,13 +393,27 @@ export class MinmaxEngineService {
   // Turns an AJS {success:false, error, errorCode} response into an Error the
   // caller can inspect programmatically. 50039 ("a session is already OPEN")
   // gets a stable `.code` — the UI is meant to show the running session, not
-  // a red generic error (FAZA6_CONTRACT.md §5).
+  // a red generic error (FAZA6_CONTRACT.md §5). 50045-50050 are the SQL Agent
+  // runner codes (missing job/setup, Agent service down, no/ambiguous OPEN
+  // session, runner already active or launch failure).
   _translateAjsError (response) {
     const message = (response && response.error) || 'S1 AJS call failed.'
     const code = ajsErrorCode(response)
     const err = new Error(message)
     if (code === 50039 || /already OPEN/i.test(message)) {
       err.code = 'SESSION_ALREADY_OPEN'
+    } else if (code === 50045) {
+      err.code = 'RUNNER_SETUP_MISSING'
+    } else if (code === 50046) {
+      err.code = 'AGENT_UNAVAILABLE'
+    } else if (code === 50047) {
+      err.code = 'NO_OPEN_SESSION'
+    } else if (code === 50048) {
+      err.code = 'RUNNER_ALREADY_ACTIVE'
+    } else if (code === 50049) {
+      err.code = 'RUNNER_LAUNCH_FAILED'
+    } else if (code === 50050) {
+      err.code = 'RUNNER_READINESS_FAILED'
     }
     if (code !== null) {
       err.sqlErrorCode = code
@@ -787,10 +801,17 @@ export class MinmaxEngineService {
 
   /**
    * Orchestrates startRun + runPhases (FAZA6_CONTRACT.md §4, §11): opens a
-   * session synchronously and returns its RUNID immediately, then launches
-   * the ~2 minute Classify/ClassifyGroup/Compute/FinishRun pipeline WITHOUT
-   * awaiting it. The kill-switch is checked first, before token/role work.
-   * The UI is expected to poll history() for progress — no socket wait.
+   * session synchronously and returns its RUNID, then AWAITS runPhases —
+   * which, under the SQL Server Agent architecture, only validates the OPEN
+   * session and launches the company-specific Agent job via
+   * msdb.dbo.sp_start_job, returning in well under a second. The actual
+   * Classify/ClassifyGroup/Compute/FinishRun pipeline runs inside that Agent
+   * job, outside of any AJS ADO CommandTimeout. Awaiting the launch means a
+   * launch failure (missing job/setup, Agent down, already active) reaches
+   * the caller instead of being logged silently; the session stays OPEN
+   * either way, recoverable only through an explicit abandonRun() call, never
+   * a silent auto-abandon. The kill-switch is checked first, before token/role
+   * work. The UI is expected to poll history() for phase progress.
    */
   async runEngine (data, params) {
     if (!this._writesEnabled()) {
@@ -819,19 +840,13 @@ export class MinmaxEngineService {
       throw new Error('startRun did not return a runId.')
     }
 
-    // Fire-and-forget: only a .catch, never awaited (§4) — a failure here
-    // leaves the session OPEN, recoverable via abandonRun(), never silent.
-    this._callAjs('runPhases', { runId }, token)
-      .then((response) => {
-        if (!response || response.success === false) {
-          throw this._translateAjsError(response)
-        }
-      })
-      .catch((err) => {
-        logger.error('minmax-engine: runPhases failed for RUNID=%s: %s', runId, (err && err.message) || err)
-      })
+    this._audit('runEngine', params, { runId, stage: 'session-opened' })
 
-    this._audit('runEngine', params, { runId })
+    const phasesResponse = await this._callAjs('runPhases', { runId }, token)
+    if (!phasesResponse || phasesResponse.success === false) {
+      throw this._translateAjsError(phasesResponse)
+    }
+
     return { runId }
   }
 

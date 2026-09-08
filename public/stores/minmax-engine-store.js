@@ -27,7 +27,7 @@ export const MinmaxEngineStoreContext = createContext('minmax-engine-store');
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 500;
 const DEFAULT_HISTORY_LIMIT = 20;
-const MAX_RUN_POLL_ATTEMPTS = 100;
+const MAX_RUN_POLL_ATTEMPTS = 600;
 const MAX_RUN_POLL_ERRORS = 3;
 
 // VZ_26S is DECIMAL(28,8) and the service only supports >=/<= intervals, so
@@ -578,11 +578,10 @@ export class MinmaxEngineStore {
       return true;
     } catch (err) {
       if (!this._isCurrent('run', seq)) return false;
-      const alreadyRunning = err && err.code === 'SESSION_ALREADY_OPEN';
       this.dispatch({
         type: 'SET_RUN_LAUNCH',
         payload: {
-          error: alreadyRunning ? 'Exista deja o sesiune MIN/MAX in curs.' : ((err && err.message) || 'Sesiunea nu a putut fi pornita.'),
+          error: this._translateRunEngineError(err),
           polling: false,
           starting: false
         }
@@ -590,6 +589,22 @@ export class MinmaxEngineStore {
       await this.loadHistory();
       return false;
     }
+  }
+
+  // Maps the stable err.code values set by minmax-engine.class.js (SQL Agent
+  // runner architecture) to concise Romanian messages for the run panel;
+  // anything unmapped falls back to the raw err.message. SESSION_ALREADY_OPEN
+  // keeps its existing behavior.
+  _translateRunEngineError (err) {
+    const code = err && err.code;
+    if (code === 'SESSION_ALREADY_OPEN') return 'Exista deja o sesiune MIN/MAX in curs.';
+    if (code === 'RUNNER_SETUP_MISSING') return 'Motorul MIN/MAX nu este instalat pentru aceasta companie. Ruleaza NewMinMax/setup.';
+    if (code === 'AGENT_UNAVAILABLE') return 'SQL Server Agent este oprit sau indisponibil.';
+    if (code === 'RUNNER_ALREADY_ACTIVE') return 'Rularea MIN/MAX este deja in curs. Asteapta finalizarea ei; o sesiune activa nu poate fi abandonata.';
+    if (code === 'RUNNER_LAUNCH_FAILED') return 'Lansarea rularii MIN/MAX a esuat; sesiunea a ramas deschisa, poate fi abandonata explicit.';
+    if (code === 'RUNNER_READINESS_FAILED') return 'Starea infrastructurii MIN/MAX nu a putut fi verificata. Nu s-a creat o sesiune noua.';
+    if (code === 'NO_OPEN_SESSION') return 'Sesiunea deschisa nu a putut fi confirmata; reincarca istoricul.';
+    return (err && err.message) || 'Sesiunea nu a putut fi pornita.';
   }
 
   async _pollRun (runId, seq, attempt = 0, errors = 0) {
@@ -609,7 +624,14 @@ export class MinmaxEngineStore {
       }
       const history = Array.isArray(rows) ? rows : this._state.runHistory;
       const run = history.find((row) => Number(row.RUNID) === Number(runId));
-      const terminal = run && (run.SESSION_STATUS === 'DONE' || run.SESSION_STATUS === 'ABANDONED' || run.STATUS === 'ERROR');
+      const terminal = run && (
+        run.SESSION_STATUS === 'DONE' ||
+        run.SESSION_STATUS === 'ABANDONED' ||
+        run.STATUS === 'ERROR' ||
+        run.GROUP_STATUS === 'ERROR' ||
+        run.COMPUTE_STATUS === 'ERROR' ||
+        (run.SESSION_STATUS === 'OPEN' && Boolean(run.ERRORMSG))
+      );
       if (!terminal) {
         this._runPollTimer = setTimeout(() => this._pollRun(runId, seq, attempt + 1, 0), 3000);
         return;
@@ -622,7 +644,7 @@ export class MinmaxEngineStore {
       } else {
         this.dispatch({
           type: 'SET_RUN_LAUNCH',
-          payload: { error: run.ERRORMSG || 'Rularea MIN/MAX nu s-a finalizat cu succes.' }
+          payload: { error: run.COMPUTE_ERRORMSG || run.GROUP_ERRORMSG || run.ERRORMSG || 'Rularea MIN/MAX nu s-a finalizat cu succes.' }
         });
       }
     } catch (err) {
@@ -651,7 +673,7 @@ export class MinmaxEngineStore {
     } catch (err) {
       this.dispatch({
         type: 'SET_RUN_LAUNCH',
-        payload: { error: (err && err.message) || 'Sesiunea nu a putut fi abandonata.', starting: false }
+        payload: { error: this._translateRunEngineError(err), starting: false }
       });
       return false;
     }

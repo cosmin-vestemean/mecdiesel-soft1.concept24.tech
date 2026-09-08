@@ -22,6 +22,8 @@ const pairs = [
     ['getFinishRunSql', 'new_min_max/sql/00f_finish_run.sql'],
     ['getLifecycleSql', 'new_min_max/sql/00g_lifecycle.sql'],
     ['getPurgeRunSql', 'new_min_max/sql/00h_purge_run.sql'],
+    ['getRunPhasesProcedureSql', 'new_min_max/sql/00i_run_phases.sql'],
+    ['getEnsureAgentJobProcedureSql', 'new_min_max/sql/00j_ensure_agent_job.sql'],
     ['getSalesLinesFunctionSql', 'new_min_max/sql/00c_sales_lines.sql'],
     ['getPrepareProcedureSql', 'new_min_max/sql/00d_prepare.sql'],
     ['getClassifyProcedureSql', 'new_min_max/sql/01_classify.sql'],

@@ -164,7 +164,7 @@ export class MinmaxRunPanel extends LitElement {
               ? html`<button
                   class="btn btn-sm btn-outline-danger"
                   title="Abandoneaza sesiunea blocata"
-                  ?disabled="${this.runLaunch.starting}"
+                  ?disabled="${this.runLaunch.starting || this.runLaunch.polling}"
                   @click="${() => this._abandonRun(openRun.RUNID)}"
                 ><i class="fas fa-ban"></i> Abandoneaza RUNID ${openRun.RUNID}</button>`
               : ''}

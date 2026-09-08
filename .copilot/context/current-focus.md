@@ -1,37 +1,38 @@
 # Current Focus
 
 ## Last Updated
-- 08.09.2026 (sesiunea 45)
+- 08.09.2026 (sesiunea 47)
 
 ## Current Goal
-- Faza 6 este implementată, deployată și instalată; Nivelul B pentru `RUNID=5` rămâne înghețat și închis.
-- Kill-switch-ul a fost validat live: `saveParams` și `runEngine` au răspuns `403` cu `MINMAX_ENGINE_WRITES_ENABLED=false` și rol `minmax.edit` prezent.
-- După activare deliberată, UI-ul a creat `RUNID=6`; `runPhases` a eșuat la timeout S1, apoi `AbandonRun` a închis sesiunea.
-- `RUNID=5` rămâne `DONE` și `ESTE_CURENT=1`; nu s-au validat invariante pe `RUNID=6`.
+- Finalizează deploy-ul hardening-ului SQL Server Agent pentru Faza 6 fără a crea încă o sesiune.
+- Starea live confirmată: `RUNID=5` este `DONE`/`ESTE_CURENT=1`; `RUNID=6` este
+  `ABANDONED`/`ERROR`; jobul `MEC_MinMaxEngine_RunPhases_1000` este enabled și inactiv.
 
 ## Active Area
-- Se investighează timeout-ul `S1:Exception: Ole Error 80040E31. Query timeout expired` din pipeline-ul AJS `runPhases`; vezi [minmax-engine-model.md](../wiki/minmax-engine-model.md).
-- Kill-switch-ul este activat în producție după validare; nu se pornește o sesiune nouă până la clarificarea timeout-ului.
+- Codul local finalizat mută `Classify → ClassifyGroup → Compute → FinishRun` în SQL Server Agent,
+  eliminând plafonul AJS de 60s. Prima versiune Agent este instalată în producție; revizia locală
+  post-review nu este încă redeployată. Vezi [minmax-engine-model.md](../wiki/minmax-engine-model.md).
 
 ## Relevant Files
-- [FAZA6_CONTRACT.md](../../new_min_max/FAZA6_CONTRACT.md) — contractul lifecycle și orchestration.
-- [minmax-engine-model.md](../wiki/minmax-engine-model.md) — modelul sesiunii și constrângerea de timing observată live.
-- [NewMinMax.js](../../S1-MEC/AJS/NewMinMax.js) — endpoint-urile AJS `startRun`, `runPhases` și `AbandonRun`.
-- [minmax-engine.class.js](../../src/services/minmax-engine/minmax-engine.class.js) — clientul Feathers și traducerea erorilor.
-- [minmax-engine-store.js](../../public/stores/minmax-engine-store.js) — lansare, polling și recuperarea sesiunii.
+- [FAZA6_CONTRACT.md](../../new_min_max/FAZA6_CONTRACT.md) — contract, ordine de livrare și criterii de readiness.
+- [minmax-engine-model.md](../wiki/minmax-engine-model.md) — arhitectura durabilă, timeout-ul confirmat și lifecycle-ul.
+- [00i_run_phases.sql](../../new_min_max/sql/00i_run_phases.sql) — wrapperul Agent pentru unica sesiune `OPEN`.
+- [00j_ensure_agent_job.sql](../../new_min_max/sql/00j_ensure_agent_job.sql) — recrearea tranzacțională a jobului per companie.
+- [NewMinMax.js](../../S1-MEC/AJS/NewMinMax.js) — installer, readiness, lansare Agent și protecția abandonului.
+- [minmax-engine.class.js](../../src/services/minmax-engine/minmax-engine.class.js) — lansare sincronă și traducerea erorilor AJS.
+- [minmax-engine-store.js](../../public/stores/minmax-engine-store.js) / [minmax-run-panel.js](../../public/components/minmax-engine/minmax-run-panel.js) — polling, erori și protecția UI.
 
 ## Confirmed Decisions
-- Baseline-ul și explicațiile de verificare folosesc doar starea persistentă din `RUNID=5`, nu ERP live.
-- `runEngine` păstrează separarea `startRun` sincron / `runPhases` fire-and-forget; progresul se citește din `history()`.
-- `AbandonRun` este calea explicită pentru o fază eșuată; `RUNID=6` nu este reutilizat și nu devine curent.
-- Sesiunea curentă se rezolvă prin `ESTE_CURENT` și statusuri `DONE`, niciodată prin `MAX(RUNID)`.
-- `PurgeRun` păstrează antetele `RUN`/`GRP` și refuză sesiunea curentă sau `OPEN`.
+- `X.RUNSQL`/`X.GETSQLDATASET` au un CommandTimeout ADO fix de 60s; SQL Server Agent este remedierea aleasă, nu fragmentarea procedurii `Classify`.
+- `runEngine` așteaptă doar lansarea rapidă a jobului. Baza de date rămâne sursa de adevăr pentru progres, iar UI face polling.
+- `sp_MinMaxEngine_RunPhases` identifică strict unica sesiune `OPEN`; rezoluția sesiunii curente nu folosește niciodată `MAX(RUNID)`.
+- Setup-ul nu realiniază jobul activ; start-ul cere readiness complet înainte de a crea un `RUNID`; abandonul este blocat cât jobul este activ sau cerut.
+- `sync-check.cjs` confirmă 13/13 perechi SQL/AJS. `node --check` și suita focalizată au trecut cu 144 teste.
 
 ## Open Questions
-- Timeout-ul este în AJS/WSMCP sau în procedura SQL; trebuie identificată limita exactă și remedierea minimă.
-- După remediere, este necesară o nouă lansare deliberată și validarea celor 9 invariante.
-- Suita are încă eșecul preexistent pentru serviciul lipsă `mec-item-producer-relation`.
-- Rămâne confirmarea beneficiarului pe formule și comportamentul butonului după prima rulare completă.
+- Este necesar redeploy-ul manual al versiunii curente din `NewMinMax.js`, urmat imediat de `setup()`.
+- Statusul deploy-ului aplicației Feathers/UI pentru protecțiile de polling și abandon trebuie confirmat înainte de primul run UI.
+- După setup, execuția Agent completă pe producție nu este încă validată; scriptul AJS diagnostic temporar trebuie eliminat din S1.
 
 ## Next Step
-- Determină sursa timeout-ului `runPhases` și validează remedierea fără a lansa o nouă sesiune; apoi pornește următoarea rulare din UI și verifică invariantele 9/9.
+- După confirmarea redeploy-ului AJS, rulează `NewMinMax/setup` și verifică read-only jobul/procedurile; nu porni un `RUNID` până acea verificare nu reușește.
