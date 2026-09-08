@@ -294,17 +294,25 @@ formulei.
 este `FARA_REFERINTA` (95,6% măsurat pe RUNID 4), deci eșantionarea uniformă ar cheltui efortul uman
 pe cazuri care nu exercită formula. Se construiește pe patru criterii:
 
-- [ ] **Stratificare pe axele care schimbă formula:** produsul `CLASA` (11) × `MARIME` (3), plus
+- [x] **Stratificare pe axele care schimbă formula:** produsul `CLASA` (11) × `MARIME` (3), plus
       `LIFECYCLE`, `ESTE_HQ` vs. non-HQ, `HQ_CAP_APLICAT`, `PODEA_APLICATA`. Câteva rânduri per celulă
       relevantă, **nu** proporțional cu populația.
-- [ ] **Ramuri de cod, deliberat:** câte un caz în care s-a activat winsorizarea, rotunjirea la
+- [x] **Ramuri de cod, deliberat:** câte un caz în care s-a activat winsorizarea, rotunjirea la
       `N_PACK`, `ORD_FURN > 0`, stoc negativ, `VZ_26S = 0` (sentinela `9999`), grupă mică,
       discontinuat / lichidare / blocat / exclus. Fiecare ramură care poate fi luată se ia cel puțin o
       dată.
-- [ ] **Impact material:** top N după `VAL_52S` și după `BUY_QTY` — acolo o eroare costă bani și acolo
+- [x] **Impact material:** top N după `VAL_52S` și după `BUY_QTY` — acolo o eroare costă bani și acolo
       Faza 4 va scrie în ERP.
-- [ ] **Eșantion înghețat, nu regenerat:** triplete `(RUNID, BRANCH, MTRL)` fixate o dată și
+- [x] **Eșantion înghețat, nu regenerat:** triplete `(RUNID, BRANCH, MTRL)` fixate o dată și
       versionate în `new_min_max/analiza/`. Fără asta nu poți compara „înainte/după" un fix.
+
+Înghețat 08.09.2026 în `analiza/esantion_minmax_run5.json`: 31 triplete unice, 22 celule relevante
+`CLASA × MARIME` (`MARIME=MEDIU` nu există în RUNID=5), 35 criterii, lifecycle
+`STANDARD/NOU/OD`, 19 HQ + 12 non-HQ și serii explicite de câte 52 săptămâni. Ramura
+`N_PACK > 1` este indisponibilă (`N_PACK=1` pe toate rândurile). Recalculul independent al celor
+13 câmpuri din lanțul `SAFETY → BUY_QTY` este 31/31 PASS atât în generatorul Node, cât și într-o
+verificare separată Python `Decimal`. Compararea manuală cu valorile afișate în drawer rămâne de
+făcut, deci definiția de terminat și poarta de mai jos nu se bifează încă.
 
 Pentru fiecare rând se consemnează: valoarea așteptată (calculată manual), valoarea afișată,
 diferența și verdictul. O diferență neexplicată blochează poarta.

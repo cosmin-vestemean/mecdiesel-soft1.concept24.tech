@@ -1,7 +1,7 @@
 # MIN/MAX Engine v5 — Reguli de business și formule
 
 > Fapte durabile despre semantica flagurilor, warning-urilor și formulelor. Editează in-place.
-> Distinct de „wiki-ul HTML" cerut ca livrabil pentru beneficiar (vezi secțiunea Transparență).
+> Distinct de wiki-ul HTML de transparență inițiat de echipă (vezi secțiunea Transparență).
 
 ## Flaguri MTRL
 
@@ -53,6 +53,21 @@
   `(SELECT MIN(v) FROM (VALUES (a),(b),(c)) t(v))`, cu `CONVERT` explicit la tipul țintă ca precizia
   intermediară să nu urce la `DECIMAL(38,x)`.
 
+## Baseline numeric Nivel B
+
+Baseline-ul `RUNID=5` este fixat în `new_min_max/analiza/esantion_minmax_run5.json` și se regenerează
+read-only cu `new_min_max/tools/freeze-minmax-sample.cjs`. Selecția are 31 triplete unice și 35 de
+criterii: toate cele 22 celule relevante `CLASA × MARIME`, lifecycle `STANDARD/NOU/OD`, HQ/non-HQ,
+ramurile exercitabile și cazurile cu impact maxim. `MARIME=MEDIU` lipsește complet din sesiune, iar
+`N_PACK=1` peste tot face ramura pack indisponibilă; ambele absențe sunt explicite în artefact.
+
+Snapshot-ul conține parametrii rulării, inputurile și intermediarii calculați, dependențele
+`SUM_BR_MAX`/`HQ_ENG_MIN`, winsorizarea și câte 52 de poziții săptămânale per triplet; săptămânile
+absente din tabela sparse sunt materializate cu zero. Lanțul `SAFETY → BUY_QTY` este recalculat
+independent cu rotunjire la `DECIMAL(28,8)` după fiecare etapă și verificat suplimentar cu Python
+`Decimal`: 31/31 PASS. Acesta este baseline persistent, nu dovada valorilor randate în UI;
+comparația manuală cu drawer-ul `explain` rămâne necesară pentru închiderea Nivelului B.
+
 ## `SLTS` — închis, a nu se redeschide
 
 Comportamentul invers intenției teoretice (clasa A primește 0,0526, clasa C 0,333) e lacuna **L3**
@@ -61,7 +76,8 @@ corecție.
 
 ## Transparență — wiki HTML pentru beneficiar
 
-Toate formulele și deciziile din `Compute` se publică într-un **wiki HTML atașat aplicației**
+Wiki-ul HTML atașat aplicației este o **inițiativă a echipei**, nu o cerință contractuală. El publică
+formulele și deciziile din `Compute`
 (tipar: `public/help/zero-minmax-help.html`, `<iframe>`/modal). Se generează dintr-o sursă unică,
 parametrii se injectează live din `CCCMINMAXPARAMS` (nu hardcodați). Coloanele intermediare din
 `CCCMINMAXDET` (`SAFETY`/`BUF`/`CYCLE`/`CAP6`/...) sunt load-bearing pentru drill-down-ul „explică
