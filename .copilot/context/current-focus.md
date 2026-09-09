@@ -39,6 +39,8 @@
 - Poarta §12.15 a Fazei 5 tehnic închisă (vezi Active Area + link-urile de mai sus).
 - Anexa de ergonomie UI implementată: filtre pe 3 niveluri, contor filtre active, sticky header,
   culori WCAG AA, formula din drawer randată cu KaTeX — 186/186 teste relevante verzi.
+- În containerul MIN/MAX, Rezultate MIN/MAX și Clasificare ABC-XYZ pe grupe sunt organizate în
+  două taburi; ambele panouri rămân montate pentru a păstra starea filtrelor și paginării.
 - KaTeX e folosit doar pentru drawer-ul „explică calcul" (valori substituite live), nu pentru
   wiki-ul HTML static (D6 din `FAZA3_HANDOFF.md` §9.6, neconstruit, rămâne deschisă separat).
 - Faza 4 (`applyToErp`) rămâne deliberat amânată până la confirmarea beneficiarului.

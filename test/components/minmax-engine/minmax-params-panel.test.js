@@ -53,4 +53,25 @@ describe('minmax-params-panel — branch MARIME select (§12.4)', () => {
       assert.deepStrictEqual(selected, [marime], `expected only ${marime} selected after switching to it`);
     }
   });
+
+  it('renders the three configuration sections as ordered tabs', async () => {
+    const el = mount();
+    await el.updateComplete;
+
+    const tabs = [...el.querySelectorAll('[role="tab"]')];
+    assert.deepStrictEqual(
+      tabs.map((tab) => tab.textContent.trim()),
+      ['Parametri globali', 'Matricea COV_TGT', 'Configurare filiale']
+    );
+    assert.strictEqual(tabs[0].getAttribute('aria-selected'), 'true');
+    assert.ok(el.querySelector('#minmax-params-tab:not([hidden])'));
+    assert.ok(el.querySelector('#minmax-cov-tab[hidden]'));
+
+    tabs[1].click();
+    await el.updateComplete;
+
+    assert.strictEqual(tabs[1].getAttribute('aria-selected'), 'true');
+    assert.ok(el.querySelector('#minmax-cov-tab:not([hidden])'));
+    assert.ok(el.querySelector('#minmax-params-tab[hidden]'));
+  });
 });

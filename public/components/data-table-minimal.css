@@ -50,12 +50,14 @@
 }
 
 tbody tr {
-    transition: all 0.15s ease;
+    transition: background-color 0.15s ease;
 }
 
+/* No transform/box-shadow on row hover: scale(1.001) grows the row box, which
+   at container boundaries shows a scrollbar, moves the pointer off the row and
+   produces a hover/normal flicker loop. Hover only recolors the row. */
 tbody tr:hover {
-    transform: scale(1.001);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    background-color: rgba(0, 0, 0, 0.02);
 }
 
 tbody tr:nth-child(even):hover {

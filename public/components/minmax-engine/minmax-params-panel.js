@@ -42,7 +42,8 @@ export class MinmaxParamsPanel extends LitElement {
       writesEnabled: { type: Boolean },
       _branchEdits: { state: true, type: Object },
       _covEdits: { state: true, type: Object },
-      _paramEdits: { state: true, type: Object }
+      _paramEdits: { state: true, type: Object },
+      _activeTab: { state: true, type: String }
     };
   }
 
@@ -59,6 +60,7 @@ export class MinmaxParamsPanel extends LitElement {
     this._branchEdits = {};
     this._covEdits = {};
     this._paramEdits = {};
+    this._activeTab = 'params';
 
     this._storeConsumer = new ContextConsumer(this, {
       callback: (store) => {
@@ -185,23 +187,27 @@ export class MinmaxParamsPanel extends LitElement {
     this._store.saveParams({ branchUpdates, covUpdates, paramsUpdates });
   }
 
+  _selectTab (tab) {
+    this._activeTab = tab;
+  }
+
   // --- Render helpers ---
   _renderParamsSection () {
     return html`
-      <div class="table-responsive mb-4">
-        <table class="table table-sm table-hover align-middle mb-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0 minmax-params-table">
           <thead>
             <tr>
               <th>Cheie</th>
               <th>Scope</th>
               <th>Scope key</th>
               <th>Descriere</th>
-              <th style="width: 160px;">Valoare</th>
+              <th style="width: 140px;">Valoare</th>
             </tr>
           </thead>
           <tbody>
             ${this.params.length === 0
-              ? html`<tr><td colspan="5" class="text-center text-muted py-3">Niciun parametru.</td></tr>`
+              ? html`<tr><td colspan="5" class="text-center text-muted py-2">Niciun parametru.</td></tr>`
               : ''}
             ${this.params.map((row) => {
               const key = paramRowKey(row);
@@ -229,8 +235,8 @@ export class MinmaxParamsPanel extends LitElement {
   _renderCovSection () {
     const byKey = new Map(this.cov.map((row) => [covRowKey(row), row]));
     return html`
-      <div class="table-responsive mb-4">
-        <table class="table table-sm table-hover align-middle mb-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0 minmax-params-table">
           <thead>
             <tr>
               <th>Clasa</th>
@@ -249,7 +255,7 @@ export class MinmaxParamsPanel extends LitElement {
                   const dirty = Object.prototype.hasOwnProperty.call(this._covEdits, key) && Number(value) !== Number(row.COV);
                   return html`
                     <td class="${dirty ? 'table-warning' : ''}">
-                      <input type="number" step="0.01" class="form-control form-control-sm" style="width: 90px;" .value="${value}"
+                      <input type="number" step="0.01" class="form-control form-control-sm" style="width: 76px;" .value="${value}"
                              @change="${(e) => this._setCovValue(row, e.target.value)}">
                     </td>
                   `;
@@ -265,7 +271,7 @@ export class MinmaxParamsPanel extends LitElement {
   _renderBranchesSection () {
     return html`
       <div class="table-responsive">
-        <table class="table table-sm table-hover align-middle mb-0">
+        <table class="table table-sm table-hover align-middle mb-0 minmax-params-table">
           <thead>
             <tr>
               <th>Filiala</th>
@@ -277,7 +283,7 @@ export class MinmaxParamsPanel extends LitElement {
           </thead>
           <tbody>
             ${this.branches.length === 0
-              ? html`<tr><td colspan="5" class="text-center text-muted py-3">Nicio filiala.</td></tr>`
+              ? html`<tr><td colspan="5" class="text-center text-muted py-2">Nicio filiala.</td></tr>`
               : ''}
             ${this.branches.map((row) => {
               const draft = this._branchDraft(row);
@@ -286,7 +292,7 @@ export class MinmaxParamsPanel extends LitElement {
                 <tr class="${dirty ? 'table-warning' : ''}">
                   <td>${row.BRANCH}</td>
                   <td>
-                    <select class="form-select form-select-sm" style="width: 110px;" aria-label="Marime filiala"
+                    <select class="form-select form-select-sm" style="width: 96px;" aria-label="Marime filiala"
                             @change="${(e) => this._setBranchField(row, 'marime', e.target.value)}">
                       ${MARIME_ORDER.map((m) => html`<option value="${m}" .selected="${m === draft.marime}">${m}</option>`)}
                     </select>
@@ -313,10 +319,98 @@ export class MinmaxParamsPanel extends LitElement {
     const dirtyCount = this._dirtyCount;
 
     return html`
-      <div class="minmax-params-panel card mb-3">
+      <style>
+        .minmax-params-panel .card-header {
+          padding: 0.25rem 0.5rem;
+          font-size: 0.8125rem;
+        }
+
+        .minmax-params-panel .card-body {
+          padding: 0.5rem;
+        }
+
+        .minmax-params-panel .nav-tabs {
+          margin-bottom: 0.25rem;
+        }
+
+        .minmax-params-panel .nav-link {
+          padding: 0.1rem 0.4rem;
+          font-size: 0.75rem;
+        }
+
+        .minmax-params-panel .btn-sm {
+          padding: 0.1rem 0.4rem;
+          font-size: 0.75rem;
+        }
+
+        .minmax-params-panel .alert {
+          margin-bottom: 0.25rem;
+          padding: 0.2rem 0.4rem;
+          font-size: 0.75rem;
+        }
+
+        .minmax-params-table {
+          font-size: 0.78rem;
+        }
+
+        .minmax-params-table th,
+        .minmax-params-table td {
+          padding: 0.1rem 0.4rem;
+          vertical-align: middle;
+          white-space: nowrap;
+        }
+
+        .minmax-params-table thead th {
+          padding: 0.2rem 0.4rem;
+          font-size: 0.72rem;
+        }
+
+        .minmax-params-table td:nth-child(4) {
+          white-space: normal;
+        }
+
+        /* Inputs render as plain text (same row height as the results table).
+           No border/background change on hover — a hover state that alters the
+           input's box makes the row look taller and, at scrollbar boundaries,
+           triggers a hover/normal flicker loop. Editability is signalled only
+           by a subtle underline on focus, which never changes the box size. */
+        .minmax-params-table .form-control,
+        .minmax-params-table .form-select {
+          height: 1.35rem;
+          min-height: 0;
+          padding: 0 0.25rem;
+          font-size: 0.78rem;
+          line-height: 1.2;
+          background-color: transparent;
+          border: 1px solid transparent;
+          box-shadow: none;
+        }
+
+        .minmax-params-table .form-control:focus,
+        .minmax-params-table .form-select:focus {
+          background-color: transparent;
+          border-color: transparent;
+          border-bottom-color: var(--bs-primary);
+          border-radius: 0;
+          box-shadow: none;
+          outline: none;
+        }
+
+        .minmax-params-table .form-check-input {
+          width: 0.85rem;
+          height: 0.85rem;
+          margin-top: 0;
+        }
+
+        .minmax-params-table .badge {
+          padding: 0.15em 0.4em;
+          font-size: 0.68rem;
+        }
+      </style>
+      <div class="minmax-params-panel card mb-2">
         <div class="card-header d-flex align-items-center justify-content-between">
           <span><i class="fas fa-sliders-h me-2"></i>Parametri MIN/MAX</span>
-          <div class="d-flex gap-2">
+          <div class="d-flex gap-1">
             <button class="btn btn-sm btn-outline-secondary" ?disabled="${this.saving || !dirtyCount}" @click="${this._cancel}">
               <i class="fas fa-undo me-1"></i>Anuleaza
             </button>
@@ -326,20 +420,48 @@ export class MinmaxParamsPanel extends LitElement {
           </div>
         </div>
         <div class="card-body">
-          ${!this.writesEnabled ? html`<div class="alert alert-warning py-2"><i class="fas fa-lock me-2"></i>Panou read-only: scrierea parametrilor este dezactivata pe server.</div>` : ''}
-          ${this.saveError ? html`<div class="alert alert-danger py-2">${this.saveError}</div>` : ''}
+          ${!this.writesEnabled ? html`<div class="alert alert-warning"><i class="fas fa-lock me-2"></i>Panou read-only: scrierea parametrilor este dezactivata pe server.</div>` : ''}
+          ${this.saveError ? html`<div class="alert alert-danger">${this.saveError}</div>` : ''}
 
           ${this.loading
-            ? html`<div class="text-muted py-3"><i class="fas fa-spinner fa-spin"></i> Se incarca parametrii...</div>`
+            ? html`<div class="text-muted py-1"><i class="fas fa-spinner fa-spin"></i> Se incarca parametrii...</div>`
             : html`
-              <h6 class="text-muted">Parametri globali</h6>
-              ${this._renderParamsSection()}
+              <ul class="nav nav-tabs" role="tablist" aria-label="Configurare MIN/MAX">
+                ${[
+                  ['params', 'fa-sliders-h', 'Parametri globali'],
+                  ['cov', 'fa-th', 'Matricea COV_TGT'],
+                  ['branches', 'fa-code-branch', 'Configurare filiale']
+                ].map(([tab, icon, label]) => html`
+                  <li class="nav-item" role="presentation">
+                    <button
+                      id="minmax-${tab}-tab-button"
+                      class="nav-link ${this._activeTab === tab ? 'active' : ''}"
+                      type="button"
+                      role="tab"
+                      aria-selected="${this._activeTab === tab}"
+                      aria-controls="minmax-${tab}-tab"
+                      @click="${() => this._selectTab(tab)}"
+                    >
+                      <i class="fas ${icon} me-1"></i>${label}
+                    </button>
+                  </li>
+                `)}
+              </ul>
 
-              <h6 class="text-muted">Matricea COV_TGT (clasa x marime filiala)</h6>
-              ${this._renderCovSection()}
-
-              <h6 class="text-muted">Configurare filiale</h6>
-              ${this._renderBranchesSection()}
+              <div class="tab-content">
+                <div id="minmax-params-tab" class="tab-pane fade ${this._activeTab === 'params' ? 'show active' : ''}"
+                     role="tabpanel" aria-labelledby="minmax-params-tab-button" ?hidden="${this._activeTab !== 'params'}">
+                  ${this._renderParamsSection()}
+                </div>
+                <div id="minmax-cov-tab" class="tab-pane fade ${this._activeTab === 'cov' ? 'show active' : ''}"
+                     role="tabpanel" aria-labelledby="minmax-cov-tab-button" ?hidden="${this._activeTab !== 'cov'}">
+                  ${this._renderCovSection()}
+                </div>
+                <div id="minmax-branches-tab" class="tab-pane fade ${this._activeTab === 'branches' ? 'show active' : ''}"
+                     role="tabpanel" aria-labelledby="minmax-branches-tab-button" ?hidden="${this._activeTab !== 'branches'}">
+                  ${this._renderBranchesSection()}
+                </div>
+              </div>
             `}
         </div>
       </div>

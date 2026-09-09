@@ -48,4 +48,28 @@ describe('minmax-engine-container — lazy activation (§12.9)', () => {
       Object.assign(minmaxEngineStore, originals);
     }
   });
+
+  it('switches between results and group classification without unmounting either panel', async () => {
+    const element = document.createElement('minmax-engine-container');
+    document.body.appendChild(element);
+    await element.updateComplete;
+
+    const resultsPanel = element.querySelector('#minmax-results-panel');
+    const groupsPanel = element.querySelector('#minmax-groups-panel');
+
+    assert.ok(resultsPanel.querySelector('minmax-results-table'));
+    assert.ok(groupsPanel.querySelector('minmax-group-abc'));
+    assert.strictEqual(resultsPanel.hidden, false);
+    assert.strictEqual(groupsPanel.hidden, true);
+    assert.strictEqual(element.querySelector('#minmax-results-tab').getAttribute('aria-selected'), 'true');
+
+    element.querySelector('#minmax-groups-tab').click();
+    await element.updateComplete;
+
+    assert.strictEqual(resultsPanel.hidden, true);
+    assert.strictEqual(groupsPanel.hidden, false);
+    assert.strictEqual(element.querySelector('#minmax-groups-tab').getAttribute('aria-selected'), 'true');
+    assert.ok(resultsPanel.querySelector('minmax-results-table'));
+    assert.ok(groupsPanel.querySelector('minmax-group-abc'));
+  });
 });
