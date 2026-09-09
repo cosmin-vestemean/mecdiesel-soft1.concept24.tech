@@ -66,7 +66,7 @@ const RESULT_COLUMNS = [
   { key: 'BRANCH', label: 'Filiala', sortField: 'branch' },
   { key: 'CODE', label: 'Cod', sortField: 'code' },
   { key: 'MTRL_NAME', label: 'Denumire' },
-  { key: 'MTRGROUP_CODE', label: 'Grupa' },
+  { key: 'MTRGROUP_NAME', label: 'Grupa' },
   { key: 'LIFECYCLE', label: 'Lifecycle', sortField: 'lifecycle' },
   { key: 'CLASA', label: 'Clasa', sortField: 'clasa' },
   { key: 'FLAG_TXT', badge: true, label: 'Flag', sortField: 'flagTxt' },
@@ -95,6 +95,7 @@ const FLAG_BADGE_CLASS = {
 };
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
+const DISPLAY_NAME_MAX_LENGTH = 47;
 
 // Anexa §A3: counts the draft filters that differ from the store's neutral
 // defaults, so the user sees how many filters are about to be applied.
@@ -364,6 +365,12 @@ export class MinmaxResultsTable extends LitElement {
     if (col.type === 'number') {
       return (value === null || value === undefined) ? '-' : Number(value).toLocaleString('ro-RO', { maximumFractionDigits: 2 });
     }
+    if (col.key === 'MTRL_NAME' && value !== null && value !== undefined) {
+      const name = String(value);
+      return name.length > DISPLAY_NAME_MAX_LENGTH
+        ? `${name.slice(0, DISPLAY_NAME_MAX_LENGTH)}...`
+        : name;
+    }
     return value ?? '-';
   }
 
@@ -518,7 +525,9 @@ export class MinmaxResultsTable extends LitElement {
                 ${this.rows.map((row) => html`
                   <tr style="cursor:pointer;" title="Vezi explicatia calculului"
                       @click="${() => this._openExplain(row)}">
-                    ${RESULT_COLUMNS.map((col) => html`<td>${this._formatCell(row, col)}</td>`)}
+                    ${RESULT_COLUMNS.map((col) => col.key === 'MTRL_NAME'
+                      ? html`<td title="${row.MTRL_NAME ?? ''}">${this._formatCell(row, col)}</td>`
+                      : html`<td>${this._formatCell(row, col)}</td>`)}
                   </tr>
                 `)}
               </tbody>

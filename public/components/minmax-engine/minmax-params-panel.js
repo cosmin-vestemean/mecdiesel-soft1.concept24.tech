@@ -199,10 +199,10 @@ export class MinmaxParamsPanel extends LitElement {
           <thead>
             <tr>
               <th>Cheie</th>
+              <th style="width: 140px;">Valoare</th>
+              <th>Descriere</th>
               <th>Scope</th>
               <th>Scope key</th>
-              <th>Descriere</th>
-              <th style="width: 140px;">Valoare</th>
             </tr>
           </thead>
           <tbody>
@@ -216,13 +216,13 @@ export class MinmaxParamsPanel extends LitElement {
               return html`
                 <tr class="${dirty ? 'table-warning' : ''}">
                   <td>${row.PARAMKEY}</td>
-                  <td>${row.SCOPE}</td>
-                  <td>${row.SCOPEKEY || '-'}</td>
-                  <td class="small text-muted">${row.DESCRIERE || ''}</td>
-                  <td>
-                    <input type="text" class="form-control form-control-sm" .value="${value}"
+                  <td class="minmax-value">
+                    <input type="text" class="form-control form-control-sm minmax-value" .value="${value}"
                            @change="${(e) => this._setParamValue(row, e.target.value)}">
                   </td>
+                  <td class="text-muted">${row.DESCRIERE || ''}</td>
+                  <td>${row.SCOPE}</td>
+                  <td>${row.SCOPEKEY || '-'}</td>
                 </tr>
               `;
             })}
@@ -365,8 +365,12 @@ export class MinmaxParamsPanel extends LitElement {
           font-size: 0.72rem;
         }
 
-        .minmax-params-table td:nth-child(4) {
+        .minmax-params-table td:nth-child(3) {
           white-space: normal;
+        }
+
+        .minmax-params-table .minmax-value {
+          color: var(--accent-primary);
         }
 
         /* Inputs render as plain text (same row height as the results table).

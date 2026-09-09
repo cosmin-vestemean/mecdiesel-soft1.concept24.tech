@@ -67,6 +67,22 @@ describe('minmax-results-table — page-size select (§12.4)', () => {
       assert.deepStrictEqual(selected, [String(size)], `expected only ${size} selected`);
     }
   });
+
+  it('renders the group name while retaining the group identifiers in the row data', async () => {
+    const el = mount();
+    el.rows = [{ MTRGROUP: 123, MTRGROUP_CODE: 'G123', MTRGROUP_NAME: 'Piese motor' }];
+    await el.updateComplete;
+
+    const headers = [...el.querySelectorAll('table thead th')].map((header) => header.textContent.trim());
+    const groupHeader = headers.findIndex((header) => header === 'Grupa');
+    const groupCell = el.querySelectorAll('table tbody tr')[0].children[groupHeader];
+
+    assert.ok(groupCell, 'expected a rendered Grupa cell');
+    assert.strictEqual(groupCell.textContent.trim(), 'Piese motor');
+    assert.ok(!groupCell.textContent.includes('123'));
+    assert.strictEqual(el.rows[0].MTRGROUP, 123);
+    assert.strictEqual(el.rows[0].MTRGROUP_CODE, 'G123');
+  });
 });
 
 // Anexa (ergonomie UI, 08.09.2026) — hierarchy, redundancy removal, counter.

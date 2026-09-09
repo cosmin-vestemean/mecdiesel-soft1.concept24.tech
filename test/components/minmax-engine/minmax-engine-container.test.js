@@ -72,4 +72,37 @@ describe('minmax-engine-container — lazy activation (§12.9)', () => {
     assert.ok(resultsPanel.querySelector('minmax-results-table'));
     assert.ok(groupsPanel.querySelector('minmax-group-abc'));
   });
+
+  it('switches between Input and Output without unmounting configuration or output panels', async () => {
+    const element = document.createElement('minmax-engine-container');
+    document.body.appendChild(element);
+    await element.updateComplete;
+
+    const inputPanel = element.querySelector('#minmax-input-panel');
+    const outputPanel = element.querySelector('#minmax-output-panel');
+    const paramsPanel = inputPanel.querySelector('minmax-params-panel');
+    const resultsPanel = outputPanel.querySelector('minmax-results-table');
+
+    assert.strictEqual(inputPanel.hidden, true);
+    assert.strictEqual(outputPanel.hidden, false);
+    assert.strictEqual(element.querySelector('#minmax-output-tab').getAttribute('aria-selected'), 'true');
+
+    element.querySelector('#minmax-input-tab').click();
+    await element.updateComplete;
+
+    assert.strictEqual(inputPanel.hidden, false);
+    assert.strictEqual(outputPanel.hidden, true);
+    assert.strictEqual(element.querySelector('#minmax-input-tab').getAttribute('aria-selected'), 'true');
+    assert.strictEqual(inputPanel.querySelector('minmax-params-panel'), paramsPanel);
+    assert.strictEqual(outputPanel.querySelector('minmax-results-table'), resultsPanel);
+
+    element.querySelector('#minmax-output-tab').click();
+    await element.updateComplete;
+
+    assert.strictEqual(inputPanel.hidden, true);
+    assert.strictEqual(outputPanel.hidden, false);
+    assert.strictEqual(element.querySelector('#minmax-output-tab').getAttribute('aria-selected'), 'true');
+    assert.strictEqual(inputPanel.querySelector('minmax-params-panel'), paramsPanel);
+    assert.strictEqual(outputPanel.querySelector('minmax-results-table'), resultsPanel);
+  });
 });

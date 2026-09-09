@@ -39,8 +39,11 @@
 - Poarta §12.15 a Fazei 5 tehnic închisă (vezi Active Area + link-urile de mai sus).
 - Anexa de ergonomie UI implementată: filtre pe 3 niveluri, contor filtre active, sticky header,
   culori WCAG AA, formula din drawer randată cu KaTeX — 186/186 teste relevante verzi.
-- În containerul MIN/MAX, Rezultate MIN/MAX și Clasificare ABC-XYZ pe grupe sunt organizate în
-  două taburi; ambele panouri rămân montate pentru a păstra starea filtrelor și paginării.
+- În containerul MIN/MAX, taburile principale sunt `Input` și `Output`. `Input` conține panoul
+  Parametri MIN/MAX (cu subtaburile Parametri globali, Matricea COV_TGT și Configurare filiale),
+  iar `Output` conține subtaburile Rezultate MIN/MAX și Clasificare ABC-XYZ pe grupe. Toate
+  panourile rămân montate și doar se ascund pentru a păstra starea filtrelor, paginării și
+  drafturilor. Sesiunile și acțiunea Rulează rămân comune deasupra taburilor principale.
 - KaTeX e folosit doar pentru drawer-ul „explică calcul" (valori substituite live), nu pentru
   wiki-ul HTML static (D6 din `FAZA3_HANDOFF.md` §9.6, neconstruit, rămâne deschisă separat).
 - Faza 4 (`applyToErp`) rămâne deliberat amânată până la confirmarea beneficiarului.
@@ -48,10 +51,9 @@
 ## Open Questions
 - Niciuna tehnică; singurul punct deschis e o decizie de business (confirmare beneficiar pe
   formule).
-- UX de revizuit ulterior: butonul „Rulează” este sus, iar secțiunea „Parametri MIN/MAX”
-  este jos; ordinea vizuală este neergonomică pentru fluxul „modifică parametrii → salvează → rulează”.
 
 ## Next Step
-- Obține confirmarea beneficiarului pe formulele MIN/MAX (deschide Faza 4). Înainte de utilizare
-  de către beneficiar, restrânge `minmaxEngine.editors` de la `"*"` la o listă explicită.
+- Validează vizual în browser noua navigație `Input` / `Output` și apoi obține confirmarea
+  beneficiarului pe formulele MIN/MAX (deschide Faza 4). Înainte de utilizare de către beneficiar,
+  restrânge `minmaxEngine.editors` de la `"*"` la o listă explicită.
 

@@ -120,7 +120,16 @@ export class MinmaxRunPanel extends LitElement {
   _startRun () {
     if (!this._store) return;
     if (!window.confirm('Pornesti o sesiune MIN/MAX noua pentru toate filialele?')) return;
+    this.dispatchEvent(new CustomEvent('run-start', { bubbles: true, composed: true }));
     this._store.runEngine();
+  }
+
+  _notifyRunHoverStart () {
+    this.dispatchEvent(new CustomEvent('run-hover-start', { bubbles: true, composed: true }));
+  }
+
+  _notifyRunHoverEnd () {
+    this.dispatchEvent(new CustomEvent('run-hover-end', { bubbles: true, composed: true }));
   }
 
   _abandonRun (runId) {
@@ -162,6 +171,8 @@ export class MinmaxRunPanel extends LitElement {
               class="btn btn-sm btn-primary"
               title="Porneste o sesiune MIN/MAX noua"
               ?disabled="${runDisabled}"
+              @mouseenter="${this._notifyRunHoverStart}"
+              @mouseleave="${this._notifyRunHoverEnd}"
               @click="${this._startRun}"
             >
               <i class="fas ${this.runLaunch.starting || this.runLaunch.polling ? 'fa-spinner fa-spin' : 'fa-play'}"></i>

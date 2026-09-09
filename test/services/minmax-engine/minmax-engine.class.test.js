@@ -87,6 +87,25 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
       assert.strictEqual(result.rows.length, 1)
     })
 
+    it('joins MTRGROUP and prefers the current ERP name', async () => {
+      let capturedSql
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXDET'))
+        .reply(200, (uri, body) => {
+          capturedSql = body.sqlQuery
+          return reply([{ MTRL: 1, MTRGROUP: 1, MTRGROUP_CODE: 'G1', MTRGROUP_NAME: 'Snapshot', MTRGROUP_NAME__ERP: 'ERP name' }])
+        })
+
+      const service = makeService()
+      const result = await service.results({ runId: 5, token: 'tok' })
+
+      assert.ok(capturedSql.includes('LEFT JOIN MTRGROUP mg ON mg.MTRGROUP = d.MTRGROUP'))
+      assert.ok(capturedSql.includes('mg.COMPANY = 1000'))
+      assert.deepStrictEqual(result.rows, [{ MTRL: 1, MTRGROUP: 1, MTRGROUP_CODE: 'G1', MTRGROUP_NAME: 'ERP name' }])
+    })
+
     it('rejects when there is no current run and none was requested', async () => {
       nock(FAKE_BASE_URL)
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('ESTE_CURENT = 1'))
@@ -318,7 +337,7 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
     it('drops MTRGROUP from the GRP tie-break when sorting by mtrgroup', async () => {
       const sql = await capturedGroupAbcOrderBy({ field: 'mtrgroup', dir: 'DESC' })
       assert.ok(sql.includes('ORDER BY g.MTRGROUP DESC, g.BRANCH ASC'))
-      assert.strictEqual(sql.match(/g\.MTRGROUP/g).length, 1)
+      assert.strictEqual(sql.match(/ORDER BY .*$/)[0].match(/g\.MTRGROUP/g).length, 1)
     })
   })
 
@@ -355,6 +374,25 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
 
       assert.strictEqual(result.runId, 5)
       assert.deepStrictEqual(result.rows, [{ ABC: 'A', MTRGROUP: 1 }])
+    })
+
+    it('joins MTRGROUP and prefers the current ERP name', async () => {
+      let capturedSql
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXGRP'))
+        .reply(200, (uri, body) => {
+          capturedSql = body.sqlQuery
+          return reply([{ MTRGROUP: 1, MTRGROUP_CODE: 'G1', MTRGROUP_NAME: 'Snapshot', MTRGROUP_NAME__ERP: 'ERP name' }])
+        })
+
+      const service = makeService()
+      const result = await service.groupAbc({ runId: 5, token: 'tok' })
+
+      assert.ok(capturedSql.includes('LEFT JOIN MTRGROUP mg ON mg.MTRGROUP = g.MTRGROUP'))
+      assert.ok(capturedSql.includes('mg.COMPANY = 1000'))
+      assert.deepStrictEqual(result.rows, [{ MTRGROUP: 1, MTRGROUP_CODE: 'G1', MTRGROUP_NAME: 'ERP name' }])
     })
 
     it('omits total when withTotal is falsy (§12.11)', async () => {

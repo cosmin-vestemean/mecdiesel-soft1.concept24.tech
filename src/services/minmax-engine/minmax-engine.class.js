@@ -86,6 +86,13 @@ const EXACT_DECIMAL_SELECT = EXACT_DECIMAL_COLUMNS
   .map((column) => `CONVERT(DECIMAL(28, 8), d.${column}) AS ${column}${EXACT_DECIMAL_ALIAS_SUFFIX}`)
   .join(', ')
 
+// The persisted name is a snapshot from the calculation run. Read the current
+// ERP group name for display, while keeping the snapshot as a fallback when a
+// group was removed from MTRGROUP after the run.
+const MTRGROUP_NAME_ALIAS = 'MTRGROUP_NAME__ERP'
+const DET_MTRGROUP_NAME_SELECT = `COALESCE(mg.NAME, d.MTRGROUP_NAME, 'NEDEFINIT') AS ${MTRGROUP_NAME_ALIAS}`
+const GRP_MTRGROUP_NAME_SELECT = `COALESCE(mg.NAME, g.MTRGROUP_NAME, 'NEDEFINIT') AS ${MTRGROUP_NAME_ALIAS}`
+
 // Same idea for CCCMINMAXGRP (groupAbc) — a different table, different grain.
 const GRP_COLUMNS = {
   branch: 'g.BRANCH',
@@ -309,6 +316,16 @@ function mergeExactDecimals (rows) {
         row[column] = row[alias]
         delete row[alias]
       }
+    }
+  }
+  return rows
+}
+
+function mergeMtrgroupNames (rows) {
+  for (const row of rows) {
+    if (Object.prototype.hasOwnProperty.call(row, MTRGROUP_NAME_ALIAS)) {
+      row.MTRGROUP_NAME = row[MTRGROUP_NAME_ALIAS]
+      delete row[MTRGROUP_NAME_ALIAS]
     }
   }
   return rows
@@ -607,7 +624,9 @@ export class MinmaxEngineService {
     const pageParams = filterParams.slice()
     const paging = buildPaging(data.page, data.pageSize)
 
-    const sql = `SELECT d.*, ${EXACT_DECIMAL_SELECT} FROM CCCMINMAXDET d WHERE ${whereSql} ORDER BY ${orderBy} ${paging.sql}`
+    const sql = `SELECT d.*, ${EXACT_DECIMAL_SELECT}, ${DET_MTRGROUP_NAME_SELECT} FROM CCCMINMAXDET d ` +
+      `LEFT JOIN MTRGROUP mg ON mg.MTRGROUP = d.MTRGROUP AND mg.COMPANY = ${COMPANY} ` +
+      `WHERE ${whereSql} ORDER BY ${orderBy} ${paging.sql}`
     const response = await this._execSql(sql, pageParams, token)
 
     let total
@@ -618,7 +637,7 @@ export class MinmaxEngineService {
       total = countRows.length ? Number(countRows[0].TOTAL) : 0
     }
 
-    return { page: paging.page, pageSize: paging.pageSize, rows: extractRows(response), runId, total }
+    return { page: paging.page, pageSize: paging.pageSize, rows: mergeMtrgroupNames(extractRows(response)), runId, total }
   }
 
   /** CCCMINMAXRUN — session history, most recent first. */
@@ -653,7 +672,9 @@ export class MinmaxEngineService {
     const orderBy = buildOrderBy(data.sort, GRP_COLUMNS, ['branch', 'mtrgroup'])
     const paging = buildPaging(data.page, data.pageSize)
 
-    const sql = `SELECT g.* FROM CCCMINMAXGRP g WHERE ${whereSql} ORDER BY ${orderBy} ${paging.sql}`
+    const sql = `SELECT g.*, ${GRP_MTRGROUP_NAME_SELECT} FROM CCCMINMAXGRP g ` +
+      `LEFT JOIN MTRGROUP mg ON mg.MTRGROUP = g.MTRGROUP AND mg.COMPANY = ${COMPANY} ` +
+      `WHERE ${whereSql} ORDER BY ${orderBy} ${paging.sql}`
     const response = await this._execSql(sql, params, token)
 
     let total
@@ -664,7 +685,7 @@ export class MinmaxEngineService {
       total = countRows.length ? Number(countRows[0].TOTAL) : 0
     }
 
-    return { page: paging.page, pageSize: paging.pageSize, rows: mergeExactDecimals(extractRows(response)), runId, total }
+    return { page: paging.page, pageSize: paging.pageSize, rows: mergeMtrgroupNames(mergeExactDecimals(extractRows(response))), runId, total }
   }
 
   /** CCCMINMAXPARAMS + CCCMINMAXCOV + CCCMINMAXBRANCH — current config. */

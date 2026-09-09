@@ -29,7 +29,8 @@ export class MinmaxEngineContainer extends LitElement {
       resolvedRunId: { type: Number },
       runId: { type: Number },
       total: { type: Number },
-      activeTab: { type: String }
+      activeTab: { type: String },
+      mainTab: { type: String }
     };
   }
 
@@ -46,7 +47,9 @@ export class MinmaxEngineContainer extends LitElement {
     });
 
     this._activationPromise = null;
+    this._runHoverPreviousTab = null;
     this.activeTab = 'results';
+    this.mainTab = 'output';
     this._syncStateFromStore(minmaxEngineStore.getState());
   }
 
@@ -93,6 +96,31 @@ export class MinmaxEngineContainer extends LitElement {
     }
   }
 
+  _setMainTab (tab) {
+    if (tab === 'input' || tab === 'output') {
+      this.mainTab = tab;
+    }
+  }
+
+  _handleRunHoverStart () {
+    if (this._runHoverPreviousTab === null) {
+      this._runHoverPreviousTab = this.mainTab;
+    }
+    this._setMainTab('input');
+  }
+
+  _handleRunHoverEnd () {
+    if (this._runHoverPreviousTab === null) return;
+    const previousTab = this._runHoverPreviousTab;
+    this._runHoverPreviousTab = null;
+    this._setMainTab(previousTab);
+  }
+
+  _handleRunStart () {
+    this._runHoverPreviousTab = null;
+    this._setMainTab('output');
+  }
+
   render () {
     return html`
       <div class="minmax-engine-container">
@@ -104,40 +132,72 @@ export class MinmaxEngineContainer extends LitElement {
           ? html`<div class="text-muted"><i class="fas fa-spinner fa-spin"></i> Se incarca datele MIN/MAX...</div>`
           : ''}
 
-        <minmax-run-panel></minmax-run-panel>
+        <minmax-run-panel
+          @run-hover-start="${this._handleRunHoverStart}"
+          @run-hover-end="${this._handleRunHoverEnd}"
+          @run-start="${this._handleRunStart}"
+        ></minmax-run-panel>
 
-        <ul class="nav nav-tabs mb-3" role="tablist" aria-label="Rezultate MIN/MAX">
+        <ul class="nav nav-tabs mb-3" role="tablist" aria-label="MIN/MAX Engine">
           <li class="nav-item" role="presentation">
-            <button class="nav-link ${this.activeTab === 'results' ? 'active' : ''}"
-                    id="minmax-results-tab" type="button" role="tab"
-                    aria-controls="minmax-results-panel" aria-selected="${this.activeTab === 'results'}"
-                    @click="${() => this._setActiveTab('results')}">
-              <i class="fas fa-table me-1"></i>Rezultate MIN/MAX
+            <button class="nav-link ${this.mainTab === 'input' ? 'active' : ''}"
+                    id="minmax-input-tab" type="button" role="tab"
+                    aria-controls="minmax-input-panel" aria-selected="${this.mainTab === 'input'}"
+                    @click="${() => this._setMainTab('input')}">
+              <i class="fas fa-sliders-h me-1"></i>Input
             </button>
           </li>
           <li class="nav-item" role="presentation">
-            <button class="nav-link ${this.activeTab === 'groups' ? 'active' : ''}"
-                    id="minmax-groups-tab" type="button" role="tab"
-                    aria-controls="minmax-groups-panel" aria-selected="${this.activeTab === 'groups'}"
-                    @click="${() => this._setActiveTab('groups')}">
-              <i class="fas fa-layer-group me-1"></i>Clasificare ABC-XYZ pe grupe
+            <button class="nav-link ${this.mainTab === 'output' ? 'active' : ''}"
+                    id="minmax-output-tab" type="button" role="tab"
+                  aria-controls="minmax-output-panel" aria-selected="${this.mainTab === 'output'}"
+                  @click="${() => this._setMainTab('output')}">
+              <i class="fas fa-chart-bar me-1"></i>Output
             </button>
           </li>
         </ul>
 
         <div class="tab-content">
-          <div id="minmax-results-panel" class="tab-pane ${this.activeTab === 'results' ? 'show active' : ''}"
-               role="tabpanel" aria-labelledby="minmax-results-tab" ?hidden="${this.activeTab !== 'results'}">
-            <minmax-results-table></minmax-results-table>
+          <div id="minmax-input-panel" class="tab-pane ${this.mainTab === 'input' ? 'show active' : ''}"
+               role="tabpanel" aria-labelledby="minmax-input-tab" ?hidden="${this.mainTab !== 'input'}">
+            <minmax-params-panel></minmax-params-panel>
           </div>
-          <div id="minmax-groups-panel" class="tab-pane ${this.activeTab === 'groups' ? 'show active' : ''}"
-               role="tabpanel" aria-labelledby="minmax-groups-tab" ?hidden="${this.activeTab !== 'groups'}">
-            <minmax-group-abc></minmax-group-abc>
+
+          <div id="minmax-output-panel" class="tab-pane ${this.mainTab === 'output' ? 'show active' : ''}"
+               role="tabpanel" aria-labelledby="minmax-output-tab" ?hidden="${this.mainTab !== 'output'}">
+            <ul class="nav nav-tabs mb-3" role="tablist" aria-label="Rezultate MIN/MAX">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link ${this.activeTab === 'results' ? 'active' : ''}"
+                        id="minmax-results-tab" type="button" role="tab"
+                        aria-controls="minmax-results-panel" aria-selected="${this.activeTab === 'results'}"
+                        @click="${() => this._setActiveTab('results')}">
+                  <i class="fas fa-table me-1"></i>Rezultate MIN/MAX
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link ${this.activeTab === 'groups' ? 'active' : ''}"
+                        id="minmax-groups-tab" type="button" role="tab"
+                        aria-controls="minmax-groups-panel" aria-selected="${this.activeTab === 'groups'}"
+                        @click="${() => this._setActiveTab('groups')}">
+                  <i class="fas fa-layer-group me-1"></i>Clasificare ABC-XYZ pe grupe
+                </button>
+              </li>
+            </ul>
+
+            <div class="tab-content">
+              <div id="minmax-results-panel" class="tab-pane ${this.activeTab === 'results' ? 'show active' : ''}"
+                   role="tabpanel" aria-labelledby="minmax-results-tab" ?hidden="${this.activeTab !== 'results'}">
+                <minmax-results-table></minmax-results-table>
+              </div>
+              <div id="minmax-groups-panel" class="tab-pane ${this.activeTab === 'groups' ? 'show active' : ''}"
+                   role="tabpanel" aria-labelledby="minmax-groups-tab" ?hidden="${this.activeTab !== 'groups'}">
+                <minmax-group-abc></minmax-group-abc>
+              </div>
+            </div>
           </div>
         </div>
 
         <minmax-explain-drawer></minmax-explain-drawer>
-        <minmax-params-panel></minmax-params-panel>
       </div>
     `;
   }

@@ -27,8 +27,7 @@ const LIFECYCLE_OPTIONS = ['STANDARD', 'NOU', 'OD'];
 // Columns rendered from CCCMINMAXGRP (subset, per 00b_persist.sql).
 const GROUP_COLUMNS = [
   { key: 'BRANCH', label: 'Filiala' },
-  { key: 'MTRGROUP_CODE', label: 'Grupa' },
-  { key: 'MTRGROUP_NAME', label: 'Denumire' },
+  { key: 'MTRGROUP_NAME', label: 'Grupa' },
   { key: 'LIFECYCLE', label: 'Lifecycle' },
   { key: 'ABC', label: 'ABC' },
   { key: 'XYZ', label: 'XYZ' },
