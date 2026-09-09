@@ -257,7 +257,78 @@ export class MinmaxGroupAbc extends LitElement {
         <div class="card-body">
           ${this.error ? html`<div class="alert alert-danger py-2">${this.error}</div>` : ''}
 
-          <div class="filters-panel border rounded p-2 mb-3 bg-light">
+          <div class="filters-panel p-2 mb-3">
+            <style>
+              /* Same subtle facelift as the results panel: white card with soft
+                 shadow, chip-like buttons — data table keeps visual focus. */
+              minmax-group-abc .filters-panel {
+                background: #ffffff;
+                border: 1px solid #e4e8ee;
+                border-radius: 0.5rem;
+                box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+              }
+              minmax-group-abc .filters-panel .small.text-muted {
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                font-weight: 600;
+                font-size: 0.68rem;
+                margin-bottom: 0.1rem !important;
+                color: #8a94a6 !important;
+              }
+              minmax-group-abc .filters-panel .btn-sm {
+                padding: 0.1rem 0.4rem;
+                font-size: 0.75rem;
+              }
+              minmax-group-abc .filters-panel .btn-group {
+                gap: 3px;
+              }
+              minmax-group-abc .filters-panel .btn-group .btn {
+                border-radius: 0.35rem !important;
+              }
+              minmax-group-abc .filters-panel .btn-outline-secondary {
+                border-color: #dde3ec;
+                color: #5a6474;
+                background: #fff;
+              }
+              minmax-group-abc .filters-panel .btn-outline-secondary:hover {
+                background: #f2f6fc;
+                border-color: #b9c9e3;
+                color: #0d6efd;
+              }
+              minmax-group-abc .filters-panel .btn-outline-secondary.active {
+                background: #e8f0fe;
+                border-color: #0d6efd;
+                color: #0d6efd;
+                font-weight: 600;
+              }
+              minmax-group-abc .filters-panel .form-control,
+              minmax-group-abc .filters-panel .form-select {
+                border-color: #dde3ec;
+                border-radius: 0.35rem;
+              }
+              minmax-group-abc .filters-panel .form-control:focus,
+              minmax-group-abc .filters-panel .form-select:focus {
+                border-color: #86b7fe;
+                box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.15);
+              }
+              /* Tri-state (Da/Nu): restore white text — custom.css .btn-success
+                 uses an undefined --success-color var and no color, so the
+                 text inherited the muted label color and looked illegible. */
+              minmax-group-abc .filters-panel .btn-success {
+                background: #3cb521;
+                color: #fff;
+              }
+              minmax-group-abc .filters-panel .btn-success:hover {
+                background: #339a1c;
+                color: #fff;
+              }
+              minmax-group-abc .filters-panel .btn-danger {
+                color: #fff;
+              }
+              minmax-group-abc .filters-panel .btn-danger:hover {
+                color: #fff;
+              }
+            </style>
             <div class="row g-2 align-items-end mb-2">
               ${this._renderIntListFilter('mtrgroup', 'Grupa (MTRGROUP)')}
               ${this._renderBranchFilter()}

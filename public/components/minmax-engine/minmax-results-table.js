@@ -390,7 +390,7 @@ export class MinmaxResultsTable extends LitElement {
         <div class="card-body p-2">
           ${this.error ? html`<div class="alert alert-danger py-2">${this.error}</div>` : ''}
 
-          <div class="filters-panel border rounded p-2 mb-2 bg-light">
+          <div class="filters-panel p-2 mb-2">
             <style>
               /* Compact filters: tighter labels/controls, smaller buttons */
               minmax-results-table .filters-panel .small.text-muted {
@@ -400,6 +400,73 @@ export class MinmaxResultsTable extends LitElement {
               minmax-results-table .filters-panel .btn-sm {
                 padding: 0.1rem 0.4rem;
                 font-size: 0.75rem;
+              }
+              /* Subtle facelift: white card with soft shadow instead of flat
+                 gray; chip-like filter buttons so the data table stays the
+                 visual focus. */
+              minmax-results-table .filters-panel {
+                background: #ffffff;
+                border: 1px solid #e4e8ee;
+                border-radius: 0.5rem;
+                box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+              }
+              minmax-results-table .filters-panel .small.text-muted {
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                font-weight: 600;
+                color: #8a94a6 !important;
+              }
+              minmax-results-table .filters-panel .btn-group {
+                gap: 3px;
+              }
+              minmax-results-table .filters-panel .btn-group .btn {
+                border-radius: 0.35rem !important;
+              }
+              minmax-results-table .filters-panel .btn-outline-secondary {
+                border-color: #dde3ec;
+                color: #5a6474;
+                background: #fff;
+              }
+              minmax-results-table .filters-panel .btn-outline-secondary:hover {
+                background: #f2f6fc;
+                border-color: #b9c9e3;
+                color: #0d6efd;
+              }
+              minmax-results-table .filters-panel .btn-outline-secondary.active {
+                background: #e8f0fe;
+                border-color: #0d6efd;
+                color: #0d6efd;
+                font-weight: 600;
+              }
+              minmax-results-table .filters-panel .form-control,
+              minmax-results-table .filters-panel .form-select {
+                border-color: #dde3ec;
+                border-radius: 0.35rem;
+              }
+              minmax-results-table .filters-panel .form-control:focus,
+              minmax-results-table .filters-panel .form-select:focus {
+                border-color: #86b7fe;
+                box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.15);
+              }
+              /* Tri-state (Da/Nu): restore white text — custom.css .btn-success
+                 uses an undefined --success-color var and no color, so the
+                 text inherited the muted label color and looked illegible. */
+              minmax-results-table .filters-panel .btn-success {
+                background: #3cb521;
+                color: #fff;
+              }
+              minmax-results-table .filters-panel .btn-success:hover {
+                background: #339a1c;
+                color: #fff;
+              }
+              minmax-results-table .filters-panel .btn-danger {
+                color: #fff;
+              }
+              minmax-results-table .filters-panel .btn-danger:hover {
+                color: #fff;
+              }
+              minmax-results-table .filters-panel details summary {
+                user-select: none;
               }
               minmax-results-table .filters-panel .form-control-sm,
               minmax-results-table .filters-panel .form-select-sm {
