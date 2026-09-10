@@ -30,7 +30,7 @@
   curentă partiționează cumulativul pe `BRANCH`, ordonare secundară deterministă pe
   `MTRGROUP_CODE`.
 - **`MOD_ATRIBUIRE_FILIALA`** (DOC/AGENT/CLIENT) — selectorul este implementat per rulare, validat
-  la `StartRun`, salvat în `PARAMSJSON` și consumat de `Classify`/`ClassifyGroup`; rularea nouă de
+  la `StartRun`, salvat în `CCCMINMAXRUNPARAM` și consumat de `Classify`/`ClassifyGroup`; rularea nouă de
   comparație cross-mode nu a fost încă executată. Default-ul rămâne `CLIENT`, cu impact estimat la
   ~35% din atribuirea liniilor.
 - **`FLAGS_ZERO_LA_APPLY`** (E15) — spec zice informațional-only; default zerorește la scriere ERP.

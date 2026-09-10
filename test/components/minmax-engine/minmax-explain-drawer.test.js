@@ -27,7 +27,7 @@ describe('minmax-explain-drawer — formula with substituted values (Anexa §B11
     el.open = true;
     el.loading = false;
     el.error = '';
-    el.data = { det, run: null, weeklySeries: [], winsor: null };
+    el.data = { det, run: null, runParams: [], weeklySeries: [], winsor: null };
     document.body.appendChild(el);
     return el;
   }
@@ -119,10 +119,10 @@ describe('minmax-explain-drawer — formula with substituted values (Anexa §B11
     assert.ok(hasTex(el, 'InflatieHQ'), 'HQ inflation step shown on MAX_INF for HQ rows');
   });
 
-  it('reads HQ_CAP_FACTOR from run.COMPUTE_PARAMSJSON instead of the default', async () => {
-    const run = { COMPUTE_PARAMSJSON: JSON.stringify({ HQ_CAP_FACTOR: 2 }) };
+  it('reads HQ_CAP_FACTOR from the run parameter snapshot instead of the default', async () => {
+    const runParams = [{ PARAMKEY: 'HQ_CAP_FACTOR', PARAMVALUE: '2' }];
     const el = mount({ ...baseDet, ESTE_HQ: 1, HQ_CAP_APLICAT: 1, SUM_BR_MAX: 50, ENG_MAX: 100 });
-    el.data = { det: el.data.det, run, weeklySeries: [], winsor: null };
+    el.data = { det: el.data.det, run: null, runParams, weeklySeries: [], winsor: null };
     await el.updateComplete;
 
     assert.ok(hasTex(el, '\\left\\lceil 50 \\times 2 \\right\\rceil'), `expected run-specific factor, got: ${annotations(el)}`);

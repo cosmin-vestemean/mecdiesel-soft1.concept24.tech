@@ -1,10 +1,10 @@
 # Current Focus
 
 ## Last Updated
-- 10.09.2026 (session 4)
+- 10.09.2026 (session 5)
 
 ## Current Goal
-- Primul bloc aprobat al Fazei 1 este implementat local: retragere Prepare, P14, P8, snapshot unic, P3 și P7. Nu a fost făcut deploy AJS și nu a fost rulată o sesiune nouă.
+- Primul bloc aprobat al Fazei 1 este implementat și deployat: retragere Prepare, P14, P8, snapshot unic, P3 și P7. `NewMinMax/setup` a fost rulat; nu a fost pornită o sesiune MIN/MAX nouă.
 - Restul registrului rămâne pentru sesiuni ulterioare: netting P1/P2 și univers P4 au dependențele proprii; P6 este neblocat pentru override-urile per filială, iar numai extensia de prefix așteaptă lista N5.
 
 ## Active Area
@@ -18,7 +18,7 @@
 - [Sumar reconciliat](../../new_min_max/SUMAR_TEORETIC_CONFIRMARE.md): C1-C5 aplicate în commitul `bbd7ad4`.
 - [Model wiki](../wiki/minmax-engine-model.md) și [formule wiki](../wiki/minmax-engine-formulas.md): arhitectură și formule durabile.
 - [Open items wiki](../wiki/minmax-engine-open-items.md): întrebări business încă neînchise.
-- [AJS NewMinMax](../../S1-MEC/AJS/NewMinMax.js): oglindește sursele SQL actualizate; nu a fost făcut deploy.
+- [AJS NewMinMax](../../S1-MEC/AJS/NewMinMax.js): oglindește sursele SQL actualizate; deploy-ul și setup-ul final, inclusiv gărzile 50074-50076, sunt confirmate pe producție la 10.09.2026.
 
 ## Confirmed Decisions
 - P6 folosește o politică mixtă: `NRSAPT`, pragurile lifecycle, `SIGMA_MIN` și `SL_A/B/C` sunt globale; `SSF` este global și doar informativ (iese din formula safety); numai `LT_ZILE` și `FRECVENTA_ZILE` acceptă override cu precedența `BRANCH+PREFIX > BRANCH > PREFIX > GLOBAL`. HQ este explicit `BRANCH=1000`; `BRANCH=0` înseamnă fără interes local. Constanța lunară este recomandare + snapshot, nu hard lock.
@@ -43,10 +43,13 @@
 - Intenția matricei COV rămâne deschisă, deși comparația numerică este corectată la `CX = BY = 2,00 > BZ = 1,75`.
 
 ## Next Step
-- Înainte de deploy controlat, se recomandă review într-o sesiune Opus cu context mic. Deploy-ul AJS și orice rulare nouă rămân manuale, la utilizator. După orice editare SQL rulează `node new_min_max/tools/sync-check.cjs`.
+- Remediile review-ului din sesiunea 5 sunt implementate local și validate: Explain folosește `runParams`; `SIGMA_MIN` este validat la salvare; validatorul citește snapshot-ul, marchează metrica `CALIBRARE_MOD` drept principală și refuză rulările vechi fără snapshot; fazele refuză explicit snapshot-ul absent prin 50074-50076.
+- Deploy-ul AJS, `NewMinMax/setup` și restartul Feathers sunt încheiate. Următorul pas operațional poate fi prima rulare nouă, care va fi prima sesiune cu snapshot `CCCMINMAXRUNPARAM`; RUNID 7 rămâne reperul curent până la finalizarea ei.
 - Următoarea implementare autorizată este P6 pentru override branch al `LT_ZILE`/`FRECVENTA_ZILE`, fără extensia longest-prefix până la N5; apoi P1. Rămân excluse P2, P4/N9-N10, P5, P10-P13 până la deciziile lor explicite.
 
 ## Validation
+- Review commituri `70ec064` + `555a3be`/subproiect `dd69e3d`: toate constatările acționabile sunt remediate local; suita focalizată are 189 passing / 0 failing.
+- Live read-only după deploy/setup final: `CCCMINMAXRUNPARAM` există cu 5 coloane; cele 3 coloane JSON lipsesc; `sp_MinMaxEngine_Prepare` lipsește; `OBJECT_DEFINITION` confirmă gărzile Classify/ClassifyGroup/Compute ca `1/1/1`; noile seed-uri există; 0 sesiuni OPEN, 0 snapshot rows și RUNID 7 rămâne curent. Setup-ul nu a pornit accidental o rulare. Jobul `MEC_MinMaxEngine_RunPhases_1000` este activ, fără schedule, cu pasul corect în baza `mecdiesel` și nu rulează.
 - `node new_min_max/tools/sync-check.cjs`: toate cele 12 perechi SQL-AJS în sync.
 - `node --check S1-MEC/AJS/NewMinMax.js`, `node --check new_min_max/tools/validate-minmax-invariants.cjs` și `node --check new_min_max/tools/freeze-minmax-sample.cjs`: trec.
 - `npx mocha test/services/minmax-engine/ --recursive`: 114 passing.

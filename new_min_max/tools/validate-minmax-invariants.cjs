@@ -3,7 +3,7 @@
 
 // Faza 5, Pasul 8, nivel A: invariante SQL pe toata populatia unei rulari
 // MIN/MAX (FAZA5_REMEDIERI_PLAN.md). Ruleaza direct impotriva CCCMINMAXDET /
-// CCCMINMAXGRP / CCCMINMAXBRANCH / CCCMINMAXPARAMS prin canalul WSMCP
+// CCCMINMAXGRP / CCCMINMAXBRANCH / CCCMINMAXRUNPARAM prin canalul WSMCP
 // execSql, acelasi canal folosit de src/services/minmax-engine. Read-only:
 // fiecare SQL de mai jos e fix, scris aici, fara input de la utilizator -
 // nu are nevoie de classifySql (garda din minmax-engine.class.js), care
@@ -28,8 +28,6 @@ const rp = require('request-promise')
 const COMPANY = 1000
 const DEFAULT_S1_BASE_URL = 'https://mecdiesel.oncloud.gr/s1services'
 const DEFAULT_S1_APP_ID = '2002'
-
-loadDotEnvIfPresent()
 
 function loadDotEnvIfPresent () {
   const envPath = path.resolve(__dirname, '..', '..', '.env')
@@ -113,11 +111,39 @@ async function resolveRunId (requested) {
   return sqlIntLiteral(rows[0].RUNID, 'RUNID rezolvat')
 }
 
+async function loadRunParams (runId) {
+  const rows = await execSql(
+    `SELECT PARAMKEY, PARAMVALUE FROM CCCMINMAXRUNPARAM WHERE RUNID = ${runId} AND BRANCH = 0 AND PREFIX = ''`
+  )
+  if (!rows.length) {
+    throw new Error(`RUNID ${runId} nu are snapshot in CCCMINMAXRUNPARAM; rularea preceda migrarea si nu poate fi validata contra parametrilor live.`)
+  }
+  return Object.fromEntries(rows.map((row) => [row.PARAMKEY, row.PARAMVALUE]))
+}
+
+function effectivePositiveParam (runParams, key, fallback) {
+  const value = Number(runParams[key])
+  if (!Number.isFinite(value) || value <= 0) return fallback
+  return Math.round((value + Number.EPSILON * Math.max(1, Math.abs(value))) * 10000) / 10000
+}
+
+function calibrationMode (runParams) {
+  const mode = String(runParams.CALIBRARE_MOD || 'C').trim().toUpperCase()
+  if (!new Set(['A', 'B', 'C']).has(mode)) {
+    throw new Error(`CALIBRARE_MOD invalid in snapshot: ${runParams.CALIBRARE_MOD}`)
+  }
+  return mode
+}
+
 // runId e deja un intreg validat mai sus -> se interpoleaza direct in SQL,
 // nu ca parametru legat (acelasi motiv ca la OFFSET/FETCH in
 // minmax-engine.class.js: WSMCP nu accepta parametri legati peste tot, si
 // e sigur pentru ca nu e input brut de utilizator - vezi conventions.md §6).
-function buildInvariants (runId) {
+function buildInvariants (runId, runParams) {
+  const hqCapFactor = effectivePositiveParam(runParams, 'HQ_CAP_FACTOR', 1.5)
+  const procentPodeaBuc = effectivePositiveParam(runParams, 'PROCENT_PODEA_BUC', 0.30)
+  const selectedCalibrationMode = calibrationMode(runParams)
+
   return [
     {
       id: 'structural',
@@ -178,12 +204,10 @@ function buildInvariants (runId) {
         const [row] = await execSql(
           `SELECT SUM(CASE WHEN d.ESTE_HQ = 1 THEN 1 ELSE 0 END) AS TOTAL_HQ_ROWS,
                   SUM(CASE WHEN d.ESTE_HQ = 1 AND d.HQ_CAP_APLICAT = 1
-                        AND d.ENG_MAX <> CEILING(d.SUM_BR_MAX * p.V) THEN 1 ELSE 0 END) AS ABATERI_APLICAT,
+                AND d.ENG_MAX <> CEILING(d.SUM_BR_MAX * ${hqCapFactor}) THEN 1 ELSE 0 END) AS ABATERI_APLICAT,
                   SUM(CASE WHEN d.ESTE_HQ = 1 AND COALESCE(d.HQ_CAP_APLICAT, 0) = 0
-                        AND d.SUM_BR_MAX > 0 AND d.ENG_MAX > CEILING(d.SUM_BR_MAX * p.V) THEN 1 ELSE 0 END) AS ABATERI_NEAPLICAT
+                AND d.SUM_BR_MAX > 0 AND d.ENG_MAX > CEILING(d.SUM_BR_MAX * ${hqCapFactor}) THEN 1 ELSE 0 END) AS ABATERI_NEAPLICAT
            FROM CCCMINMAXDET d
-           CROSS JOIN (SELECT TRY_CONVERT(DECIMAL(10, 4), PARAMVALUE) AS V FROM CCCMINMAXPARAMS
-                       WHERE PARAMKEY = 'HQ_CAP_FACTOR' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '') p
            WHERE d.RUNID = ${runId}`
         )
         const aplicat = n(row.ABATERI_APLICAT) || 0
@@ -202,13 +226,11 @@ function buildInvariants (runId) {
           `SELECT SUM(CASE WHEN d.ESTE_PODEA = 1 THEN 1 ELSE 0 END) AS TOTAL_PODEA_ROWS,
                   SUM(CASE WHEN d.PODEA_APLICATA = 1 AND d.ESTE_PODEA = 0 THEN 1 ELSE 0 END) AS ABATERI_FLAG_FARA_PODEA,
                   SUM(CASE WHEN d.ESTE_PODEA = 1 AND hq.ENG_MIN > 0
-                        AND d.ENG_MIN < CEILING(hq.ENG_MIN * pp.V) - 0.0001 THEN 1 ELSE 0 END) AS ABATERI_SUB_PODEA,
+                    AND d.ENG_MIN < CEILING(hq.ENG_MIN * ${procentPodeaBuc}) - 0.0001 THEN 1 ELSE 0 END) AS ABATERI_SUB_PODEA,
                   COUNT(DISTINCT CASE WHEN b.BRANCH IS NOT NULL AND b.ESTE_PODEA <> d.ESTE_PODEA THEN d.BRANCH END) AS BRANCHES_CONFIG_MISMATCH
            FROM CCCMINMAXDET d
            LEFT JOIN CCCMINMAXDET hq ON hq.RUNID = d.RUNID AND hq.MTRL = d.MTRL AND hq.ESTE_HQ = 1
            LEFT JOIN CCCMINMAXBRANCH b ON b.BRANCH = d.BRANCH
-           CROSS JOIN (SELECT TRY_CONVERT(DECIMAL(10, 4), PARAMVALUE) AS V FROM CCCMINMAXPARAMS
-                       WHERE PARAMKEY = 'PROCENT_PODEA_BUC' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '') pp
            WHERE d.RUNID = ${runId}`
         )
         const flagFaraPodea = n(row.ABATERI_FLAG_FARA_PODEA) || 0
@@ -311,6 +333,7 @@ function buildInvariants (runId) {
     {
       id: 'calibrare_a',
       label: 'RAPORTARE A (nu pass/fail): FLAG_RATIO 0.50-2.00 pe populatia curata',
+      primary: selectedCalibrationMode === 'A',
       async run () {
         const [row] = await execSql(
           `SELECT COUNT(*) AS TOTAL_POPULATIE_CURATA,
@@ -337,6 +360,7 @@ function buildInvariants (runId) {
     {
       id: 'calibrare_b',
       label: "RAPORTARE B (nu pass/fail): FLAG_TXT='OK' pe populatia curata",
+      primary: selectedCalibrationMode === 'B',
       async run () {
         const [row] = await execSql(
           `SELECT COUNT(*) AS TOTAL_POPULATIE_CURATA,
@@ -363,6 +387,7 @@ function buildInvariants (runId) {
     {
       id: 'calibrare_c',
       label: "RAPORTARE C (nu pass/fail): FLAG_TXT='OK' pe toate randurile cu ERP_MAX > 0",
+      primary: selectedCalibrationMode === 'C',
       async run () {
         const [row] = await execSql(
           `SELECT COUNT(*) AS TOTAL_POPULATIE_S8,
@@ -386,11 +411,15 @@ function buildInvariants (runId) {
 }
 
 async function main () {
+  loadDotEnvIfPresent()
   const requested = process.argv[2] !== undefined ? process.argv[2] : undefined
   const runId = await resolveRunId(requested)
-  console.log(`RUNID = ${runId}\n`)
+  const runParams = await loadRunParams(runId)
+  const selectedCalibrationMode = calibrationMode(runParams)
+  console.log(`RUNID = ${runId}`)
+  console.log(`CALIBRARE_MOD = ${selectedCalibrationMode} (metrica ${selectedCalibrationMode} este PRINCIPALA)\n`)
 
-  const invariants = buildInvariants(runId)
+  const invariants = buildInvariants(runId, runParams)
   let failed = 0
   for (const inv of invariants) {
     let result
@@ -399,7 +428,7 @@ async function main () {
     } catch (err) {
       result = { pass: false, detail: `EROARE: ${err.message}` }
     }
-    const verdict = result.pass === null ? 'INFO' : (result.pass ? 'PASS' : 'FAIL')
+    const verdict = result.pass === null ? (inv.primary ? 'PRINCIPALA' : 'INFO') : (result.pass ? 'PASS' : 'FAIL')
     if (result.pass === false) failed++
     console.log(`[${verdict}] ${inv.id.padEnd(18)} ${inv.label}`)
     console.log(`         ${result.detail}\n`)
@@ -413,7 +442,11 @@ async function main () {
   }
 }
 
-main().catch((err) => {
-  console.error(err.stack || err.message || err)
-  process.exitCode = 1
-})
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err.stack || err.message || err)
+    process.exitCode = 1
+  })
+}
+
+module.exports = { buildInvariants, calibrationMode, effectivePositiveParam }

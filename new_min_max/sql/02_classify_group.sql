@@ -31,6 +31,12 @@ BEGIN
 
         IF NOT EXISTS (SELECT 1 FROM CCCMINMAXRUN WHERE RUNID = @RunId AND SESSION_STATUS = 'OPEN')
             THROW 50015, 'sp_MinMaxEngine_ClassifyGroup: the session is not OPEN; a finished session is immutable.', 1;
+
+        IF NOT EXISTS (
+            SELECT 1 FROM CCCMINMAXRUNPARAM
+            WHERE RUNID = @RunId AND BRANCH = 0 AND PREFIX = ''
+        )
+            THROW 50075, 'sp_MinMaxEngine_ClassifyGroup: the run parameter snapshot is missing.', 1;
     END;
 
     -- ---------------------------------------------------------------

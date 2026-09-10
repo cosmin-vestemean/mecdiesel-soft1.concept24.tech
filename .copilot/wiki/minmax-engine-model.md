@@ -24,7 +24,7 @@
   `history()`, la fel ca înainte.
 - **Atribuirea vânzărilor se decide per RUNID.** Panoul de rulare oferă `CLIENT` (`TRDBRANCH`),
   `DOC` (`FINDOC.BRANCH`) și `AGENT` (`PRSN.BRANCH`). `StartRun` validează alegerea și o salvează
-  imediat în `PARAMSJSON`; `Classify` și `ClassifyGroup` citesc snapshot-ul sesiunii și îl transmit
+  imediat în `CCCMINMAXRUNPARAM`; `Classify` și `ClassifyGroup` citesc snapshot-ul sesiunii și îl transmit
   explicit către `ufn_MinMaxSalesLines`, deci schimbarea ulterioară a parametrului global nu poate
   altera rularea deschisă.
 - **Estimarea de ~2 minute pentru o sesiune nu este o limită operațională garantată.** La prima
@@ -56,17 +56,17 @@
   AND COMPUTE_STATUS='DONE'`, niciodată `MAX(RUNID)`.** Precedent de evitat: `#LatestAbcData` din
   `reumplere/sp_GetMtrlsDat.sql` ia `MAX(DATACALCUL)` per rând și compune un colaj din rulări
   diferite.
-- **`sp_MinMaxEngine_Prepare` NU e o fază de pipeline** — propriul antet spune „același pipeline ca
-  Classify, oprit înainte de clasificare"; n-are `@Persist`, nu scrie în niciun `CCC*`, nimic n-o
-  consumă. E doar oracolul de validare din Faza 1b; cei ~180s ai ei nu intră în costul unei sesiuni.
+- **`sp_MinMaxEngine_Prepare` a fost retras la 10.09.2026.** Nu era o fază de pipeline: nu avea
+  `@Persist`, nu scria în niciun `CCC*` și nimic nu o consuma. `setup()` elimină explicit obiectul
+  instalat; Classify rămâne singura implementare SKU a pipeline-ului de clasificare.
 - **Codurile `THROW` alocate:** `50004/50007/50008` Classify sesiune, `50005/50006/50015`
-  ClassifyGroup, `50017` Compute sesiune, `50030-50032` StartRun, `50033-50038` FinishRun,
+  ClassifyGroup, `50010-50014/50017` Compute, `50030-50032` StartRun, `50033-50038` FinishRun,
   `50020-50024` rezervate pentru Faza 4 (`applyToErp`), `50039-50044` ciclul de viață
   (StartRun/AbandonRun/PurgeRun, FAZA6_CONTRACT.md §9), `50045-50051` arhitectura SQL Server Agent,
-  `50052` modul de atribuire al vânzărilor invalid
-  (job/setup lipsă, Agent oprit, sesiune OPEN absentă/ambiguă, runner activ, launch eșuat,
-  readiness neverificabil, setup refuzat cât jobul rulează — detaliat în
-  FAZA6_CONTRACT.md §4.1/§9).
+  pentru job/setup lipsă, Agent oprit, sesiune OPEN absentă/ambiguă, runner activ, launch eșuat,
+  readiness neverificabil sau setup refuzat cât jobul rulează (FAZA6_CONTRACT.md §4.1/§9),
+  `50052-50055` validările StartRun pentru atribuirea vânzărilor, calibrare și `SIGMA_MIN`,
+  `50070-50073` validările `SIGMA_MIN` din Classify/ClassifyGroup și `50074-50076` snapshot lipsă.
 - **`AZI` rămâne pe rândurile copil**, antetul rulării nu stochează un `AZI` autoritar (Opțiunea A,
   confirmată). Fereastra de analiză vine din `MAX(TRNDATE)` pe date vii, deci populația poate crește
   în aceeași zi — **numărul de rânduri nu e criteriu de acceptanță**; se verifică invariantele
@@ -101,7 +101,7 @@ reprezintă 96% (~700 MB / 706.734 rânduri). Antetul `CCCMINMAXRUN` costă ~7 K
 
 | Strat | Retenție | Rol |
 |---|---|---|
-| `CCCMINMAXRUN` + `PARAMSJSON` | pentru totdeauna | *ce am setat* |
+| `CCCMINMAXRUN` + `CCCMINMAXRUNPARAM` | pentru totdeauna | *ce am setat* |
 | rezumat per sesiune *(electiv, de construit)* | pentru totdeauna | *ce am obținut* — bucla de învățare |
 | `CCCMINMAXAPPLY` (Faza 4) | pentru totdeauna | *ce am aplicat*, la nivel de rând |
 | `CCCMINMAXDET` | **curentă + precedenta** | `explain` + comparația dinaintea apply-ului |
@@ -187,7 +187,7 @@ cele 50.481 de HQ care merg în `MTRL`.
 
 - **Faza 0** (`00_params.sql`): `CCCMINMAXPARAMS`/`COV`/`BRANCH`/`TEMPLATE` + seed idempotent.
 - **Faza 1a** (`ufn_MinMaxSalesLines`): atribuire linii de vânzare pe filială, mod `CLIENT`.
-- **Faza 1b** (`sp_MinMaxEngine_Prepare`): oracol de validare, nu fază de pipeline (vezi mai sus).
+- **Faza 1b** (`sp_MinMaxEngine_Prepare`): fost oracol de validare, retras la 10.09.2026 (vezi mai sus).
 - **Faza 2** (`sp_MinMaxEngine_Classify`, per SKU): clasificare ABC-XYZ, `COV_TGT`, `SL`, `SSF`,
   `AVG` ponderat, Pareto. Smoke test pe MTRL 1360919 × 14 filiale — toate valorile teoretice
   confirmate.
@@ -197,9 +197,9 @@ cele 50.481 de HQ care merg în `MTRL`.
   pe MTRL 1360919 corect pe toate valorile verificabile manual.
 - **Sesiuni persistate** (`RUNID`, `CCCMINMAXRUN`/`DET`/`GRP`/`WEEK`/`WINSOR`): stratul de
   persistență + modelul de sesiune imutabilă (`StartRun`/`FinishRun`) — vezi secțiunea „Cadență și
-  sesiuni" mai sus. **`RUNID=5` este sesiunea curentă validată** (07.09.2026): `StartRun → Classify
-  → ClassifyGroup → Compute → FinishRun`, toate `DONE`, `706.734 = 50.481 × 14` rânduri,
-  `MIN_GT_MAX=0`, `ESTE_CURENT=1`. `RUNID≤4` sunt legacy (`SESSION_STATUS` NULL, înghețate prin
-  construcție).
+  sesiuni" mai sus. **`RUNID=7` este sesiunea curentă validată** (08.09.2026): `StartRun → Classify
+  → ClassifyGroup → Compute → FinishRun`, toate `DONE`, `708.876 = 50.634 × 14` rânduri și
+  `MIN_GT_MAX=0`. Rulează anterior migrării la `CCCMINMAXRUNPARAM`, deci nu poate fi recomputată sau
+  reverificată contra parametrilor înghețați; prima sesiune nouă va produce snapshot-ul complet.
 - **Instrumente de sincronizare:** `new_min_max/tools/sync-check.cjs` verifică SQL-ul embedat în AJS
   linie cu linie față de `new_min_max/sql/*.sql` — de rulat după fiecare editare de SQL.

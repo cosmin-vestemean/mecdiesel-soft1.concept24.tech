@@ -151,6 +151,23 @@ function requireString (value, label) {
   return value.trim()
 }
 
+function normalizeParamValue (paramKey, value) {
+  if (paramKey.toUpperCase() !== 'SIGMA_MIN') return requireString(value, 'paramValue')
+
+  const normalized = typeof value === 'number' && Number.isFinite(value)
+    ? String(value)
+    : requireString(value, 'paramValue')
+
+  const sigmaMin = Number(normalized)
+  if (!Number.isFinite(sigmaMin)) {
+    throw new Error('SIGMA_MIN must be numeric')
+  }
+  if (sigmaMin < 0) {
+    throw new Error('SIGMA_MIN must not be negative')
+  }
+  return normalized
+}
+
 function normalizeBranchAssignmentMode (value) {
   const mode = requireString(value, 'branchAssignmentMode').toUpperCase()
   if (!BRANCH_ASSIGNMENT_MODES.has(mode)) {
@@ -806,13 +823,16 @@ export class MinmaxEngineService {
     const paramsUpdates = data.paramsUpdates || []
     validateRowCount(paramsUpdates, 'paramsUpdates')
     if (paramsUpdates.length) {
-      const rows = paramsUpdates.map((p) => ({
-        PARAMKEY: requireString(p.paramKey, 'paramKey'),
-        PARAMTYPE: p.paramType ? requireString(p.paramType, 'paramType') : 'STR',
-        PARAMVALUE: requireString(p.paramValue, 'paramValue'),
-        SCOPE: p.scope ? requireString(p.scope, 'scope') : 'GLOBAL',
-        SCOPEKEY: typeof p.scopeKey === 'string' ? p.scopeKey.trim() : ''
-      }))
+      const rows = paramsUpdates.map((p) => {
+        const paramKey = requireString(p.paramKey, 'paramKey')
+        return {
+          PARAMKEY: paramKey,
+          PARAMTYPE: p.paramType ? requireString(p.paramType, 'paramType') : 'STR',
+          PARAMVALUE: normalizeParamValue(paramKey, p.paramValue),
+          SCOPE: p.scope ? requireString(p.scope, 'scope') : 'GLOBAL',
+          SCOPEKEY: typeof p.scopeKey === 'string' ? p.scopeKey.trim() : ''
+        }
+      })
       paramsKeys = rows.map((r) => ({ paramKey: r.PARAMKEY, scope: r.SCOPE, scopeKey: r.SCOPEKEY }))
       const json = JSON.stringify(rows)
       // Table immediately after UPDATE (no alias), per §12.2: referencedTable()

@@ -642,6 +642,44 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
       await assert.rejects(service.saveParams({ token: 'tok' }), /saveParams called with no updates\./)
     })
 
+    it('accepts SIGMA_MIN = 0 and preserves the explicit zero in the write payload', async () => {
+      let capturedBody
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => Array.isArray(body.statements))
+        .reply(200, (uri, body) => {
+          capturedBody = body
+          return { data: [{ affected: 1 }], success: true }
+        })
+
+      const service = makeService({ writesEnabled: true })
+      const result = await service.saveParams({
+        paramsUpdates: [{ paramKey: 'SIGMA_MIN', paramType: 'NUM', paramValue: 0 }],
+        token: 'tok'
+      })
+
+      assert.strictEqual(result.success, true)
+      const [row] = JSON.parse(capturedBody.statements[0].params[0])
+      assert.strictEqual(row.PARAMVALUE, '0')
+    })
+
+    it('rejects a negative SIGMA_MIN before calling the transport layer', async () => {
+      const service = makeService({ writesEnabled: true })
+      await assert.rejects(
+        service.saveParams({ paramsUpdates: [{ paramKey: 'SIGMA_MIN', paramValue: '-0.1' }], token: 'tok' }),
+        /SIGMA_MIN must not be negative/
+      )
+      assert.strictEqual(nock.pendingMocks().length, 0)
+    })
+
+    it('rejects a non-numeric SIGMA_MIN before calling the transport layer', async () => {
+      const service = makeService({ writesEnabled: true })
+      await assert.rejects(
+        service.saveParams({ paramsUpdates: [{ paramKey: 'SIGMA_MIN', paramValue: 'abc' }], token: 'tok' }),
+        /SIGMA_MIN must be numeric/
+      )
+      assert.strictEqual(nock.pendingMocks().length, 0)
+    })
+
     it('rejects with Forbidden when writes are disabled (flag OFF), even with valid payload', async () => {
       const service = makeService({ writesEnabled: false })
       const payload = {

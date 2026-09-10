@@ -209,7 +209,7 @@ export class MinmaxExplainDrawer extends LitElement {
     const k = (tex) => this._katex(tex);
     const num = (v) => (v === null || v === undefined ? 0 : Number(v));
     const lifecycle = det.LIFECYCLE;
-    const cp = this._paramsMap(run);
+    const cp = this._paramsMap(runParams);
 
     const inflatieHq = num(cp.INFLATIE_HQ) || 1.30;
     const hqCapFactor = num(cp.HQ_CAP_FACTOR) || 1.5;

@@ -46,6 +46,12 @@ BEGIN
     IF @Persist = 1 AND COALESCE(@RunSession, '') <> 'OPEN'
         THROW 50017, 'sp_MinMaxEngine_Compute: the session is not OPEN; a finished session is immutable.', 1;
 
+    IF NOT EXISTS (
+        SELECT 1 FROM CCCMINMAXRUNPARAM
+        WHERE RUNID = @RunId AND BRANCH = 0 AND PREFIX = ''
+    )
+        THROW 50076, 'sp_MinMaxEngine_Compute: the run parameter snapshot is missing.', 1;
+
     -- ---------------------------------------------------------------
     -- 2. Citire parametri din snapshot-ul rularii (CCCMINMAXRUNPARAM)
     --    @RunId e obligatoriu si se refera intotdeauna la o sesiune
