@@ -1,59 +1,51 @@
 # Current Focus
 
 ## Last Updated
-- 08.09.2026 (sesiunea 49)
+- 10.09.2026 (comparatie referinta beneficiar / analiza interna / cod)
 
-> **⚠️ A NU SE SALVA ÎN ERP DATELE MIN/MAX PÂNĂ NU AVEM APROBARE DE LA BENEFICIAR.** `applyToErp`
-> (Faza 4) NU e implementat, deliberat, până la confirmarea beneficiarului pe formule.
+> Fara modificari de implementare si fara scrieri in baza de date in etapa curenta.
+> Nu executa CalculMinMax.js: este vechea interfata si scrie limite in ERP.
+> Faza 4 applyToErp ramane amanata pana la aprobare explicita.
 
 ## Current Goal
-- Faza 5: poarta de acceptanță §12.15 rămâne **tehnic complet închisă** — singurul punct rămas e
-  confirmarea beneficiarului pe formule (decizie de business).
-- Anexa de ergonomie UI (11 puncte, filtre/culori/KaTeX) **implementată și verificată live** —
-  vezi [FAZA5_REMEDIERI_PLAN.md](../../new_min_max/FAZA5_REMEDIERI_PLAN.md) secțiunea Anexă
-  („Rezultat implementare"), [faza5-ui-frontend.md](../wiki/faza5-ui-frontend.md).
+- Reconcilierea pachetului beneficiarului din 10.09 cu interpretarile anterioare si codul.
+- Matrice comparativa livrata: 56 reguli, surse, diferente si decizii necesare.
+- Nu exista inca decizie ca pachetul nou inlocuieste toate confirmarile consemnate in august.
 
 ## Active Area
-- Singurul punct rămas pentru Faza 5: **confirmarea beneficiarului pe formule** (decizie de
-  business, nu tehnică) — deschide Faza 4.
-- `minmaxEngine.editors="*"` e o deviere temporară deliberată ("deocamdată") pentru testare — de
-  restrâns la o listă explicită înainte de utilizare de beneficiar
-  ([FAZA5_CONTRACT.md](../../new_min_max/FAZA5_CONTRACT.md) §12.8).
-- Nu presupune starea flagurilor de scriere din `config/default.json`/`.env` — procesul pm2 live
-  își setează mediul direct (vezi [faza5-ui-backend.md](../wiki/faza5-ui-backend.md)).
+- Doar analiza/documentatie. Nicio interogare sau scriere DB in aceasta sesiune.
+- Implementarea din workspace a fost citita; parametrii live si deploy-ul nu au fost verificati.
+- Verificarea locala SQL-AJS: 13/13 blocuri sincronizate. Contraexemple aritmetice offline verificate.
 
 ## Relevant Files
-- [FAZA5_REMEDIERI_PLAN.md](../../new_min_max/FAZA5_REMEDIERI_PLAN.md) — plan de execuție + poarta
-  §12.15 + Anexa (ergonomie UI, implementată 08.09.2026).
-- [faza5-ui-frontend.md](../wiki/faza5-ui-frontend.md) — arhitectura frontend, la zi (KaTeX pentru
-  formula din drawer, gotcha CDN `unsafeHTML`).
-- [faza5-ui-backend.md](../wiki/faza5-ui-backend.md) — arhitectura backend, la zi.
-- [softone-error-codes.md](../wiki/softone-error-codes.md) — helper comun coduri eroare SoftOne
-  (`public/shared/softone-error-codes.js`), reutilizat de branch-replenishment și minmax-engine.
-- [minmax-engine-model.md](../wiki/minmax-engine-model.md) — arhitectura durabilă a motorului.
-- [minmax-engine-open-items.md](../wiki/minmax-engine-open-items.md) — întrebări de business
-  deschise.
+- [Matrice comparativa](../../new_min_max/10.09.2026/MATRICE_COMPARATIVA_MINMAX_2026-09-10.md).
+- [Referinta beneficiarului](../../new_min_max/10.09.2026/REFERINTA_BENEFICIAR_MINMAX_2026-09-10.md).
+- [Sumar teoretic anterior](../../new_min_max/SUMAR_TEORETIC_CONFIRMARE.md), [contract Compute](../../new_min_max/FAZA3_HANDOFF.md).
+- [SalesLines](../../new_min_max/sql/00c_sales_lines.sql), [Classify](../../new_min_max/sql/01_classify.sql), [Compute](../../new_min_max/sql/03_compute.sql).
+- [Validator intern](../../new_min_max/tools/validate-minmax-invariants.cjs), [starea tehnica Faza 5](../../new_min_max/FAZA5_REMEDIERI_PLAN.md).
 
-## Confirmed Decisions
-- Faza 6 finalizată: `Classify → ClassifyGroup → Compute → FinishRun` rulează în SQL Server Agent.
-- Poarta §12.15 a Fazei 5 tehnic închisă (vezi Active Area + link-urile de mai sus).
-- Anexa de ergonomie UI implementată: filtre pe 3 niveluri, contor filtre active, sticky header,
-  culori WCAG AA, formula din drawer randată cu KaTeX — 186/186 teste relevante verzi.
-- În containerul MIN/MAX, taburile principale sunt `Input` și `Output`. `Input` conține panoul
-  Parametri MIN/MAX (cu subtaburile Parametri globali, Matricea COV_TGT și Configurare filiale),
-  iar `Output` conține subtaburile Rezultate MIN/MAX și Clasificare ABC-XYZ pe grupe. Toate
-  panourile rămân montate și doar se ascund pentru a păstra starea filtrelor, paginării și
-  drafturilor. Sesiunile și acțiunea Rulează rămân comune deasupra taburilor principale.
-- KaTeX e folosit doar pentru drawer-ul „explică calcul" (valori substituite live), nu pentru
-  wiki-ul HTML static (D6 din `FAZA3_HANDOFF.md` §9.6, neconstruit, rămâne deschisă separat).
-- Faza 4 (`applyToErp`) rămâne deliberat amânată până la confirmarea beneficiarului.
+## Confirmed Understanding
+- Patru niveluri distincte: S/C declarat, X observat static, interpretari interne, cod efectiv.
+- Diferentele nu se reduc la parametri: netting saptamanal vs per fereastra, univers din vanzari,
+  ABC pe toate lifecycle-urile/cumul precedent, SSF flat vs z(ABC), sigma zero -> 1.3,
+  LT/frecventa globale fara resolver prefix/filiala, pack numai BUY, flags informative,
+  BUY fara exceptie OD dupa podea, alta formula TREND; lipsesc costuri/AltRef/export complet.
+- COV/marimi/podea sunt furnizate in noul config; prioritatea lor trebuie aprobata, nu inventata.
+- IMPORTANT: validatorul intern numara banda FLAG_RATIO 0.50-2.00 pe populatie curata,
+  nu FLAG=OK (0.77-1.30). Procentele istorice 85.3%/85.5% NU demonstreaza acceptanta S 8.
+- DEFAULT = fallback prefix nerecunoscut; FSOP are furnizor ERP OPET FUCHS conform clarificarii
+  utilizatorului, fara a autoriza maparea prin MTRSUP. DEFAULT 14 vs 30 ramane neclar.
+- ALL legacy/72235 este separat; semantica in ufn_vanzariWksOptimized ramane neverificata.
+- Validarea tehnica Faza 5/6 consemnata la 08.09 nu este invalidata global, dar nu dovedeste
+  conformitatea cu pachetul 10.09. Nu s-a schimbat codul pentru a forta concordanta cu Excel.
 
 ## Open Questions
-- Niciuna tehnică; singurul punct deschis e o decizie de business (confirmare beneficiar pe
-  formule).
+- Autoritatea punctuala a pachetului nou fata de deciziile consemnate anterior; N01-N16 din referinta.
+- Contract comun al datelor, reguli finale si baza reprezentativa pentru acceptanta.
 
 ## Next Step
-- Validează vizual în browser noua navigație `Input` / `Output` și apoi obține confirmarea
-  beneficiarului pe formulele MIN/MAX (deschide Faza 4). Înainte de utilizare de către beneficiar,
-  restrânge `minmaxEngine.editors` de la `"*"` la o listă explicită.
+- Obtine deciziile din matrice inaintea unui plan de aliniere; nu incepe implementarea automat.
+- Apoi, numai cu autorizare, compara pe inputuri/config inghetate, separat de etalonul static X.
+- Restrictia anterioara ramane: minmaxEngine.editors="*" era temporar pentru testare; de restrans
+  inainte de utilizare de beneficiar. Nu deduce flagurile live din fisierele config/.env.
 
