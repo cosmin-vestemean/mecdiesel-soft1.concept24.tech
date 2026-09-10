@@ -161,4 +161,75 @@ describe('minmax-run-panel — Phase 6 launch button', () => {
     assert.ok(mixedRow.querySelector('.badge.bg-warning'), 'OPEN stays a warning badge');
     assert.ok(mixedRow.querySelector('.badge.bg-danger'), 'ERROR stays a danger badge');
   });
+
+  it('shows the active phase and elapsed phase durations while a run is OPEN', async () => {
+    setAppToken(jwtWithRoles(['minmax.edit']));
+    const { element } = mount({ open: true, polling: true });
+    element.runHistory = [{
+      RUNID: 8,
+      SESSION_STATUS: 'OPEN',
+      STATUS: 'DONE',
+      CLASSIFY_DURATA_SEC: 63,
+      GROUP_STATUS: 'RUNNING',
+      GROUP_DURATA_SEC: 4,
+      COMPUTE_STATUS: null,
+      SESSION_DURATA_SEC: 67
+    }];
+    await element.updateComplete;
+
+    const progress = element.querySelector('.minmax-run-progress').textContent.replace(/\s+/g, ' ').trim();
+    assert.ok(progress.includes('RUNID 8'));
+    assert.ok(progress.includes('Faza: Clasificare grupe'));
+    assert.ok(progress.includes('Total: 1m 7s'));
+    assert.ok(progress.includes('Clasificare: 1m 3s'));
+    assert.ok(progress.includes('Grupe: 4s'));
+    assert.ok(progress.includes('Compute: -'));
+    const historyCells = [...element.querySelectorAll('tbody tr td')];
+    assert.strictEqual(historyCells.at(-1).textContent.trim(), '-', 'OPEN run must not expose classify FINISHEDAT as session final');
+  });
+
+  it('shows an OPEN phase failure without a running spinner', async () => {
+    setAppToken(jwtWithRoles(['minmax.edit']));
+    const { element } = mount({ open: true });
+    element.runHistory = [{
+      RUNID: 8,
+      SESSION_STATUS: 'OPEN',
+      STATUS: 'DONE',
+      GROUP_STATUS: 'ERROR',
+      GROUP_ERRORMSG: 'Clasificarea pe grupe a esuat.'
+    }];
+    await element.updateComplete;
+
+    const progress = element.querySelector('.minmax-run-progress');
+    assert.ok(progress.classList.contains('alert-danger'));
+    assert.ok(progress.textContent.includes('Eroare clasificare grupe'));
+    assert.ok(progress.textContent.includes('Clasificarea pe grupe a esuat.'));
+    assert.ok(!progress.querySelector('.fa-spin'));
+  });
+
+  it('renders ISO timestamps and phase durations in history', async () => {
+    setAppToken(jwtWithRoles(['minmax.edit']));
+    const { element } = mount();
+    element.runHistory = [{
+      RUNID: 8,
+      SESSION_STATUS: 'DONE',
+      STATUS: 'DONE',
+      CLASSIFY_DURATA_SEC: 63,
+      GROUP_STATUS: 'DONE',
+      GROUP_DURATA_SEC: 30,
+      COMPUTE_STATUS: 'DONE',
+      COMPUTE_DURATA_SEC: 39,
+      SESSION_DURATA_SEC: 132,
+      STARTEDAT: '2026-09-10T21:00:00',
+      FINISHEDAT: '2026-09-10T21:02:12'
+    }];
+    await element.updateComplete;
+
+    const rowText = element.querySelector('tbody tr').textContent.replace(/\s+/g, ' ').trim();
+    assert.ok(rowText.includes('1m 3s'));
+    assert.ok(rowText.includes('30s'));
+    assert.ok(rowText.includes('39s'));
+    assert.ok(rowText.includes('2m 12s'));
+    assert.ok(rowText.includes('10.09.2026'));
+  });
 });

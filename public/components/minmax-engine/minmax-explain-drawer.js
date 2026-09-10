@@ -87,6 +87,7 @@ export class MinmaxExplainDrawer extends LitElement {
     this.loading = false;
     this.mtrl = null;
     this.open = false;
+    this._pageOverflow = null;
     this._handleKeydown = (event) => {
       if (event.key === 'Escape' && this.open) {
         event.preventDefault();
@@ -111,10 +112,12 @@ export class MinmaxExplainDrawer extends LitElement {
   connectedCallback () {
     super.connectedCallback();
     document.addEventListener('keydown', this._handleKeydown);
+    if (this.open) this._lockPageScroll();
   }
 
   disconnectedCallback () {
     document.removeEventListener('keydown', this._handleKeydown);
+    this._unlockPageScroll();
     super.disconnectedCallback();
     if (this._unsubscribeFromStore) {
       this._unsubscribeFromStore();
@@ -141,9 +144,32 @@ export class MinmaxExplainDrawer extends LitElement {
     this.mtrl = state.explain.mtrl;
   }
 
+  updated (changedProperties) {
+    if (!changedProperties.has('open')) return;
+    if (this.open) this._lockPageScroll();
+    else this._unlockPageScroll();
+  }
+
   // --- Actions ---
   _close () {
     if (this._store) this._store.closeExplain();
+  }
+
+  _lockPageScroll () {
+    if (this._pageOverflow) return;
+    this._pageOverflow = {
+      body: document.body.style.overflow,
+      root: document.documentElement.style.overflow
+    };
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+  }
+
+  _unlockPageScroll () {
+    if (!this._pageOverflow) return;
+    document.body.style.overflow = this._pageOverflow.body;
+    document.documentElement.style.overflow = this._pageOverflow.root;
+    this._pageOverflow = null;
   }
 
   // --- Rendering Helpers ---
@@ -159,6 +185,16 @@ export class MinmaxExplainDrawer extends LitElement {
     return date.toLocaleString('ro-RO', {
       day: '2-digit', hour: '2-digit', minute: '2-digit', month: '2-digit', year: 'numeric'
     });
+  }
+
+  _formatDuration (value) {
+    if (value === null || value === undefined || value === '') return '-';
+    const seconds = Number(value);
+    if (!Number.isFinite(seconds) || seconds < 0) return '-';
+    const rounded = Math.round(seconds);
+    const minutes = Math.floor(rounded / 60);
+    const remainder = rounded % 60;
+    return minutes ? `${minutes}m ${remainder}s` : `${remainder}s`;
   }
 
   _formatValue (row, field) {
@@ -324,8 +360,12 @@ export class MinmaxExplainDrawer extends LitElement {
             <tr><th class="w-50">RUNID</th><td>${run.RUNID}</td></tr>
             <tr><th>Companie</th><td>${run.COMPANY}</td></tr>
             <tr><th>Azi (referinta)</th><td>${run.AZI ?? '-'}</td></tr>
-            <tr><th>Pornit</th><td>${this._formatDateTime(run.STARTEDAT)}</td></tr>
-            <tr><th>Compute pornit</th><td>${this._formatDateTime(run.COMPUTE_STARTEDAT)}</td></tr>
+            <tr><th>Start clasificare</th><td>${this._formatDateTime(run.STARTEDAT)}</td></tr>
+            <tr><th>Final procesare</th><td>${run.SESSION_STATUS === 'OPEN' ? '-' : this._formatDateTime(run.FINISHEDAT)}</td></tr>
+            <tr><th>Durata procesare</th><td>${this._formatDuration(run.SESSION_DURATA_SEC)}</td></tr>
+            <tr><th>Clasificare</th><td>${this._formatDateTime(run.STARTEDAT)} – ${this._formatDateTime(run.GROUP_STARTEDAT)} · ${this._formatDuration(run.CLASSIFY_DURATA_SEC)}</td></tr>
+            <tr><th>Clasificare grupe</th><td>${this._formatDateTime(run.GROUP_STARTEDAT)} – ${this._formatDateTime(run.GROUP_FINISHEDAT)} · ${this._formatDuration(run.GROUP_DURATA_SEC)}</td></tr>
+            <tr><th>Compute</th><td>${this._formatDateTime(run.COMPUTE_STARTEDAT)} – ${this._formatDateTime(run.COMPUTE_FINISHEDAT)} · ${this._formatDuration(run.COMPUTE_DURATA_SEC)}</td></tr>
           </tbody>
         </table>
         <details>
@@ -379,7 +419,8 @@ export class MinmaxExplainDrawer extends LitElement {
     return html`
       <div class="minmax-explain-backdrop" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1050;" @click="${this._close}"></div>
       <div class="minmax-explain-drawer card shadow-lg"
-           style="position: fixed; top: 0; right: 0; bottom: 0; width: 520px; max-width: 95vw; z-index: 1051; overflow-y: auto; border-radius: 0;">
+         role="dialog" aria-modal="true" aria-label="Explicatie calcul MIN/MAX"
+         style="position: fixed; top: 0; right: 0; bottom: 0; width: 520px; max-width: 95vw; z-index: 1051; overflow-y: auto; overscroll-behavior: contain; border-radius: 0;">
         <div class="card-header d-flex align-items-center justify-content-between">
           <span>
             <i class="fas fa-magnifying-glass-chart me-2"></i>Explicatie

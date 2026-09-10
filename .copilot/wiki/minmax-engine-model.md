@@ -73,6 +73,22 @@
   (`TOTAL_ROWS = DISTINCT_ITEMS × DISTINCT_BRANCHES`, `DISTINCT_BRANCHES = 14`, `HQ_ROWS =
   DISTINCT_ITEMS`, controale la zero).
 
+## Observabilitate și transport UI
+
+- `history()` convertește explicit coloanele `DATETIME` din `CCCMINMAXRUN` la ISO 8601
+  (`VARCHAR(19)`, stil 126), deoarece transportul WSMCP omite valorile `DATETIME` brute din dataset.
+  `STARTEDAT` este startul Classify, nu momentul `StartRun`; durata Classify se măsoară până la
+  `GROUP_STARTEDAT`, singurul reper final persistent înainte ca `FinishRun` să suprascrie
+  `FINISHEDAT`/`DURATA_SEC`. Group și Compute folosesc propriile coloane `*_DURATA_SEC`, iar durata
+  totală folosește `GETDATE()` numai cât `SESSION_STATUS='OPEN'`.
+- Panoul de rulare afișează faza activă, statusul și duratele Classify/Group/Compute/total. O fază
+  `ERROR` oprește spinnerul și afișează mesajul fazei. Explain citește același antet temporal și
+  snapshot-ul `CCCMINMAXRUNPARAM`; drawer-ul este dialog modal și blochează scrollul paginii din
+  spate cât timp este deschis.
+- Socket.IO client și server sunt aliniate la 4.6.1. Nginx are un `location /socket.io/` dedicat în
+  `/etc/nginx/forge-conf/mecdiesel-soft1.concept24.tech/server/socket-io.conf`, cu HTTP/1.1 și
+  headerele `Upgrade`/`Connection`; conexiunea de producție ajunge la transport `websocket`.
+
 ## Modelul de operare — centrul de greutate e sesiunea curentă
 
 > Formulat explicit 08.09.2026, după ce o dezbatere despre istoric a arătat că designul începuse să
@@ -197,9 +213,10 @@ cele 50.481 de HQ care merg în `MTRL`.
   pe MTRL 1360919 corect pe toate valorile verificabile manual.
 - **Sesiuni persistate** (`RUNID`, `CCCMINMAXRUN`/`DET`/`GRP`/`WEEK`/`WINSOR`): stratul de
   persistență + modelul de sesiune imutabilă (`StartRun`/`FinishRun`) — vezi secțiunea „Cadență și
-  sesiuni" mai sus. **`RUNID=7` este sesiunea curentă validată** (08.09.2026): `StartRun → Classify
-  → ClassifyGroup → Compute → FinishRun`, toate `DONE`, `708.876 = 50.634 × 14` rânduri și
-  `MIN_GT_MAX=0`. Rulează anterior migrării la `CCCMINMAXRUNPARAM`, deci nu poate fi recomputată sau
-  reverificată contra parametrilor înghețați; prima sesiune nouă va produce snapshot-ul complet.
+  sesiuni" mai sus. **`RUNID=8` este sesiunea curentă validată**: `FULL`, atribuire `CLIENT`,
+  calibrare `C`, toate fazele `DONE`, `713.104 = 50.936 × 14` rânduri. Este prima sesiune cu
+  snapshot complet `CCCMINMAXRUNPARAM`; validatorul raportează toate cele opt familii de invariante
+  PASS și marchează calibrarea C drept `[PRINCIPALA]`. Timpii măsurați sunt Classify 63s, Group 30s,
+  Compute 39s și total 132s.
 - **Instrumente de sincronizare:** `new_min_max/tools/sync-check.cjs` verifică SQL-ul embedat în AJS
   linie cu linie față de `new_min_max/sql/*.sql` — de rulat după fiecare editare de SQL.

@@ -160,6 +160,75 @@ describe('minmax-explain-drawer — formula with substituted values (Anexa §B11
     assert.ok(hasTex(el, '\\max(11, 14)'), `expected substituted CYCLE inputs, got: ${annotations(el)}`);
   });
 
+  it('shows the session and phase audit times from the run header', async () => {
+    const el = mount(baseDet);
+    el.data = {
+      ...el.data,
+      run: {
+        RUNID: 8,
+        COMPANY: 1000,
+        AZI: '2026-09-10',
+        SESSION_STATUS: 'DONE',
+        STARTEDAT: '2026-09-10T21:00:00',
+        FINISHEDAT: '2026-09-10T21:02:12',
+        CLASSIFY_DURATA_SEC: 63,
+        GROUP_STARTEDAT: '2026-09-10T21:01:03',
+        GROUP_FINISHEDAT: '2026-09-10T21:01:33',
+        GROUP_DURATA_SEC: 30,
+        COMPUTE_STARTEDAT: '2026-09-10T21:01:33',
+        COMPUTE_FINISHEDAT: '2026-09-10T21:02:12',
+        COMPUTE_DURATA_SEC: 39,
+        SESSION_DURATA_SEC: 132
+      }
+    };
+    await el.updateComplete;
+
+    const valueFor = (label) => {
+      const row = [...el.querySelectorAll('tr')].find((candidate) => candidate.querySelector('th')?.textContent.trim() === label);
+      return row?.querySelector('td')?.textContent.replace(/\s+/g, ' ').trim();
+    };
+    assert.ok(valueFor('Start clasificare').includes('10.09.2026'));
+    assert.ok(valueFor('Final procesare').includes('10.09.2026'));
+    assert.strictEqual(valueFor('Durata procesare'), '2m 12s');
+    assert.ok(valueFor('Clasificare').includes('1m 3s'));
+    assert.ok(valueFor('Clasificare grupe').includes('30s'));
+    assert.ok(valueFor('Compute').includes('39s'));
+  });
+
+  it('does not show a final processing time for an OPEN run', async () => {
+    const el = mount(baseDet);
+    el.data = {
+      ...el.data,
+      run: {
+        RUNID: 9,
+        COMPANY: 1000,
+        SESSION_STATUS: 'OPEN',
+        STARTEDAT: '2026-09-10T21:00:00',
+        FINISHEDAT: '2026-09-10T21:01:03',
+        SESSION_DURATA_SEC: 90
+      }
+    };
+    await el.updateComplete;
+
+    const finalRow = [...el.querySelectorAll('tr')].find((row) => row.querySelector('th')?.textContent.trim() === 'Final procesare');
+    assert.strictEqual(finalRow.querySelector('td').textContent.trim(), '-');
+  });
+
+  it('locks page scrolling while open and restores it when closed', async () => {
+    document.body.style.overflow = 'auto';
+    document.documentElement.style.overflow = 'scroll';
+    const el = mount(baseDet);
+    await el.updateComplete;
+
+    assert.strictEqual(document.body.style.overflow, 'hidden');
+    assert.strictEqual(document.documentElement.style.overflow, 'hidden');
+
+    el.open = false;
+    await el.updateComplete;
+    assert.strictEqual(document.body.style.overflow, 'auto');
+    assert.strictEqual(document.documentElement.style.overflow, 'scroll');
+  });
+
   it('short-circuits ENG_MIN/ENG_MAX to 0 for OD lifecycle', async () => {
     const el = mount({ ...baseDet, LIFECYCLE: 'OD', ENG_MIN: 0, ENG_MAX: 0, BUY_QTY: 0 });
     await el.updateComplete;

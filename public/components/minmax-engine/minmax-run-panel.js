@@ -14,7 +14,8 @@ import { getAppTokenRoles } from '../../stores/app-auth.js';
 const STATUS_BADGE_CLASS = {
   DONE: 'bg-success',
   ERROR: 'bg-danger',
-  OPEN: 'bg-warning'
+  OPEN: 'bg-warning',
+  RUNNING: 'bg-primary'
 };
 
 // Anexa §B7: only OPEN/ERROR render as coloured badges; DONE is plain muted
@@ -189,6 +190,40 @@ export class MinmaxRunPanel extends LitElement {
     });
   }
 
+  _formatDuration (value) {
+    if (value === null || value === undefined || value === '') return '-';
+    const seconds = Number(value);
+    if (!Number.isFinite(seconds) || seconds < 0) return '-';
+    const rounded = Math.round(seconds);
+    const minutes = Math.floor(rounded / 60);
+    const remainder = rounded % 60;
+    return minutes ? `${minutes}m ${remainder}s` : `${remainder}s`;
+  }
+
+  _activePhase (run) {
+    if (run && run.STATUS === 'ERROR') return 'Eroare clasificare articole';
+    if (!run || run.STATUS !== 'DONE') return 'Clasificare articole';
+    if (run.GROUP_STATUS === 'ERROR') return 'Eroare clasificare grupe';
+    if (run.GROUP_STATUS !== 'DONE') return 'Clasificare grupe';
+    if (run.COMPUTE_STATUS === 'ERROR') return 'Eroare calcul MIN/MAX';
+    if (run.COMPUTE_STATUS !== 'DONE') return 'Calcul MIN/MAX';
+    return 'Finalizare';
+  }
+
+  _runError (run) {
+    if (!run) return '';
+    return run.COMPUTE_ERRORMSG || run.GROUP_ERRORMSG || run.ERRORMSG || '';
+  }
+
+  _statusWithDuration (status, duration) {
+    return html`
+      ${this._statusBadge(status)}
+      ${duration === null || duration === undefined
+        ? ''
+        : html`<span class="d-block text-muted small mt-1">${this._formatDuration(duration)}</span>`}
+    `;
+  }
+
   _statusBadge (status) {
     if (!status) return html`<span class="badge bg-secondary">-</span>`;
     if (QUIET_STATUSES.has(status)) {
@@ -201,6 +236,7 @@ export class MinmaxRunPanel extends LitElement {
   render () {
     const isCurrentSelected = this.runId === null;
     const openRun = this.runHistory.find((run) => run.SESSION_STATUS === 'OPEN');
+    const openRunError = this._runError(openRun);
     const runDisabled = !this.writesEnabled || !this.canEdit || Boolean(openRun) || this.runLaunch.starting || this.runLaunch.polling;
 
     return html`
@@ -276,6 +312,17 @@ export class MinmaxRunPanel extends LitElement {
           ${this.historyError
             ? html`<div class="alert alert-danger py-2 mb-2">${this.historyError}</div>`
             : ''}
+          ${openRun
+            ? html`<div class="minmax-run-progress alert ${openRunError ? 'alert-danger' : 'alert-primary'} py-2 mb-3 d-flex flex-wrap align-items-center gap-3" role="status">
+                <span><i class="fas ${openRunError ? 'fa-exclamation-triangle' : 'fa-spinner fa-spin'} me-1"></i><strong>RUNID ${openRun.RUNID}</strong></span>
+                <span>Faza: <strong>${this._activePhase(openRun)}</strong></span>
+                <span>Total: ${this._formatDuration(openRun.SESSION_DURATA_SEC)}</span>
+                <span>Clasificare: ${this._formatDuration(openRun.CLASSIFY_DURATA_SEC)}</span>
+                <span>Grupe: ${this._formatDuration(openRun.GROUP_DURATA_SEC)}</span>
+                <span>Compute: ${this._formatDuration(openRun.COMPUTE_DURATA_SEC)}</span>
+                ${openRunError ? html`<span class="w-100 small">${openRunError}</span>` : ''}
+              </div>`
+            : ''}
 
           <div class="form-check mb-2">
             <input
@@ -312,21 +359,23 @@ export class MinmaxRunPanel extends LitElement {
                   <th>Data</th>
                   <th>Scope</th>
                   <th>Sesiune</th>
-                  <th>Compute</th>
+                  <th>Clasificare</th>
                   <th>Grup</th>
+                  <th>Compute</th>
                   <th>Randuri</th>
-                  <th>Pornit</th>
-                  <th>Finalizat</th>
+                  <th>Durata</th>
+                  <th>Start clasificare</th>
+                  <th>Final procesare</th>
                 </tr>
               </thead>
               <tbody>
                 ${this.loadingHistory
-                  ? html`<tr><td colspan="10" class="text-center text-muted py-3">
+                  ? html`<tr><td colspan="12" class="text-center text-muted py-3">
                       <i class="fas fa-spinner fa-spin"></i> Se incarca istoricul...
                     </td></tr>`
                   : ''}
                 ${!this.loadingHistory && this.runHistory.length === 0
-                  ? html`<tr><td colspan="10" class="text-center text-muted py-3">Nicio sesiune gasita.</td></tr>`
+                  ? html`<tr><td colspan="12" class="text-center text-muted py-3">Nicio sesiune gasita.</td></tr>`
                   : ''}
                 ${this.runHistory.map((run) => html`
                   <tr
@@ -351,11 +400,13 @@ export class MinmaxRunPanel extends LitElement {
                     <td>${this._formatDate(run.AZI)}</td>
                     <td>${run.SCOPE || '-'}</td>
                     <td>${this._statusBadge(run.SESSION_STATUS)}</td>
-                    <td>${this._statusBadge(run.COMPUTE_STATUS)}</td>
-                    <td>${this._statusBadge(run.GROUP_STATUS)}</td>
+                    <td>${this._statusWithDuration(run.STATUS, run.CLASSIFY_DURATA_SEC)}</td>
+                    <td>${this._statusWithDuration(run.GROUP_STATUS, run.GROUP_DURATA_SEC)}</td>
+                    <td>${this._statusWithDuration(run.COMPUTE_STATUS, run.COMPUTE_DURATA_SEC)}</td>
                     <td>${run.NR_RANDURI ?? '-'}</td>
+                    <td>${this._formatDuration(run.SESSION_DURATA_SEC ?? run.DURATA_SEC)}</td>
                     <td>${this._formatDate(run.STARTEDAT)}</td>
-                    <td>${this._formatDate(run.FINISHEDAT)}</td>
+                    <td>${run.SESSION_STATUS === 'OPEN' ? '-' : this._formatDate(run.FINISHEDAT)}</td>
                   </tr>
                 `)}
               </tbody>
