@@ -29,12 +29,14 @@
 - **Faza 2b — agregare ABC pe grupă:** formula exactă rămâne de confirmat (§3.3.1). Implementarea
   curentă partiționează cumulativul pe `BRANCH`, ordonare secundară deterministă pe
   `MTRGROUP_CODE`.
-- **`MOD_ATRIBUIRE_FILIALA`** (DOC/AGENT/CLIENT) — default `CLIENT`, schimbă ~35% din atribuirea de
-  linii. Comparație cross-mode blocată cât timp `S1_WRITE_MODE=off` la nivel de proiect (mod
-  `CLIENT` complet validat read-only).
+- **`MOD_ATRIBUIRE_FILIALA`** (DOC/AGENT/CLIENT) — selectorul este implementat per rulare, validat
+  la `StartRun`, salvat în `PARAMSJSON` și consumat de `Classify`/`ClassifyGroup`; rularea nouă de
+  comparație cross-mode nu a fost încă executată. Default-ul rămâne `CLIENT`, cu impact estimat la
+  ~35% din atribuirea liniilor.
 - **`FLAGS_ZERO_LA_APPLY`** (E15) — spec zice informațional-only; default zerorește la scriere ERP.
 - **`COV_MEDIU`** — fallback `MEDIU=MIC` până clientul completează (editabil în UI).
-- **`CX=2.00 > BY=2.00`** — deliberat? Valorile din spec au fost păstrate ca atare.
+- **`CX=2.00 = BY=2.00 > BZ=1.75`** — comparația numerică este corectată; intenția matricei rămâne
+  de confirmat.
 - **σ_LT** (variabilitate lead-time, L1) absentă din formulă; disponibilitatea istoricului de
   recepții e necunoscută.
 - **σ_WK pentru clasa NOU:** serie completă de 52 săptămâni vs. de la prima vânzare (E5) — default
