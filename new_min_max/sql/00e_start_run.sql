@@ -10,13 +10,23 @@ CREATE OR ALTER PROCEDURE dbo.sp_MinMaxEngine_StartRun
     @Scope VARCHAR(10) = 'FULL',
     @Mtrl INT = NULL,
     @CreatedBy INT = NULL,
-    @RunId INT = NULL OUTPUT
+    @RunId INT = NULL OUTPUT,
+    @BranchAssignmentMode VARCHAR(10) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
 
     SET @Scope = UPPER(LTRIM(RTRIM(COALESCE(@Scope, ''))));
+    SET @BranchAssignmentMode = UPPER(LTRIM(RTRIM(COALESCE(@BranchAssignmentMode, ''))));
+
+    IF @BranchAssignmentMode = ''
+        SELECT @BranchAssignmentMode = UPPER(LTRIM(RTRIM(PARAMVALUE)))
+        FROM CCCMINMAXPARAMS
+        WHERE PARAMKEY = 'MOD_ATRIBUIRE_FILIALA' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
+
+    IF @BranchAssignmentMode = '' OR @BranchAssignmentMode IS NULL
+        SET @BranchAssignmentMode = 'CLIENT';
 
     IF @Scope NOT IN ('FULL', 'SKU', 'GROUP')
         THROW 50030, 'sp_MinMaxEngine_StartRun: @Scope must be FULL, SKU or GROUP.', 1;
@@ -28,6 +38,9 @@ BEGIN
 
     IF @Scope <> 'SKU' AND @Mtrl IS NOT NULL
         THROW 50032, 'sp_MinMaxEngine_StartRun: @Mtrl is only allowed when @Scope = SKU.', 1;
+
+    IF @BranchAssignmentMode NOT IN ('DOC', 'AGENT', 'CLIENT')
+        THROW 50052, 'sp_MinMaxEngine_StartRun: @BranchAssignmentMode must be DOC, AGENT or CLIENT.', 1;
 
     BEGIN TRANSACTION;
 
@@ -43,17 +56,19 @@ BEGIN
     END;
 
     INSERT INTO CCCMINMAXRUN (
-        COMPANY, FAZA, STATUS, SESSION_STATUS, SCOPE, MTRL, STARTEDAT, CREATEDBY
+        COMPANY, FAZA, STATUS, SESSION_STATUS, SCOPE, MTRL, PARAMSJSON, STARTEDAT, CREATEDBY
     )
     VALUES (
-        @Company, 'START', 'RUNNING', 'OPEN', @Scope, @Mtrl, GETDATE(), @CreatedBy
+        @Company, 'START', 'RUNNING', 'OPEN', @Scope, @Mtrl,
+        N'{"MOD_ATRIBUIRE_FILIALA":"' + @BranchAssignmentMode + N'"}', GETDATE(), @CreatedBy
     );
 
     SET @RunId = CONVERT(INT, SCOPE_IDENTITY());
 
     COMMIT TRANSACTION;
 
-    SELECT RUNID, COMPANY, SCOPE, SESSION_STATUS, MTRL, STARTEDAT, CREATEDBY
+    SELECT RUNID, COMPANY, SCOPE, SESSION_STATUS, MTRL,
+        @BranchAssignmentMode AS MOD_ATRIBUIRE_FILIALA, STARTEDAT, CREATEDBY
     FROM CCCMINMAXRUN
     WHERE RUNID = @RunId;
 END;

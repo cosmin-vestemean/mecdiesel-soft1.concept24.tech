@@ -22,6 +22,11 @@
   minute. Execuția reală (`Classify → ClassifyGroup → Compute → FinishRun`) rulează în jobul Agent,
   ca `dbo.sp_MinMaxEngine_RunPhases @Company`; browserul urmărește starea persistentă prin
   `history()`, la fel ca înainte.
+- **Atribuirea vânzărilor se decide per RUNID.** Panoul de rulare oferă `CLIENT` (`TRDBRANCH`),
+  `DOC` (`FINDOC.BRANCH`) și `AGENT` (`PRSN.BRANCH`). `StartRun` validează alegerea și o salvează
+  imediat în `PARAMSJSON`; `Classify` și `ClassifyGroup` citesc snapshot-ul sesiunii și îl transmit
+  explicit către `ufn_MinMaxSalesLines`, deci schimbarea ulterioară a parametrului global nu poate
+  altera rularea deschisă.
 - **Estimarea de ~2 minute pentru o sesiune nu este o limită operațională garantată.** La prima
   lansare completă din UI, `RUNID=6` a rămas `OPEN/RUNNING` deoarece `runPhases` a primit de la S1
   `Ole Error 80040E31: Query timeout expired`. Sesiunea a fost închisă explicit prin `AbandonRun`, iar
@@ -57,7 +62,8 @@
 - **Codurile `THROW` alocate:** `50004/50007/50008` Classify sesiune, `50005/50006/50015`
   ClassifyGroup, `50017` Compute sesiune, `50030-50032` StartRun, `50033-50038` FinishRun,
   `50020-50024` rezervate pentru Faza 4 (`applyToErp`), `50039-50044` ciclul de viață
-  (StartRun/AbandonRun/PurgeRun, FAZA6_CONTRACT.md §9), `50045-50051` arhitectura SQL Server Agent
+  (StartRun/AbandonRun/PurgeRun, FAZA6_CONTRACT.md §9), `50045-50051` arhitectura SQL Server Agent,
+  `50052` modul de atribuire al vânzărilor invalid
   (job/setup lipsă, Agent oprit, sesiune OPEN absentă/ambiguă, runner activ, launch eșuat,
   readiness neverificabil, setup refuzat cât jobul rulează — detaliat în
   FAZA6_CONTRACT.md §4.1/§9).

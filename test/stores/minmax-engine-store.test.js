@@ -197,11 +197,45 @@ describe('minmax-engine-store — Phase 6 run lifecycle', () => {
     const ok = await store.runEngine({ poll: false });
 
     assert.strictEqual(ok, true);
+    assert.strictEqual(payload.branchAssignmentMode, 'CLIENT');
     assert.strictEqual(payload.scope, 'FULL');
     assert.strictEqual(payload.token, 'test-token');
     assert.strictEqual(Object.prototype.hasOwnProperty.call(payload, 'authKey'), false);
     assert.strictEqual(store.getState().runLaunch.runId, 6);
     assert.strictEqual(store.getState().runId, null, 'an OPEN run must not become the result selector');
+  });
+
+  it('normalizes and forwards the selected branch assignment mode', async () => {
+    const store = new MinmaxEngineStore();
+    let payload;
+    store._getService = () => ({
+      runEngine: async (data) => {
+        payload = data;
+        return { runId: 6 };
+      }
+    });
+
+    const ok = await store.runEngine({ branchAssignmentMode: ' agent ', poll: false });
+
+    assert.strictEqual(ok, true);
+    assert.strictEqual(payload.branchAssignmentMode, 'AGENT');
+  });
+
+  it('rejects an unknown branch assignment mode before calling the service', async () => {
+    const store = new MinmaxEngineStore();
+    let runEngineCalled = false;
+    store._getService = () => ({
+      history: async () => ({ rows: [] }),
+      runEngine: async () => {
+        runEngineCalled = true;
+      }
+    });
+
+    const ok = await store.runEngine({ branchAssignmentMode: 'OTHER', poll: false });
+
+    assert.strictEqual(ok, false);
+    assert.strictEqual(runEngineCalled, false);
+    assert.ok(store.getState().runLaunch.error.includes('DOC, AGENT sau CLIENT'));
   });
 
   it('turns the already-open code into a stable user-facing state and refreshes history', async () => {

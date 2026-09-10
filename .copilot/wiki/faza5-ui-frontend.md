@@ -17,6 +17,8 @@
   butonul „Rulează”. Butonul este dezactivat când kill-switch-ul este oprit, lipsește rolul
   `minmax.edit`, există o sesiune `OPEN` sau lansarea este deja în curs. Store-ul face polling pe
   `history()` și reîncarcă sesiunea curentă după `DONE`; autorizarea reală rămâne server-side.
+  Selectorul „Atribuire vânzări” stabilește pentru fiecare rulare `CLIENT`, `DOC` sau `AGENT` și
+  pornește de la valoarea globală curentă, fără să o modifice.
 - `public/components/minmax-engine/minmax-results-table.js` — al doilea `ContextConsumer`, cablat
   în container. Filtre server-side complete (contract §5: liste, tri-state, intervale, `codeLike`,
   `mtrl`/`mtrgroup` ca liste text), sortare (whitelist + click pe antet, tie-break implicit din

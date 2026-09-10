@@ -4,7 +4,10 @@
 -- Fereastra este derivata din MAX(TRNDATE) pe date vii, deci populatia creste in cursul zilei.
 -- ===================================================================
 
-CREATE OR ALTER FUNCTION dbo.ufn_MinMaxSalesLines (@Company SMALLINT)
+CREATE OR ALTER FUNCTION dbo.ufn_MinMaxSalesLines (
+    @Company SMALLINT,
+    @ModAtribuireOverride VARCHAR(10)
+)
 RETURNS @SalesLines TABLE (
     COMPANY SMALLINT NOT NULL,
     FINDOC INT NOT NULL,
@@ -32,9 +35,12 @@ BEGIN
     -- ---------------------------------------------------------------
     -- 1. Citire parametri din CCCMINMAXPARAMS
     -- ---------------------------------------------------------------
-    SELECT @ModAtribuire = UPPER(LTRIM(RTRIM(PARAMVALUE)))
-    FROM CCCMINMAXPARAMS
-    WHERE PARAMKEY = 'MOD_ATRIBUIRE_FILIALA' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
+    SET @ModAtribuire = UPPER(LTRIM(RTRIM(COALESCE(@ModAtribuireOverride, ''))));
+
+    IF @ModAtribuire = ''
+        SELECT @ModAtribuire = UPPER(LTRIM(RTRIM(PARAMVALUE)))
+        FROM CCCMINMAXPARAMS
+        WHERE PARAMKEY = 'MOD_ATRIBUIRE_FILIALA' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
 
     SELECT @ExcluderiClienti = PARAMVALUE
     FROM CCCMINMAXPARAMS

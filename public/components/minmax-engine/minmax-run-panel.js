@@ -20,11 +20,13 @@ const STATUS_BADGE_CLASS = {
 // Anexa §B7: only OPEN/ERROR render as coloured badges; DONE is plain muted
 // text so the three green "DONE" badges per row stop diluting the signal.
 const QUIET_STATUSES = new Set(['DONE']);
+const BRANCH_ASSIGNMENT_MODES = new Set(['DOC', 'AGENT', 'CLIENT']);
 
 export class MinmaxRunPanel extends LitElement {
   static get properties () {
     return {
       historyError: { type: String },
+      branchAssignmentMode: { type: String },
       canEdit: { type: Boolean },
       loading: { type: Boolean },
       loadingHistory: { type: Boolean },
@@ -40,6 +42,7 @@ export class MinmaxRunPanel extends LitElement {
     super();
 
     this.historyError = '';
+    this.branchAssignmentMode = 'CLIENT';
     this.canEdit = false;
     this.loading = false;
     this.loadingHistory = false;
@@ -48,6 +51,7 @@ export class MinmaxRunPanel extends LitElement {
     this.runHistory = [];
     this.runId = null;
     this.writesEnabled = false;
+    this._branchAssignmentModeTouched = false;
 
     this._storeConsumer = new ContextConsumer(this, {
       callback: (store) => {
@@ -91,6 +95,16 @@ export class MinmaxRunPanel extends LitElement {
     this.runLaunch = state.runLaunch;
     this.writesEnabled = Boolean(state.params && state.params.writesEnabled);
     this.canEdit = getAppTokenRoles().includes('minmax.edit');
+
+    if (!this._branchAssignmentModeTouched) {
+      const configuredMode = (state.params && state.params.params || []).find((param) =>
+        param.PARAMKEY === 'MOD_ATRIBUIRE_FILIALA' && param.SCOPE === 'GLOBAL' && !param.SCOPEKEY
+      );
+      const normalizedMode = configuredMode && String(configuredMode.PARAMVALUE).trim().toUpperCase();
+      if (BRANCH_ASSIGNMENT_MODES.has(normalizedMode)) {
+        this.branchAssignmentMode = normalizedMode;
+      }
+    }
   }
 
   // --- Actions ---
@@ -119,9 +133,16 @@ export class MinmaxRunPanel extends LitElement {
 
   _startRun () {
     if (!this._store) return;
-    if (!window.confirm('Pornesti o sesiune MIN/MAX noua pentru toate filialele?')) return;
+    if (!window.confirm(`Pornesti o sesiune MIN/MAX noua cu atribuirea vanzarilor dupa ${this.branchAssignmentMode}?`)) return;
     this.dispatchEvent(new CustomEvent('run-start', { bubbles: true, composed: true }));
-    this._store.runEngine();
+    this._store.runEngine({ branchAssignmentMode: this.branchAssignmentMode });
+  }
+
+  _setBranchAssignmentMode (event) {
+    const mode = String(event.target.value || '').trim().toUpperCase();
+    if (!BRANCH_ASSIGNMENT_MODES.has(mode)) return;
+    this._branchAssignmentModeTouched = true;
+    this.branchAssignmentMode = mode;
   }
 
   _notifyRunHoverStart () {
@@ -167,6 +188,22 @@ export class MinmaxRunPanel extends LitElement {
         <div class="card-header d-flex align-items-center justify-content-between">
           <span><i class="fas fa-history me-2"></i>Sesiuni MIN/MAX</span>
           <div class="d-flex gap-2">
+            <label class="d-flex align-items-center gap-2 mb-0 small" for="minmax-branch-assignment-mode">
+              Atribuire vanzari
+              <select
+                id="minmax-branch-assignment-mode"
+                class="form-select form-select-sm"
+                style="width:auto;"
+                title="Filiala folosita pentru atribuirea vanzarilor"
+                .value="${this.branchAssignmentMode}"
+                ?disabled="${Boolean(openRun) || this.runLaunch.starting || this.runLaunch.polling}"
+                @change="${this._setBranchAssignmentMode}"
+              >
+                <option value="CLIENT">Client (TRDBRANCH)</option>
+                <option value="DOC">Document (FINDOC)</option>
+                <option value="AGENT">Agent (PRSN)</option>
+              </select>
+            </label>
             <button
               class="btn btn-sm btn-primary"
               title="Porneste o sesiune MIN/MAX noua"

@@ -24,7 +24,7 @@ describe('minmax-run-panel — Phase 6 launch button', () => {
     element._store = {
       getState: () => ({ params: { writesEnabled } }),
       abandonRun: (runId) => calls.push(`abandonRun:${runId}`),
-      runEngine: () => calls.push('runEngine')
+      runEngine: (options) => calls.push(`runEngine:${options.branchAssignmentMode}`)
     };
     element.writesEnabled = writesEnabled;
     element.canEdit = true;
@@ -67,7 +67,24 @@ describe('minmax-run-panel — Phase 6 launch button', () => {
     try {
       await element.updateComplete;
       element.querySelector('button[title="Porneste o sesiune MIN/MAX noua"]').click();
-      assert.deepStrictEqual(calls, ['runEngine']);
+      assert.deepStrictEqual(calls, ['runEngine:CLIENT']);
+    } finally {
+      window.confirm = originalConfirm;
+    }
+  });
+
+  it('launches with the branch assignment mode selected for this run', async () => {
+    setAppToken(jwtWithRoles(['minmax.edit']));
+    const { calls, element } = mount();
+    const originalConfirm = window.confirm;
+    window.confirm = () => true;
+    try {
+      await element.updateComplete;
+      const select = element.querySelector('#minmax-branch-assignment-mode');
+      select.value = 'AGENT';
+      select.dispatchEvent(new Event('change'));
+      element.querySelector('button[title="Porneste o sesiune MIN/MAX noua"]').click();
+      assert.deepStrictEqual(calls, ['runEngine:AGENT']);
     } finally {
       window.confirm = originalConfirm;
     }

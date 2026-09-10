@@ -114,6 +114,7 @@ const XYZ_VALUES = new Set(['X', 'Y', 'Z'])
 const CLASA_VALUES = new Set(['AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ', 'NOU', 'OD'])
 const FLAG_TXT_VALUES = new Set(['OK', 'UP', 'DOWN', 'MAJOR_UP', 'SUPRASTOC', 'FARA_REFERINTA'])
 const STATUS_TREND_VALUES = new Set(['ACTIVE', 'STABLE', 'TREND_DOWN', 'DECLINE'])
+const BRANCH_ASSIGNMENT_MODES = new Set(['DOC', 'AGENT', 'CLIENT'])
 
 const RUN_HEADER_COLUMNS = [
   'RUNID', 'COMPANY', 'AZI', 'FAZA', 'STATUS', 'MTRL', 'NR_RANDURI', 'DURATA_SEC',
@@ -148,6 +149,14 @@ function requireString (value, label) {
     throw new Error(`${label} is required`)
   }
   return value.trim()
+}
+
+function normalizeBranchAssignmentMode (value) {
+  const mode = requireString(value, 'branchAssignmentMode').toUpperCase()
+  if (!BRANCH_ASSIGNMENT_MODES.has(mode)) {
+    throw new Error('branchAssignmentMode must be DOC, AGENT or CLIENT')
+  }
+  return mode
 }
 
 function requireToken (data) {
@@ -888,12 +897,14 @@ export class MinmaxEngineService {
       throw new Forbidden('Lansarea unei sesiuni MIN/MAX este dezactivata (MINMAX_ENGINE_WRITES_ENABLED).')
     }
     const token = requireToken(data)
+    const branchAssignmentMode = normalizeBranchAssignmentMode(data.branchAssignmentMode || 'CLIENT')
     const authPayload = params && params.authentication && params.authentication.payload
     const createdBy = authPayload && authPayload.sub !== undefined
       ? sqlInt(authPayload.sub, 'authenticated REFID')
       : null
 
     const startResponse = await this._callAjs('startRun', {
+      branchAssignmentMode,
       createdBy,
       mtrl: data.mtrl,
       scope: data.scope || 'FULL'
@@ -910,7 +921,7 @@ export class MinmaxEngineService {
       throw new Error('startRun did not return a runId.')
     }
 
-    this._audit('runEngine', params, { runId, stage: 'session-opened' })
+    this._audit('runEngine', params, { branchAssignmentMode, runId, stage: 'session-opened' })
 
     const phasesResponse = await this._callAjs('runPhases', { runId }, token)
     if (!phasesResponse || phasesResponse.success === false) {

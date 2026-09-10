@@ -20,6 +20,7 @@ BEGIN
     DECLARE @WinsorPct FLOAT;
     DECLARE @WinsorMinLinii INT;
     DECLARE @WinsorSubPrag VARCHAR(10);
+    DECLARE @ModAtribuire VARCHAR(10);
     DECLARE @SigmaMin DECIMAL(28, 8);
     DECLARE @HqDinAgregatCompanie BIT;
     DECLARE @Azi DATE;
@@ -42,6 +43,10 @@ BEGIN
     FROM CCCMINMAXPARAMS
     WHERE PARAMKEY = 'WINSOR_SUB_PRAG' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
 
+    SELECT @ModAtribuire = UPPER(LTRIM(RTRIM(PARAMVALUE)))
+    FROM CCCMINMAXPARAMS
+    WHERE PARAMKEY = 'MOD_ATRIBUIRE_FILIALA' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
+
     SELECT @SigmaMin = TRY_CONVERT(DECIMAL(28, 8), PARAMVALUE)
     FROM CCCMINMAXPARAMS
     WHERE PARAMKEY = 'SIGMA_MIN' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
@@ -54,6 +59,7 @@ BEGIN
     IF @WinsorPct IS NULL OR @WinsorPct <= 0 OR @WinsorPct > 1 SET @WinsorPct = 0.95;
     IF COALESCE(@WinsorMinLinii, 0) <= 0 SET @WinsorMinLinii = 8;
     IF @WinsorSubPrag NOT IN ('NONE', 'MEDIANA') OR @WinsorSubPrag IS NULL SET @WinsorSubPrag = 'MEDIANA';
+    IF @ModAtribuire NOT IN ('DOC', 'AGENT', 'CLIENT') OR @ModAtribuire IS NULL SET @ModAtribuire = 'CLIENT';
     IF COALESCE(@SigmaMin, 0) <= 0 SET @SigmaMin = 1.3;
     SET @HqDinAgregatCompanie = COALESCE(@HqDinAgregatCompanie, 1);
 
@@ -64,7 +70,7 @@ BEGIN
         COMPANY, FINDOC, MTRTRN, LINENUM, TRNDATE, AZI, TRDR, TRDRCODE,
         MTRL, MTRSUP, CODE, BRANCH, QTY, LTRNVAL
     INTO #SalesLines
-    FROM dbo.ufn_MinMaxSalesLines(@Company)
+    FROM dbo.ufn_MinMaxSalesLines(@Company, @ModAtribuire)
     WHERE @Mtrl IS NULL OR MTRL = @Mtrl;
 
     SELECT @Azi = MAX(AZI) FROM #SalesLines;

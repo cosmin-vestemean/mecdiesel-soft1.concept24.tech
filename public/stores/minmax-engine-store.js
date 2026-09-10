@@ -29,6 +29,7 @@ const MAX_PAGE_SIZE = 500;
 const DEFAULT_HISTORY_LIMIT = 20;
 const MAX_RUN_POLL_ATTEMPTS = 600;
 const MAX_RUN_POLL_ERRORS = 3;
+const BRANCH_ASSIGNMENT_MODES = new Set(['DOC', 'AGENT', 'CLIENT']);
 
 // VZ_26S is DECIMAL(28,8) and the service only supports >=/<= intervals, so
 // the contract's "VZ_26S > 0" default is approximated with its smallest unit.
@@ -564,13 +565,21 @@ export class MinmaxEngineStore {
     }
   }
 
-  async runEngine ({ poll = true } = {}) {
+  async runEngine ({ branchAssignmentMode = 'CLIENT', poll = true } = {}) {
     const seq = this._beginRequest('run');
     this._stopRunPolling();
     this.dispatch({ type: 'SET_RUN_LAUNCH', payload: { error: '', polling: false, runId: null, starting: true } });
     try {
+      const normalizedMode = String(branchAssignmentMode).trim().toUpperCase();
+      if (!BRANCH_ASSIGNMENT_MODES.has(normalizedMode)) {
+        throw new Error('Modul de atribuire trebuie sa fie DOC, AGENT sau CLIENT.');
+      }
       const service = await this._authenticatedService();
-      const response = await service.runEngine({ scope: 'FULL', token: this._token() });
+      const response = await service.runEngine({
+        branchAssignmentMode: normalizedMode,
+        scope: 'FULL',
+        token: this._token()
+      });
       if (!this._isCurrent('run', seq)) return false;
       const runId = Number(response.runId);
       this.dispatch({ type: 'SET_RUN_LAUNCH', payload: { polling: poll, runId, starting: false } });

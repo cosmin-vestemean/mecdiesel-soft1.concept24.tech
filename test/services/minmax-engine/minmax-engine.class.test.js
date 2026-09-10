@@ -920,7 +920,7 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
 
         const service = makeService({ writesEnabled: true })
         const result = await service.runEngine(
-          { createdBy: 999, token: 'tok' },
+          { branchAssignmentMode: 'agent', createdBy: 999, token: 'tok' },
           { authentication: { payload: { sub: '104' } } }
         )
 
@@ -929,8 +929,17 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
         // reach the caller instead of being logged silently.
         assert.deepStrictEqual(result, { runId: 6 })
         assert.strictEqual(startBody.authKey, 'unit-test-secret')
+        assert.strictEqual(JSON.parse(startBody.JSONDATA).branchAssignmentMode, 'AGENT')
         assert.strictEqual(JSON.parse(startBody.JSONDATA).createdBy, 104, 'CREATEDBY must come from the signed JWT, not request data')
         assert.strictEqual(JSON.parse(phasesBody.JSONDATA).runId, 6)
+      })
+
+      it('rejects an unknown branch assignment mode before calling AJS', async () => {
+        const service = makeService({ writesEnabled: true })
+        await assert.rejects(
+          service.runEngine({ branchAssignmentMode: 'OTHER', token: 'tok' }),
+          /branchAssignmentMode must be DOC, AGENT or CLIENT/
+        )
       })
 
       it('translates 50039 (session already OPEN) into a stable code instead of a generic error', async () => {

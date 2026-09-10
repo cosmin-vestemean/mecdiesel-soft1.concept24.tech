@@ -286,6 +286,7 @@ Continuă alocarea din [minmax-engine-model.md](../.copilot/wiki/minmax-engine-m
 | `50049` | AJS `runPhases` | `sp_start_job` a eșuat; sesiunea rămâne `OPEN` și poate fi abandonată |
 | `50050` | AJS `startRun` | starea/configurația/permisiunile runnerului nu au putut fi verificate |
 | `50051` | `EnsureAgentJob` | setup refuzat deoarece jobul rulează |
+| `50052` | `StartRun` | modul de atribuire nu este `DOC`, `AGENT` sau `CLIENT` |
 
 Codurile 50045-50050 nu sunt neapărat `THROW`-uri T-SQL: cele din stratul AJS (`startRun`,
 `runPhases`) sunt returnate direct ca `errorCode` numeric în JSON, fără să treacă prin recuperarea de
