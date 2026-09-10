@@ -97,3 +97,44 @@ describe('MIN/MAX SQL snapshot contract', () => {
     assert.match(validator, /lt\.RUNID = d\.RUNID AND lt\.BRANCH = d\.BRANCH/)
   })
 })
+
+describe('MIN/MAX P1 window netting contract', () => {
+  it('nets a client across the whole window while preserving weekly demand buckets', () => {
+    const lines = [
+      { weekIndex: 0, quantity: 7 },
+      { weekIndex: 0, quantity: 3 },
+      { weekIndex: 1, quantity: -5 },
+      { weekIndex: 1, quantity: -3 }
+    ]
+    const netWindow = (weekCount) => Math.max(
+      0,
+      lines
+        .filter(({ weekIndex }) => weekIndex < weekCount)
+        .reduce((total, { quantity }) => total + quantity, 0)
+    )
+    const weeklyTotals = new Map()
+    for (const { weekIndex, quantity } of lines) {
+      weeklyTotals.set(weekIndex, (weeklyTotals.get(weekIndex) || 0) + quantity)
+    }
+    const weeklySeries = [...weeklyTotals]
+      .map(([weekIndex, quantity]) => ({ weekIndex, quantity: Math.max(0, quantity) }))
+      .sort((left, right) => left.weekIndex - right.weekIndex)
+
+    assert.strictEqual(netWindow(4), 2)
+    assert.deepStrictEqual(weeklySeries, [
+      { weekIndex: 0, quantity: 10 },
+      { weekIndex: 1, quantity: 0 }
+    ])
+
+    const classify = sqlSource('01_classify.sql')
+    assert.match(classify, /INTO #ClientWeekly[\s\S]*?GROUP BY BRANCH, TRDR, MTRL, WEEK_INDEX;/)
+    assert.match(classify, /SUM\(WINSORIZED_QTY\) AS RAW_NET_QTY[\s\S]*?INTO #ClientWeekly/)
+    assert.match(classify, /WHEN SUM\(CASE WHEN WEEK_INDEX < 4 THEN RAW_NET_QTY ELSE 0 END\) < 0 THEN 0[\s\S]*?INTO #ClientWindowTotals[\s\S]*?FROM #ClientWeekly[\s\S]*?GROUP BY BRANCH, TRDR, MTRL;/)
+    assert.match(classify, /INTO #BranchWindowTotals[\s\S]*?GROUP BY BRANCH, MTRL;/)
+    assert.match(classify, /COALESCE\(windowTotals\.VZ_4S, 0\)/)
+    assert.match(classify, /COALESCE\(weeklyStats\.VAL_52S, 0\)/)
+    assert.match(classify, /POWER\(COALESCE\(CONVERT\(FLOAT, weeklyStats\.WEEK_QTY_SUM\), 0\.0\), 2\)/)
+    assert.match(classify, /MAX_LUNA_QTY > @ForceZLunaDominanta \* ac\.WEEK_QTY_SUM/)
+    assert.match(classify, /FROM #BranchWindowTotals totals[\s\S]*?sourceBranch\.ESTE_HQ = 0/)
+  })
+})

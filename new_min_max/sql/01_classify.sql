@@ -316,10 +316,12 @@ BEGIN
     GROUP BY ws.MTRL, ws.POSITIVE_LINE_COUNT, ws.P95_QTY, ws.MEDIAN_QTY;
 
     -- ---------------------------------------------------------------
-    -- 5. Netting per (Branch, TRDR, Mtrl, Week)
+    -- 5. Seria saptamanala per (Branch, TRDR, Mtrl, Week)
+    --    Ramane separata pentru sigma, frecventa, recenta si XYZ.
     -- ---------------------------------------------------------------
     SELECT
         BRANCH, TRDR, MTRL, MAX(MTRSUP) AS MTRSUP, MAX(CODE) AS CODE, WEEK_INDEX,
+        SUM(WINSORIZED_QTY) AS RAW_NET_QTY,
         CONVERT(DECIMAL(28, 8),
             CASE WHEN SUM(WINSORIZED_QTY) < 0 THEN 0 ELSE SUM(WINSORIZED_QTY) END
         ) AS NET_QTY,
@@ -328,7 +330,7 @@ BEGIN
             THEN MAX(CASE WHEN WINSORIZED_QTY > 0 THEN TRNDATE END)
             ELSE NULL
         END AS LAST_POSITIVE_SALE
-    INTO #NettedLines
+    INTO #ClientWeekly
     FROM #WinsorizedLines
     GROUP BY BRANCH, TRDR, MTRL, WEEK_INDEX;
 
@@ -341,7 +343,7 @@ BEGIN
         CONVERT(DECIMAL(28, 8), SUM(NET_VALUE)) AS SALES_VALUE,
         MAX(LAST_POSITIVE_SALE) AS LAST_POSITIVE_SALE
     INTO #BranchWeekly
-    FROM #NettedLines
+    FROM #ClientWeekly
     GROUP BY BRANCH, MTRL, WEEK_INDEX;
 
     IF @HqDinAgregatCompanie = 1
@@ -366,7 +368,66 @@ BEGIN
         ON #BranchWeekly (BRANCH, MTRL, WEEK_INDEX);
 
     -- ---------------------------------------------------------------
-    -- 7. MIN_DOC per articol
+    -- 7. P1: netting independent pe fiecare fereastra, per client.
+    --    HQ ramane suma filialelor netate, pana la decizia separata P2.
+    -- ---------------------------------------------------------------
+    SELECT
+        BRANCH, TRDR, MTRL, MAX(MTRSUP) AS MTRSUP, MAX(CODE) AS CODE,
+        CONVERT(DECIMAL(28, 8), CASE
+            WHEN SUM(CASE WHEN WEEK_INDEX < 4 THEN RAW_NET_QTY ELSE 0 END) < 0 THEN 0
+            ELSE SUM(CASE WHEN WEEK_INDEX < 4 THEN RAW_NET_QTY ELSE 0 END)
+        END) AS VZ_4S,
+        CONVERT(DECIMAL(28, 8), CASE
+            WHEN SUM(CASE WHEN WEEK_INDEX < 13 THEN RAW_NET_QTY ELSE 0 END) < 0 THEN 0
+            ELSE SUM(CASE WHEN WEEK_INDEX < 13 THEN RAW_NET_QTY ELSE 0 END)
+        END) AS VZ_13S,
+        CONVERT(DECIMAL(28, 8), CASE
+            WHEN SUM(CASE WHEN WEEK_INDEX < 26 THEN RAW_NET_QTY ELSE 0 END) < 0 THEN 0
+            ELSE SUM(CASE WHEN WEEK_INDEX < 26 THEN RAW_NET_QTY ELSE 0 END)
+        END) AS VZ_26S,
+        CONVERT(DECIMAL(28, 8), CASE
+            WHEN SUM(RAW_NET_QTY) < 0 THEN 0
+            ELSE SUM(RAW_NET_QTY)
+        END) AS VZ_52S
+    INTO #ClientWindowTotals
+    FROM #ClientWeekly
+    WHERE WEEK_INDEX >= 0 AND WEEK_INDEX < @NrSaptamani
+    GROUP BY BRANCH, TRDR, MTRL;
+
+    SELECT
+        BRANCH, MTRL, MAX(MTRSUP) AS MTRSUP, MAX(CODE) AS CODE,
+        CONVERT(DECIMAL(28, 8), SUM(VZ_4S)) AS VZ_4S,
+        CONVERT(DECIMAL(28, 8), SUM(VZ_13S)) AS VZ_13S,
+        CONVERT(DECIMAL(28, 8), SUM(VZ_26S)) AS VZ_26S,
+        CONVERT(DECIMAL(28, 8), SUM(VZ_52S)) AS VZ_52S
+    INTO #BranchWindowTotals
+    FROM #ClientWindowTotals
+    GROUP BY BRANCH, MTRL;
+
+    IF @HqDinAgregatCompanie = 1
+    BEGIN
+        INSERT INTO #BranchWindowTotals (
+            BRANCH, MTRL, MTRSUP, CODE, VZ_4S, VZ_13S, VZ_26S, VZ_52S
+        )
+        SELECT
+            hq.BRANCH, totals.MTRL, MAX(totals.MTRSUP), MAX(totals.CODE),
+            CONVERT(DECIMAL(28, 8), SUM(totals.VZ_4S)),
+            CONVERT(DECIMAL(28, 8), SUM(totals.VZ_13S)),
+            CONVERT(DECIMAL(28, 8), SUM(totals.VZ_26S)),
+            CONVERT(DECIMAL(28, 8), SUM(totals.VZ_52S))
+        FROM #BranchWindowTotals totals
+        INNER JOIN #ActiveBranches sourceBranch
+            ON sourceBranch.BRANCH = totals.BRANCH AND sourceBranch.ESTE_HQ = 0
+        CROSS JOIN #ActiveBranches hq
+        WHERE hq.ESTE_HQ = 1
+        GROUP BY hq.BRANCH, totals.MTRL;
+    END;
+
+    CREATE CLUSTERED INDEX IX_BranchWindowTotals_BranchMtrl
+        ON #BranchWindowTotals (BRANCH, MTRL);
+
+    -- ---------------------------------------------------------------
+    -- 8. MIN_DOC per articol
     -- ---------------------------------------------------------------
     SELECT
         MTRL, MAX(MTRSUP) AS MTRSUP, MAX(CODE) AS CODE,
@@ -376,14 +437,11 @@ BEGIN
     GROUP BY MTRL;
 
     -- ---------------------------------------------------------------
-    -- 8. Agregate saptamanale rare; saptamanile absente sunt zerouri implicite
+    -- 9. Agregate saptamanale rare; saptamanile absente sunt zerouri implicite
     -- ---------------------------------------------------------------
     SELECT
         BRANCH, MTRL,
-        CONVERT(DECIMAL(28, 8), SUM(CASE WHEN WEEK_INDEX < 4 THEN QTY ELSE 0 END)) AS VZ_4S,
-        CONVERT(DECIMAL(28, 8), SUM(CASE WHEN WEEK_INDEX < 13 THEN QTY ELSE 0 END)) AS VZ_13S,
-        CONVERT(DECIMAL(28, 8), SUM(CASE WHEN WEEK_INDEX < 26 THEN QTY ELSE 0 END)) AS VZ_26S,
-        CONVERT(DECIMAL(28, 8), SUM(QTY)) AS VZ_52S,
+        CONVERT(DECIMAL(28, 8), SUM(QTY)) AS WEEK_QTY_SUM,
         CONVERT(DECIMAL(28, 8), SUM(SALES_VALUE)) AS VAL_52S,
         SUM(CASE WHEN QTY > 0 THEN 1 ELSE 0 END) AS SAPT_VZ,
         SUM(CASE WHEN WEEK_INDEX < 8 AND QTY > 0 THEN 1 ELSE 0 END) AS SAPT_8S,
@@ -401,41 +459,44 @@ BEGIN
         ON #WeeklyStats (BRANCH, MTRL);
 
     -- ---------------------------------------------------------------
-    -- 9. Un singur rand per articol x filiala, cu SIGMA_WK din momente
+    -- 10. Un singur rand per articol x filiala, cu SIGMA_WK din momente
     -- ---------------------------------------------------------------
     SELECT
         @Company AS COMPANY, @Azi AS AZI,
         b.BRANCH, b.MARIME, b.ESTE_HQ, b.ESTE_PODEA,
         i.MTRL, i.MTRSUP, i.CODE,
-        CONVERT(DECIMAL(28, 8), COALESCE(ws.VZ_4S, 0)) AS VZ_4S,
-        CONVERT(DECIMAL(28, 8), COALESCE(ws.VZ_13S, 0)) AS VZ_13S,
-        CONVERT(DECIMAL(28, 8), COALESCE(ws.VZ_26S, 0)) AS VZ_26S,
-        CONVERT(DECIMAL(28, 8), COALESCE(ws.VZ_52S, 0)) AS VZ_52S,
-        CONVERT(DECIMAL(28, 8), COALESCE(ws.VAL_52S, 0)) AS VAL_52S,
-        COALESCE(ws.SAPT_VZ, 0) AS SAPT_VZ,
-        COALESCE(ws.SAPT_8S, 0) AS SAPT_8S,
-        COALESCE(ws.SAPT_FARA, @NrSaptamani) AS SAPT_FARA,
-        ws.ULT_VANZ,
+        CONVERT(DECIMAL(28, 8), COALESCE(windowTotals.VZ_4S, 0)) AS VZ_4S,
+        CONVERT(DECIMAL(28, 8), COALESCE(windowTotals.VZ_13S, 0)) AS VZ_13S,
+        CONVERT(DECIMAL(28, 8), COALESCE(windowTotals.VZ_26S, 0)) AS VZ_26S,
+        CONVERT(DECIMAL(28, 8), COALESCE(windowTotals.VZ_52S, 0)) AS VZ_52S,
+        CONVERT(DECIMAL(28, 8), COALESCE(weeklyStats.WEEK_QTY_SUM, 0)) AS WEEK_QTY_SUM,
+        CONVERT(DECIMAL(28, 8), COALESCE(weeklyStats.VAL_52S, 0)) AS VAL_52S,
+        COALESCE(weeklyStats.SAPT_VZ, 0) AS SAPT_VZ,
+        COALESCE(weeklyStats.SAPT_8S, 0) AS SAPT_8S,
+        COALESCE(weeklyStats.SAPT_FARA, @NrSaptamani) AS SAPT_FARA,
+        weeklyStats.ULT_VANZ,
         i.MIN_DOC,
         CONVERT(DECIMAL(28, 8),
             CASE
-                WHEN COALESCE(ws.SAPT_VZ, 0) = 0
-                    OR (ws.SAPT_VZ = @NrSaptamani AND ws.MIN_WEEK_QTY = ws.MAX_WEEK_QTY)
+                WHEN COALESCE(weeklyStats.SAPT_VZ, 0) = 0
+                    OR (weeklyStats.SAPT_VZ = @NrSaptamani AND weeklyStats.MIN_WEEK_QTY = weeklyStats.MAX_WEEK_QTY)
                     OR variance.SAMPLE_VARIANCE <= 0 THEN @SigmaMin
                 ELSE SQRT(variance.SAMPLE_VARIANCE)
             END
         ) AS SIGMA_WK,
-        CONVERT(DECIMAL(38, 8), COALESCE(ws.SIGMA_WK_SUMSQ, 0)) AS SIGMA_WK_SUMSQ
+        CONVERT(DECIMAL(38, 8), COALESCE(weeklyStats.SIGMA_WK_SUMSQ, 0)) AS SIGMA_WK_SUMSQ
     INTO #BaseAggregates
     FROM #Items i
     CROSS JOIN #ActiveBranches b
-    LEFT JOIN #WeeklyStats ws
-        ON ws.BRANCH = b.BRANCH AND ws.MTRL = i.MTRL
+    LEFT JOIN #BranchWindowTotals windowTotals
+        ON windowTotals.BRANCH = b.BRANCH AND windowTotals.MTRL = i.MTRL
+    LEFT JOIN #WeeklyStats weeklyStats
+        ON weeklyStats.BRANCH = b.BRANCH AND weeklyStats.MTRL = i.MTRL
     CROSS APPLY (
         SELECT CASE
             WHEN @NrSaptamani > 1 THEN
-                (COALESCE(CONVERT(FLOAT, ws.SIGMA_WK_SUMSQ), 0.0)
-                    - POWER(COALESCE(CONVERT(FLOAT, ws.VZ_52S), 0.0), 2)
+                (COALESCE(CONVERT(FLOAT, weeklyStats.SIGMA_WK_SUMSQ), 0.0)
+                    - POWER(COALESCE(CONVERT(FLOAT, weeklyStats.WEEK_QTY_SUM), 0.0), 2)
                         / CONVERT(FLOAT, @NrSaptamani))
                     / CONVERT(FLOAT, @NrSaptamani - 1)
             ELSE 0.0
@@ -446,7 +507,7 @@ BEGIN
         ON #BaseAggregates (BRANCH, MTRL);
 
     -- ---------------------------------------------------------------
-    -- 10. Bucket-uri lunare rare si statistici pe exact 12 luni (4-4-5)
+    -- 11. Bucket-uri lunare rare si statistici pe exact 12 luni (4-4-5)
     -- ---------------------------------------------------------------
     SELECT
         BRANCH, MTRL,
@@ -527,7 +588,7 @@ BEGIN
         ON #MonthlyStats (BRANCH, MTRL);
 
     -- ---------------------------------------------------------------
-    -- 11. Informații suplimentare articol (Grupă, Cod, Denumire)
+    -- 12. Informații suplimentare articol (Grupă, Cod, Denumire)
     -- ---------------------------------------------------------------
     SELECT
         m.MTRL,
@@ -544,14 +605,14 @@ BEGIN
         ON #ItemDetails (MTRL);
 
     -- ---------------------------------------------------------------
-    -- 12. Clasificare completă (LIFECYCLE, ABC per grupă, XYZ, CLASA, COV_TGT, SL, AVG, ad)
+    -- 13. Clasificare completă (LIFECYCLE, ABC per grupă, XYZ, CLASA, COV_TGT, SL, AVG, ad)
     -- ---------------------------------------------------------------
     ;WITH Step1_Lifecycle AS (
         SELECT
             ba.COMPANY, ba.AZI, ba.BRANCH, ba.MARIME, ba.ESTE_HQ, ba.ESTE_PODEA,
             ba.MTRL, ba.MTRSUP, ba.CODE,
             id.MTRL_NAME, id.MTRGROUP, id.MTRGROUP_CODE, id.MTRGROUP_NAME,
-            ba.VZ_4S, ba.VZ_13S, ba.VZ_26S, ba.VZ_52S, ba.VAL_52S,
+            ba.VZ_4S, ba.VZ_13S, ba.VZ_26S, ba.VZ_52S, ba.WEEK_QTY_SUM, ba.VAL_52S,
             ba.SAPT_VZ, ba.SAPT_8S, ba.SAPT_FARA, ba.ULT_VANZ, ba.MIN_DOC,
             ba.SIGMA_WK, ba.SIGMA_WK_SUMSQ,
             COALESCE(ms.MEAN_MTH, 0) AS MEAN_MTH,
@@ -635,7 +696,7 @@ BEGIN
             END AS ABC,
             CASE
                 WHEN ac.LIFECYCLE IN ('NOU', 'OD')
-                    OR ac.MAX_LUNA_QTY > @ForceZLunaDominanta * ac.VZ_52S
+                    OR ac.MAX_LUNA_QTY > @ForceZLunaDominanta * ac.WEEK_QTY_SUM
                     OR ac.LUNI_VZ < @ForceZMinLuni
                     OR ac.VZ_52S <= 0
                 THEN 1
@@ -714,7 +775,7 @@ BEGIN
         ON freqBranch.BRANCH = xc.BRANCH AND freqBranch.PARAMKEY = 'FRECVENTA_ZILE';
 
     -- ---------------------------------------------------------------
-    -- 13. Persistenta rularii in CCCMINMAXRUN + CCCMINMAXDET
+    -- 14. Persistenta rularii in CCCMINMAXRUN + CCCMINMAXDET
     --     Sesiunea si parametrii au fost deja validati la pasul 0/1;
     --     configuratia inghetata traieste in CCCMINMAXRUNPARAM (StartRun).
     -- ---------------------------------------------------------------
