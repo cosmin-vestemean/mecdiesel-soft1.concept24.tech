@@ -214,6 +214,7 @@ export class MinmaxResultsTable extends LitElement {
 
   _goToPage (page) {
     if (!this._store || page < 1) return;
+    window.scrollTo(0, 0);
     this._store.setPage(page);
     this._store.loadResults({ withTotal: false });
   }

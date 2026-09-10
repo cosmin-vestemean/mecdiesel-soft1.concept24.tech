@@ -31,4 +31,24 @@ describe('minmax-group-abc — group display contract', () => {
     assert.strictEqual(element.rows[0].MTRGROUP, 123);
     assert.strictEqual(element.rows[0].MTRGROUP_CODE, 'G123');
   });
+
+  it('scrolls to the top when changing page', () => {
+    const element = document.createElement('minmax-group-abc');
+    document.body.appendChild(element);
+    const calls = [];
+    window.scrollTo = (...args) => calls.push(args);
+    const storeCalls = [];
+    element._store = {
+      setGroupAbcPage: (page) => storeCalls.push(['setGroupAbcPage', page]),
+      loadGroupAbc: (filters, options) => storeCalls.push(['loadGroupAbc', filters, options])
+    };
+
+    element._goToPage(2);
+
+    assert.deepStrictEqual(calls, [[0, 0]]);
+    assert.deepStrictEqual(storeCalls, [
+      ['setGroupAbcPage', 2],
+      ['loadGroupAbc', element._filters, { withTotal: false }]
+    ]);
+  });
 });

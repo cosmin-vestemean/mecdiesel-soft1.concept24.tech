@@ -135,6 +135,7 @@ export class MinmaxGroupAbc extends LitElement {
 
   _goToPage (page) {
     if (!this._store || page < 1) return;
+    window.scrollTo(0, 0);
     this._store.setGroupAbcPage(page);
     this._store.loadGroupAbc(this._filters, { withTotal: false });
   }

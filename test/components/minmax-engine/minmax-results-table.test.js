@@ -68,6 +68,25 @@ describe('minmax-results-table — page-size select (§12.4)', () => {
     }
   });
 
+  it('scrolls to the top when changing page', () => {
+    const el = mount();
+    const calls = [];
+    window.scrollTo = (...args) => calls.push(args);
+    const storeCalls = [];
+    el._store = {
+      setPage: (page) => storeCalls.push(['setPage', page]),
+      loadResults: (options) => storeCalls.push(['loadResults', options])
+    };
+
+    el._goToPage(2);
+
+    assert.deepStrictEqual(calls, [[0, 0]]);
+    assert.deepStrictEqual(storeCalls, [
+      ['setPage', 2],
+      ['loadResults', { withTotal: false }]
+    ]);
+  });
+
   it('renders the group name while retaining the group identifiers in the row data', async () => {
     const el = mount();
     el.rows = [{ MTRGROUP: 123, MTRGROUP_CODE: 'G123', MTRGROUP_NAME: 'Piese motor' }];
