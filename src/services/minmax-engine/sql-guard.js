@@ -14,7 +14,7 @@ const ALWAYS_BLOCKED_VERBS = new Set([
 
 // The only tables this service is allowed to mutate (FAZA5_CONTRACT.md §7).
 export const WRITABLE_TABLES = new Set([
-  'CCCMINMAXPARAMS', 'CCCMINMAXCOV', 'CCCMINMAXBRANCH', 'CCCMINMAXTEMPLATE'
+  'CCCMINMAXPARAMS', 'CCCMINMAXCOV', 'CCCMINMAXBRANCH', 'CCCMINMAXPARAMOVERRIDE', 'CCCMINMAXTEMPLATE'
 ])
 
 function stripCommentsAndLiterals (sql) {

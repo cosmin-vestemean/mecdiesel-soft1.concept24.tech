@@ -21,6 +21,12 @@ describe('minmax-params-panel — branch MARIME select (§12.4)', () => {
     const el = document.createElement('minmax-params-panel');
     document.body.appendChild(el);
     el.branches = [{ BRANCH: 2200, ESTE_HQ: 0, ESTE_PODEA: 0, INCLUS: 1, MARIME: 'MEDIU' }];
+    el.overrides = [{ BRANCH: 2200, PARAMKEY: 'LT_ZILE', PARAMVALUE: '21', PREFIX: '' }];
+    el.params = [
+      { PARAMKEY: 'LT_ZILE', PARAMVALUE: '30', SCOPE: 'GLOBAL', SCOPEKEY: '' },
+      { PARAMKEY: 'FRECVENTA_ZILE', PARAMVALUE: '14', SCOPE: 'GLOBAL', SCOPEKEY: '' }
+    ];
+    el.writesEnabled = true;
     return el;
   }
 
@@ -73,5 +79,49 @@ describe('minmax-params-panel — branch MARIME select (§12.4)', () => {
     assert.strictEqual(tabs[1].getAttribute('aria-selected'), 'true');
     assert.ok(el.querySelector('#minmax-cov-tab:not([hidden])'));
     assert.ok(el.querySelector('#minmax-params-tab[hidden]'));
+  });
+
+  it('saves a branch override and clears an existing one to restore global fallback', async () => {
+    const el = mount();
+    let payload;
+    el._store = { saveParams: (value) => { payload = value; } };
+    el._activeTab = 'branches';
+    await el.updateComplete;
+
+    const lt = el.querySelector('[aria-label="LT_ZILE filiala 2200"]');
+    const frecventa = el.querySelector('[aria-label="FRECVENTA_ZILE filiala 2200"]');
+    assert.strictEqual(lt.value, '21');
+    assert.strictEqual(frecventa.value, '');
+    assert.strictEqual(frecventa.placeholder, 'Global: 14');
+
+    lt.value = '';
+    lt.dispatchEvent(new Event('change', { bubbles: true }));
+    frecventa.value = '10';
+    frecventa.dispatchEvent(new Event('change', { bubbles: true }));
+    await el.updateComplete;
+    el.querySelector('.btn-primary').click();
+
+    assert.deepStrictEqual(payload.overrideUpdates, [
+      { branch: 2200, paramKey: 'LT_ZILE', paramValue: '' },
+      { branch: 2200, paramKey: 'FRECVENTA_ZILE', paramValue: '10' }
+    ]);
+  });
+
+  it('removes the draft when an override is changed back to its original value', async () => {
+    const el = mount();
+    el._activeTab = 'branches';
+    await el.updateComplete;
+
+    const lt = el.querySelector('[aria-label="LT_ZILE filiala 2200"]');
+    lt.value = '22';
+    lt.dispatchEvent(new Event('change', { bubbles: true }));
+    await el.updateComplete;
+    assert.strictEqual(el._dirtyCount, 1);
+
+    const rerendered = el.querySelector('[aria-label="LT_ZILE filiala 2200"]');
+    rerendered.value = '21';
+    rerendered.dispatchEvent(new Event('change', { bubbles: true }));
+    await el.updateComplete;
+    assert.strictEqual(el._dirtyCount, 0);
   });
 });

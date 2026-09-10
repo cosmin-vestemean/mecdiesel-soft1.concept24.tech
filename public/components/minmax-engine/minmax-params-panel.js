@@ -36,12 +36,14 @@ export class MinmaxParamsPanel extends LitElement {
       branches: { type: Array },
       cov: { type: Array },
       loading: { type: Boolean },
+      overrides: { type: Array },
       params: { type: Array },
       saveError: { type: String },
       saving: { type: Boolean },
       writesEnabled: { type: Boolean },
       _branchEdits: { state: true, type: Object },
       _covEdits: { state: true, type: Object },
+      _overrideEdits: { state: true, type: Object },
       _paramEdits: { state: true, type: Object },
       _activeTab: { state: true, type: String }
     };
@@ -53,12 +55,14 @@ export class MinmaxParamsPanel extends LitElement {
     this.branches = [];
     this.cov = [];
     this.loading = false;
+    this.overrides = [];
     this.params = [];
     this.saveError = '';
     this.saving = false;
     this.writesEnabled = false;
     this._branchEdits = {};
     this._covEdits = {};
+    this._overrideEdits = {};
     this._paramEdits = {};
     this._activeTab = 'params';
 
@@ -98,6 +102,7 @@ export class MinmaxParamsPanel extends LitElement {
     this.branches = state.params.branches;
     this.cov = state.params.cov;
     this.loading = state.params.loading;
+    this.overrides = state.params.overrides;
     this.params = state.params.params;
     this.saveError = state.params.saveError;
     this.writesEnabled = state.params.writesEnabled;
@@ -108,12 +113,14 @@ export class MinmaxParamsPanel extends LitElement {
       this._paramEdits = {};
       this._covEdits = {};
       this._branchEdits = {};
+      this._overrideEdits = {};
     }
     this.saving = state.params.saving;
   }
 
   get _dirtyCount () {
-    return Object.keys(this._paramEdits).length + Object.keys(this._covEdits).length + Object.keys(this._branchEdits).length;
+    return Object.keys(this._paramEdits).length + Object.keys(this._covEdits).length +
+      Object.keys(this._branchEdits).length + Object.keys(this._overrideEdits).length;
   }
 
   // --- Draft edits (local until Salveaza) ---
@@ -140,10 +147,37 @@ export class MinmaxParamsPanel extends LitElement {
     this._branchEdits = { ...this._branchEdits, [key]: { ...this._branchDraft(row), [field]: value } };
   }
 
+  _overrideKey (branch, paramKey) {
+    return `${branch}|${paramKey}`;
+  }
+
+  _overrideValue (branch, paramKey) {
+    const key = this._overrideKey(branch, paramKey);
+    if (Object.prototype.hasOwnProperty.call(this._overrideEdits, key)) return this._overrideEdits[key];
+    const row = this.overrides.find((item) => Number(item.BRANCH) === Number(branch) && item.PARAMKEY === paramKey);
+    return row ? String(row.PARAMVALUE) : '';
+  }
+
+  _setOverrideValue (branch, paramKey, value) {
+    const key = this._overrideKey(branch, paramKey);
+    const row = this.overrides.find((item) => Number(item.BRANCH) === Number(branch) && item.PARAMKEY === paramKey);
+    const original = row ? String(row.PARAMVALUE) : '';
+    const next = { ...this._overrideEdits };
+    if (String(value).trim() === original) delete next[key];
+    else next[key] = value;
+    this._overrideEdits = next;
+  }
+
+  _globalParamValue (paramKey) {
+    const row = this.params.find((item) => item.PARAMKEY === paramKey && item.SCOPE === 'GLOBAL');
+    return row ? String(row.PARAMVALUE) : '';
+  }
+
   _cancel () {
     this._paramEdits = {};
     this._covEdits = {};
     this._branchEdits = {};
+    this._overrideEdits = {};
   }
 
   _save () {
@@ -182,9 +216,18 @@ export class MinmaxParamsPanel extends LitElement {
       }
     }
 
-    if (!paramsUpdates.length && !covUpdates.length && !branchUpdates.length) return;
+    const overrideUpdates = [];
+    for (const [key, paramValue] of Object.entries(this._overrideEdits)) {
+      const [branch, paramKey] = key.split('|');
+      const original = this.overrides.find((row) => Number(row.BRANCH) === Number(branch) && row.PARAMKEY === paramKey);
+      if (String(paramValue).trim() !== (original ? String(original.PARAMVALUE) : '')) {
+        overrideUpdates.push({ branch: Number(branch), paramKey, paramValue: String(paramValue).trim() });
+      }
+    }
 
-    this._store.saveParams({ branchUpdates, covUpdates, paramsUpdates });
+    if (!paramsUpdates.length && !covUpdates.length && !branchUpdates.length && !overrideUpdates.length) return;
+
+    this._store.saveParams({ branchUpdates, covUpdates, overrideUpdates, paramsUpdates });
   }
 
   _selectTab (tab) {
@@ -279,11 +322,13 @@ export class MinmaxParamsPanel extends LitElement {
               <th>Inclus</th>
               <th>HQ</th>
               <th>Podea</th>
+              <th>LT zile</th>
+              <th>Frecventa zile</th>
             </tr>
           </thead>
           <tbody>
             ${this.branches.length === 0
-              ? html`<tr><td colspan="5" class="text-center text-muted py-2">Nicio filiala.</td></tr>`
+              ? html`<tr><td colspan="7" class="text-center text-muted py-2">Nicio filiala.</td></tr>`
               : ''}
             ${this.branches.map((row) => {
               const draft = this._branchDraft(row);
@@ -306,6 +351,15 @@ export class MinmaxParamsPanel extends LitElement {
                     <input type="checkbox" class="form-check-input" .checked="${draft.estePodea}"
                            @change="${(e) => this._setBranchField(row, 'estePodea', e.target.checked)}">
                   </td>
+                  ${['LT_ZILE', 'FRECVENTA_ZILE'].map((paramKey) => html`
+                    <td>
+                      <input type="number" class="form-control form-control-sm" min="1" step="1" style="width: 96px;"
+                             aria-label="${paramKey} filiala ${row.BRANCH}"
+                             .value="${this._overrideValue(row.BRANCH, paramKey)}"
+                             placeholder="Global: ${this._globalParamValue(paramKey)}"
+                             @change="${(e) => this._setOverrideValue(row.BRANCH, paramKey, e.target.value)}">
+                    </td>
+                  `)}
                 </tr>
               `;
             })}

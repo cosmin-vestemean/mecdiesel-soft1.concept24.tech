@@ -27,6 +27,14 @@
   imediat în `CCCMINMAXRUNPARAM`; `Classify` și `ClassifyGroup` citesc snapshot-ul sesiunii și îl transmit
   explicit către `ufn_MinMaxSalesLines`, deci schimbarea ulterioară a parametrului global nu poate
   altera rularea deschisă.
+- **P6 branch-only este implementat și validat live pe RUNID 9.** `LT_ZILE` și `FRECVENTA_ZILE` acceptă override per
+  filială în `CCCMINMAXPARAMOVERRIDE`; `StartRun` le copiază în snapshot, iar `Classify` rezolvă
+  `BRANCH > GLOBAL` și persistă valorile efective în `CCCMINMAXDET`. Preview-ul (`@Persist=0`)
+  citește configurația live, nu snapshot-ul unui RUNID. Valoarea goală din UI șterge override-ul și
+  reactivează fallback-ul global. Prefixele rămân dezactivate până la confirmarea listei N5;
+  schema rezervă deja `BRANCH=0` pentru viitorul scope prefix-only. Testul live a folosit HQ
+  `21/7`, Cluj `28/10`, București `35/12` și fallback Constanța `30/14`; T9 a raportat zero abateri
+  pe 713.104 rânduri. Configurația de test a fost ștearsă după snapshot, care rămâne dovada rulării.
 - **Estimarea de ~2 minute pentru o sesiune nu este o limită operațională garantată.** La prima
   lansare completă din UI, `RUNID=6` a rămas `OPEN/RUNNING` deoarece `runPhases` a primit de la S1
   `Ole Error 80040E31: Query timeout expired`. Sesiunea a fost închisă explicit prin `AbandonRun`, iar

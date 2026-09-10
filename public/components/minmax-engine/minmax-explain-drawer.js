@@ -213,12 +213,14 @@ export class MinmaxExplainDrawer extends LitElement {
   // values substituted, above the raw parameter tables. Formulas transcribed
   // from new_min_max/sql/03_compute.sql Step1-Step6 + §7a-7c (read-only
   // display; the authoritative calculation stays in the stored procedure).
-  // Constants (InflatieHq, HqCapFactor, ...) come from the CCCMINMAXRUNPARAM
-  // snapshot (BRANCH=0/PREFIX=''), with the same fallbacks as 03_compute.sql,
-  // since they aren't persisted per-row on CCCMINMAXDET.
+  // Constants (InflatieHq, HqCapFactor, ...) come only from global
+  // CCCMINMAXRUNPARAM rows. Branch LT/FRECVENTA rows are shown in the
+  // snapshot table, while their effective values come from CCCMINMAXDET.
   _paramsMap (runParams) {
     const rows = Array.isArray(runParams) ? runParams : [];
-    return Object.fromEntries(rows.map((row) => [row.PARAMKEY, row.PARAMVALUE]));
+    return Object.fromEntries(
+      rows.filter((row) => Number(row.BRANCH || 0) === 0).map((row) => [row.PARAMKEY, row.PARAMVALUE])
+    );
   }
 
   // KaTeX renders the symbolic/substituted math (Anexa feedback 08.09.2026:
@@ -372,7 +374,12 @@ export class MinmaxExplainDrawer extends LitElement {
           <summary class="small text-muted" style="cursor: pointer;">Parametri (CCCMINMAXRUNPARAM, snapshot)</summary>
           <table class="table table-sm table-bordered mb-0">
             <tbody>
-              ${rows.map((row) => html`<tr><th>${row.PARAMKEY}</th><td>${row.PARAMVALUE}</td></tr>`)}
+              ${rows.map((row) => html`
+                <tr>
+                  <th>${row.PARAMKEY}${Number(row.BRANCH) > 0 ? ` (filiala ${row.BRANCH})` : ''}</th>
+                  <td>${row.PARAMVALUE}</td>
+                </tr>
+              `)}
             </tbody>
           </table>
         </details>

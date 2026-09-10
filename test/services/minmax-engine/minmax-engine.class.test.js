@@ -444,6 +444,8 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
         .reply(200, reply([{ CLASA: 'AX' }]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXBRANCH'))
         .reply(200, reply([{ BRANCH: 1000 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXPARAMOVERRIDE'))
+        .reply(200, reply([{ BRANCH: 1000, PARAMKEY: 'LT_ZILE', PARAMVALUE: '21', PREFIX: null }]))
 
       const service = makeService()
       const result = await service.params({ token: 'tok' })
@@ -451,6 +453,7 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
       assert.deepStrictEqual(result, {
         branches: [{ BRANCH: 1000 }],
         cov: [{ CLASA: 'AX' }],
+        overrides: [{ BRANCH: 1000, PARAMKEY: 'LT_ZILE', PARAMVALUE: '21', PREFIX: null }],
         params: [{ PARAMKEY: 'X' }],
         writesEnabled: false
       })
@@ -463,6 +466,8 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXCOV'))
         .reply(200, reply([]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXBRANCH'))
+        .reply(200, reply([]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXPARAMOVERRIDE'))
         .reply(200, reply([]))
 
       const service = makeService({ writesEnabled: true })
@@ -503,13 +508,21 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
     })
 
     it('resolves the current run (ESTE_CURENT=1) when runId is omitted, like results()', async () => {
+      let runParamsSql
       nock(FAKE_BASE_URL)
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('ESTE_CURENT = 1'))
         .reply(200, reply([{ RUNID: 5 }]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXRUN WHERE RUNID = :1'))
         .reply(200, reply([{ RUNID: 5 }]))
-        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXRUNPARAM'))
-        .reply(200, reply([{ PARAMKEY: 'CALIBRARE_MOD', PARAMVALUE: 'C' }]))
+        .post(EXEC_SQL_PATH, (body) => {
+          const isRunParams = body.sqlQuery.includes('FROM CCCMINMAXRUNPARAM')
+          if (isRunParams) runParamsSql = body.sqlQuery
+          return isRunParams
+        })
+        .reply(200, reply([
+          { BRANCH: 0, PARAMKEY: 'LT_ZILE', PARAMVALUE: '30', PREFIX: null },
+          { BRANCH: 1000, PARAMKEY: 'LT_ZILE', PARAMVALUE: '21', PREFIX: null }
+        ]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXDET d'))
         .reply(200, reply([{ BRANCH: 1000, ENG_MAX: 10, MTRL: 42, RUNID: 5 }]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXWINSOR'))
@@ -522,7 +535,11 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
 
       assert.strictEqual(result.det.RUNID, 5)
       assert.strictEqual(result.run.RUNID, 5)
-      assert.deepStrictEqual(result.runParams, [{ PARAMKEY: 'CALIBRARE_MOD', PARAMVALUE: 'C' }])
+      assert.ok(runParamsSql.includes('BRANCH IN (0, :2)'))
+      assert.deepStrictEqual(result.runParams, [
+        { BRANCH: 0, PARAMKEY: 'LT_ZILE', PARAMVALUE: '30', PREFIX: null },
+        { BRANCH: 1000, PARAMKEY: 'LT_ZILE', PARAMVALUE: '21', PREFIX: null }
+      ])
     })
 
     it('rejects when there is no persisted CCCMINMAXDET row for the given key', async () => {
@@ -682,6 +699,50 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
       await assert.rejects(
         service.saveParams({ paramsUpdates: [{ paramKey: 'SIGMA_MIN', paramValue: 'abc' }], token: 'tok' }),
         /SIGMA_MIN must be numeric/
+      )
+      assert.strictEqual(nock.pendingMocks().length, 0)
+    })
+
+    it('upserts and deletes branch overrides in the same atomic batch', async () => {
+      let capturedBody
+      nock(FAKE_BASE_URL)
+        .post(EXEC_SQL_PATH, (body) => Array.isArray(body.statements))
+        .reply(200, (uri, body) => {
+          capturedBody = body
+          return { data: [{ affected: 1 }], success: true }
+        })
+
+      const service = makeService({ writesEnabled: true })
+      await service.saveParams({
+        overrideUpdates: [
+          { branch: 1000, paramKey: 'LT_ZILE', paramValue: 21 },
+          { branch: 2200, paramKey: 'FRECVENTA_ZILE', paramValue: '' }
+        ],
+        token: 'tok'
+      })
+
+      assert.strictEqual(capturedBody.statements.length, 3)
+      const [updated] = JSON.parse(capturedBody.statements[0].params[0])
+      assert.deepStrictEqual(updated, { BRANCH: 1000, PARAMKEY: 'LT_ZILE', PARAMVALUE: '21', PREFIX: '' })
+      assert.ok(capturedBody.statements[2].sql.startsWith('DELETE FROM CCCMINMAXPARAMOVERRIDE'))
+      for (const statement of capturedBody.statements) {
+        assert.strictEqual(classifySql(statement.sql).ok, true)
+      }
+    })
+
+    it('rejects rigid keys, prefix rows and invalid values before transport', async () => {
+      const service = makeService({ writesEnabled: true })
+      await assert.rejects(
+        service.saveParams({ overrideUpdates: [{ branch: 1000, paramKey: 'SIGMA_MIN', paramValue: 2 }], token: 'tok' }),
+        /Only LT_ZILE and FRECVENTA_ZILE/
+      )
+      await assert.rejects(
+        service.saveParams({ overrideUpdates: [{ branch: 1000, paramKey: 'LT_ZILE', paramValue: 14, prefix: 'GEW' }], token: 'tok' }),
+        /Prefix overrides are not available/
+      )
+      await assert.rejects(
+        service.saveParams({ overrideUpdates: [{ branch: 1000, paramKey: 'LT_ZILE', paramValue: 0 }], token: 'tok' }),
+        /must be a positive integer/
       )
       assert.strictEqual(nock.pendingMocks().length, 0)
     })

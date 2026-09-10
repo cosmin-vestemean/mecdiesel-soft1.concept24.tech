@@ -128,6 +128,17 @@ describe('minmax-explain-drawer — formula with substituted values (Anexa §B11
     assert.ok(hasTex(el, '\\left\\lceil 50 \\times 2 \\right\\rceil'), `expected run-specific factor, got: ${annotations(el)}`);
   });
 
+  it('keeps formula constants global when branch override rows are also present', () => {
+    const el = mount();
+    const params = el._paramsMap([
+      { BRANCH: 0, PARAMKEY: 'HQ_CAP_FACTOR', PARAMVALUE: '1.5', PREFIX: null },
+      { BRANCH: 2200, PARAMKEY: 'HQ_CAP_FACTOR', PARAMVALUE: '9', PREFIX: null },
+      { BRANCH: 2200, PARAMKEY: 'LT_ZILE', PARAMVALUE: '21', PREFIX: null }
+    ]);
+
+    assert.deepStrictEqual(params, { HQ_CAP_FACTOR: '1.5' });
+  });
+
   it('marks ENG_MAX as equalised to ENG_MIN when podea forces MAX down', async () => {
     const el = mount({ ...baseDet, PODEA_APLICATA: 1, ENG_MIN: 20, ENG_MAX: 20 });
     await el.updateComplete;

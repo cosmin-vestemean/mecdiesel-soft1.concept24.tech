@@ -113,6 +113,7 @@ const XYZ_VALUES = new Set(['X', 'Y', 'Z'])
 // for non-STANDARD items, per CCCMINMAXCOV's 11x3 seed — §12.5).
 const CLASA_VALUES = new Set(['AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ', 'NOU', 'OD'])
 const FLAG_TXT_VALUES = new Set(['OK', 'UP', 'DOWN', 'MAJOR_UP', 'SUPRASTOC', 'FARA_REFERINTA'])
+const FLEXIBLE_OVERRIDE_KEYS = new Set(['LT_ZILE', 'FRECVENTA_ZILE'])
 const STATUS_TREND_VALUES = new Set(['ACTIVE', 'STABLE', 'TREND_DOWN', 'DECLINE'])
 const BRANCH_ASSIGNMENT_MODES = new Set(['DOC', 'AGENT', 'CLIENT'])
 
@@ -176,6 +177,33 @@ function normalizeParamValue (paramKey, value) {
     throw new Error('SIGMA_MIN must not be negative')
   }
   return normalized
+}
+
+function normalizeBranchOverride (override) {
+  const paramKey = requireString(override.paramKey, 'paramKey').toUpperCase()
+  if (!FLEXIBLE_OVERRIDE_KEYS.has(paramKey)) {
+    throw new Error('Only LT_ZILE and FRECVENTA_ZILE accept branch overrides')
+  }
+
+  const branch = sqlInt(override.branch, 'branch')
+  if (branch <= 0 || branch > 32767) {
+    throw new Error('branch must be between 1 and 32767')
+  }
+
+  const prefix = override.prefix == null ? '' : String(override.prefix).trim()
+  if (prefix !== '') {
+    throw new Error('Prefix overrides are not available until the N5 prefix list is confirmed')
+  }
+
+  if (override.paramValue == null || (typeof override.paramValue === 'string' && override.paramValue.trim() === '')) {
+    return { BRANCH: branch, PARAMKEY: paramKey, PARAMVALUE: null, PREFIX: '' }
+  }
+
+  const paramValue = sqlInt(override.paramValue, 'paramValue')
+  if (paramValue <= 0) {
+    throw new Error(`${paramKey} branch override must be a positive integer`)
+  }
+  return { BRANCH: branch, PARAMKEY: paramKey, PARAMVALUE: String(paramValue), PREFIX: '' }
 }
 
 function normalizeBranchAssignmentMode (value) {
@@ -732,17 +760,19 @@ export class MinmaxEngineService {
     return { page: paging.page, pageSize: paging.pageSize, rows: mergeMtrgroupNames(mergeExactDecimals(extractRows(response))), runId, total }
   }
 
-  /** CCCMINMAXPARAMS + CCCMINMAXCOV + CCCMINMAXBRANCH — current config. */
+  /** CCCMINMAXPARAMS + COV + BRANCH + branch-only operational overrides. */
   async params (data) {
     const token = requireToken(data)
-    const [paramsRes, covRes, branchRes] = await Promise.all([
+    const [paramsRes, covRes, branchRes, overrideRes] = await Promise.all([
       this._execSql('SELECT PARAMKEY, PARAMVALUE, PARAMTYPE, SCOPE, SCOPEKEY, DESCRIERE, UPDATEDAT FROM CCCMINMAXPARAMS ORDER BY PARAMKEY, SCOPE, SCOPEKEY', [], token),
       this._execSql('SELECT CLASA, MARIME, COV, UPDATEDAT FROM CCCMINMAXCOV ORDER BY CLASA, MARIME', [], token),
-      this._execSql('SELECT BRANCH, MARIME, INCLUS, ESTE_HQ, ESTE_PODEA, UPDATEDAT FROM CCCMINMAXBRANCH ORDER BY BRANCH', [], token)
+      this._execSql('SELECT BRANCH, MARIME, INCLUS, ESTE_HQ, ESTE_PODEA, UPDATEDAT FROM CCCMINMAXBRANCH ORDER BY BRANCH', [], token),
+      this._execSql("SELECT PARAMKEY, BRANCH, PREFIX, PARAMVALUE, UPDATEDAT FROM CCCMINMAXPARAMOVERRIDE WHERE PREFIX = '' ORDER BY BRANCH, PARAMKEY", [], token)
     ])
     return {
       branches: extractRows(branchRes),
       cov: extractRows(covRes),
+      overrides: extractRows(overrideRes),
       params: extractRows(paramsRes),
       writesEnabled: this._writesEnabled()
     }
@@ -778,8 +808,8 @@ export class MinmaxEngineService {
         [runId], token
       ),
       this._execSql(
-        "SELECT PARAMKEY, PARAMVALUE FROM CCCMINMAXRUNPARAM WHERE RUNID = :1 AND BRANCH = 0 AND PREFIX = ''",
-        [runId], token
+        "SELECT PARAMKEY, PARAMVALUE, BRANCH, PREFIX FROM CCCMINMAXRUNPARAM WHERE RUNID = :1 AND PREFIX = '' AND BRANCH IN (0, :2) ORDER BY PARAMKEY, BRANCH",
+        [runId, branch], token
       ),
       this._execSql(
         `SELECT d.*, ${EXACT_DECIMAL_SELECT} FROM CCCMINMAXDET d ` +
@@ -838,6 +868,7 @@ export class MinmaxEngineService {
     let paramsKeys = []
     let covKeys = []
     let branchKeys = []
+    let overrideKeys = []
 
     const paramsUpdates = data.paramsUpdates || []
     validateRowCount(paramsUpdates, 'paramsUpdates')
@@ -909,6 +940,45 @@ export class MinmaxEngineService {
       })
     }
 
+    const overrideUpdates = data.overrideUpdates || []
+    validateRowCount(overrideUpdates, 'overrideUpdates')
+    if (overrideUpdates.length) {
+      const rows = overrideUpdates.map(normalizeBranchOverride)
+      overrideKeys = rows.map((r) => ({ branch: r.BRANCH, paramKey: r.PARAMKEY, prefix: '' }))
+      const upserts = rows.filter((r) => r.PARAMVALUE !== null)
+      const deletes = rows.filter((r) => r.PARAMVALUE === null)
+
+      if (upserts.length) {
+        const json = JSON.stringify(upserts)
+        statements.push({
+          params: [json],
+          sql: 'UPDATE CCCMINMAXPARAMOVERRIDE SET PARAMVALUE = j.PARAMVALUE, UPDATEDAT = GETDATE() ' +
+            'FROM CCCMINMAXPARAMOVERRIDE INNER JOIN OPENJSON(:1) ' +
+            'WITH (PARAMKEY VARCHAR(50), BRANCH SMALLINT, PREFIX VARCHAR(50), PARAMVALUE VARCHAR(255)) j ' +
+            'ON j.PARAMKEY = CCCMINMAXPARAMOVERRIDE.PARAMKEY AND j.BRANCH = CCCMINMAXPARAMOVERRIDE.BRANCH ' +
+            'AND j.PREFIX = CCCMINMAXPARAMOVERRIDE.PREFIX'
+        })
+        statements.push({
+          params: [json],
+          sql: 'INSERT INTO CCCMINMAXPARAMOVERRIDE (PARAMKEY, BRANCH, PREFIX, PARAMVALUE) ' +
+            'SELECT j.PARAMKEY, j.BRANCH, j.PREFIX, j.PARAMVALUE FROM OPENJSON(:1) ' +
+            'WITH (PARAMKEY VARCHAR(50), BRANCH SMALLINT, PREFIX VARCHAR(50), PARAMVALUE VARCHAR(255)) j ' +
+            'WHERE NOT EXISTS (SELECT 1 FROM CCCMINMAXPARAMOVERRIDE WHERE PARAMKEY = j.PARAMKEY ' +
+            'AND BRANCH = j.BRANCH AND PREFIX = j.PREFIX)'
+        })
+      }
+
+      if (deletes.length) {
+        statements.push({
+          params: [JSON.stringify(deletes)],
+          sql: 'DELETE FROM CCCMINMAXPARAMOVERRIDE WHERE EXISTS (' +
+            'SELECT 1 FROM OPENJSON(:1) WITH (PARAMKEY VARCHAR(50), BRANCH SMALLINT, PREFIX VARCHAR(50)) j ' +
+            'WHERE j.PARAMKEY = CCCMINMAXPARAMOVERRIDE.PARAMKEY AND j.BRANCH = CCCMINMAXPARAMOVERRIDE.BRANCH ' +
+            'AND j.PREFIX = CCCMINMAXPARAMOVERRIDE.PREFIX)'
+        })
+      }
+    }
+
     if (!statements.length) {
       throw new Error('saveParams called with no updates.')
     }
@@ -918,11 +988,13 @@ export class MinmaxEngineService {
       changedKeys: {
         branchUpdates: branchKeys,
         covUpdates: covKeys,
+        overrideUpdates: overrideKeys,
         paramsUpdates: paramsKeys
       },
       counts: {
         branchUpdates: branchUpdates.length,
         covUpdates: covUpdates.length,
+        overrideUpdates: overrideUpdates.length,
         paramsUpdates: paramsUpdates.length
       }
     })

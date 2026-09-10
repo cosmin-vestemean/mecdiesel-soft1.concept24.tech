@@ -185,6 +185,43 @@ function buildInvariants (runId, runParams) {
       }
     },
     {
+      id: 'parametri_branch',
+      label: 'T9: LT_ZILE/FRECVENTA_ZILE = override BRANCH din snapshot sau fallback GLOBAL',
+      async run () {
+        const [row] = await execSql(
+          `WITH global_params AS (
+             SELECT
+               MAX(CASE WHEN PARAMKEY = 'LT_ZILE' THEN TRY_CONVERT(INT, PARAMVALUE) END) AS LT_ZILE,
+               MAX(CASE WHEN PARAMKEY = 'FRECVENTA_ZILE' THEN TRY_CONVERT(INT, PARAMVALUE) END) AS FRECVENTA_ZILE
+             FROM CCCMINMAXRUNPARAM
+             WHERE RUNID = ${runId} AND BRANCH = 0 AND PREFIX = ''
+           )
+           SELECT COUNT(*) AS TOTAL_ROWS,
+             COUNT(DISTINCT CASE WHEN lt.PARAMVALUE IS NOT NULL OR freq.PARAMVALUE IS NOT NULL THEN d.BRANCH END) AS OVERRIDE_BRANCHES,
+             SUM(CASE WHEN COALESCE(d.LT_ZILE, -1) <>
+               COALESCE(TRY_CONVERT(INT, lt.PARAMVALUE), CASE WHEN gp.LT_ZILE > 0 THEN gp.LT_ZILE ELSE 30 END) THEN 1 ELSE 0 END) AS ABATERI_LT,
+             SUM(CASE WHEN COALESCE(d.FRECVENTA_ZILE, -1) <>
+               COALESCE(TRY_CONVERT(INT, freq.PARAMVALUE), CASE WHEN gp.FRECVENTA_ZILE > 0 THEN gp.FRECVENTA_ZILE ELSE 14 END) THEN 1 ELSE 0 END) AS ABATERI_FRECVENTA
+           FROM CCCMINMAXDET d
+           CROSS JOIN global_params gp
+           LEFT JOIN CCCMINMAXRUNPARAM lt ON lt.RUNID = d.RUNID AND lt.BRANCH = d.BRANCH
+             AND lt.PREFIX = '' AND lt.PARAMKEY = 'LT_ZILE'
+           LEFT JOIN CCCMINMAXRUNPARAM freq ON freq.RUNID = d.RUNID AND freq.BRANCH = d.BRANCH
+             AND freq.PREFIX = '' AND freq.PARAMKEY = 'FRECVENTA_ZILE'
+           WHERE d.RUNID = ${runId}`
+        )
+        const lt = n(row.ABATERI_LT) || 0
+        const frecventa = n(row.ABATERI_FRECVENTA) || 0
+        const problems = []
+        if (lt !== 0) problems.push(`${lt} randuri cu LT_ZILE gresit`)
+        if (frecventa !== 0) problems.push(`${frecventa} randuri cu FRECVENTA_ZILE gresita`)
+        return {
+          pass: problems.length === 0,
+          detail: problems.join('; ') || `0 abateri din ${row.TOTAL_ROWS} randuri; ${row.OVERRIDE_BRANCHES || 0} filiale cu override`
+        }
+      }
+    },
+    {
       id: 'rotunjire_pack',
       label: 'N_PACK > 1 => BUY_QTY - FLOOR(BUY_QTY/N_PACK)*N_PACK = 0',
       async run () {

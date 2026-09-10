@@ -136,7 +136,7 @@ function populationKey (runId, filters) {
 // back from execSql/WSMCP as JSON `null`, not `''` (DATALENGTH=0 but the
 // column is NOT NULL) — both sides must coerce with `|| ''`, or every GLOBAL
 // param save would spuriously report a mismatch.
-function findSaveMismatch (fresh, { branchUpdates, covUpdates, paramsUpdates } = {}) {
+function findSaveMismatch (fresh, { branchUpdates, covUpdates, overrideUpdates, paramsUpdates } = {}) {
   const paramsByKey = new Map(
     (fresh.params || []).map((r) => [`${r.PARAMKEY}|${r.SCOPE}|${r.SCOPEKEY || ''}`, String(r.PARAMVALUE)])
   );
@@ -163,6 +163,17 @@ function findSaveMismatch (fresh, { branchUpdates, covUpdates, paramsUpdates } =
     const row = branchByKey.get(key);
     if (!row || row.estePodea !== Boolean(b.estePodea) || row.inclus !== Boolean(b.inclus) || row.marime !== b.marime) {
       return `filiala ${key}`;
+    }
+  }
+
+  const overridesByKey = new Map(
+    (fresh.overrides || []).map((r) => [`${r.BRANCH}|${r.PARAMKEY}|${r.PREFIX || ''}`, String(r.PARAMVALUE)])
+  );
+  for (const override of (overrideUpdates || [])) {
+    const key = `${override.branch}|${override.paramKey}|${override.prefix || ''}`;
+    const deleting = override.paramValue == null || String(override.paramValue).trim() === '';
+    if (deleting ? overridesByKey.has(key) : overridesByKey.get(key) !== String(Number(override.paramValue))) {
+      return `override ${key}`;
     }
   }
 
@@ -215,7 +226,7 @@ export class MinmaxEngineStore {
       pageSize: DEFAULT_PAGE_SIZE,
 
       // Params/COV/branches (CCCMINMAXPARAMS et al.) — contract §7
-      params: { branches: [], cov: [], error: '', params: [], saveError: '', saving: false, writesEnabled: false },
+      params: { branches: [], cov: [], error: '', overrides: [], params: [], saveError: '', saving: false, writesEnabled: false },
       runLaunch: { error: '', polling: false, runId: null, starting: false },
       resolvedRunId: null, // actual RUNID the last successful results() call used
       rows: [],
@@ -375,6 +386,7 @@ export class MinmaxEngineStore {
           ...newState.params,
           branches: Array.isArray(action.payload.branches) ? action.payload.branches : [],
           cov: Array.isArray(action.payload.cov) ? action.payload.cov : [],
+          overrides: Array.isArray(action.payload.overrides) ? action.payload.overrides : [],
           params: Array.isArray(action.payload.params) ? action.payload.params : [],
           writesEnabled: action.payload.writesEnabled === true
         };
@@ -768,7 +780,7 @@ export class MinmaxEngineStore {
   // the transaction itself, the params() reload, and a read-back match
   // against what was sent — a reload failure or a mismatch must surface as
   // a save error, not a silent success.
-  async saveParams ({ branchUpdates, covUpdates, paramsUpdates } = {}) {
+  async saveParams ({ branchUpdates, covUpdates, overrideUpdates, paramsUpdates } = {}) {
     this.dispatch({ type: 'SET_PARAMS_SAVING', payload: true });
     this.dispatch({ type: 'SET_PARAMS_SAVE_ERROR', payload: '' });
     try {
@@ -776,13 +788,14 @@ export class MinmaxEngineStore {
       await service.saveParams({
         branchUpdates,
         covUpdates,
+        overrideUpdates,
         paramsUpdates,
         token: this._token()
       });
 
       const fresh = await this._fetchParams();
       this.dispatch({ type: 'SET_PARAMS_DATA', payload: fresh });
-      const mismatch = findSaveMismatch(fresh, { branchUpdates, covUpdates, paramsUpdates });
+      const mismatch = findSaveMismatch(fresh, { branchUpdates, covUpdates, overrideUpdates, paramsUpdates });
       if (mismatch) {
         throw new Error(`Salvarea a reusit dar recitirea nu corespunde (${mismatch}).`);
       }

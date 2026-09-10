@@ -60,6 +60,32 @@ BEGIN
         FROM CCCMINMAXPARAMS
         WHERE SCOPE = 'GLOBAL' AND SCOPEKEY = '';
 
+    CREATE TABLE #ResolvedOverrides (
+        BRANCH SMALLINT NOT NULL,
+        PARAMKEY VARCHAR(50) NOT NULL,
+        PARAMVALUE VARCHAR(255) NOT NULL,
+        PRIMARY KEY (BRANCH, PARAMKEY)
+    );
+
+    IF @Persist = 1
+        INSERT INTO #ResolvedOverrides (BRANCH, PARAMKEY, PARAMVALUE)
+        SELECT BRANCH, PARAMKEY, PARAMVALUE
+        FROM CCCMINMAXRUNPARAM
+        WHERE RUNID = @RunId AND BRANCH > 0 AND PREFIX = ''
+            AND PARAMKEY IN ('LT_ZILE', 'FRECVENTA_ZILE');
+    ELSE
+        INSERT INTO #ResolvedOverrides (BRANCH, PARAMKEY, PARAMVALUE)
+        SELECT BRANCH, PARAMKEY, PARAMVALUE
+        FROM CCCMINMAXPARAMOVERRIDE
+        WHERE BRANCH > 0 AND PREFIX = ''
+            AND PARAMKEY IN ('LT_ZILE', 'FRECVENTA_ZILE');
+
+    IF EXISTS (
+        SELECT 1 FROM #ResolvedOverrides
+        WHERE TRY_CONVERT(INT, PARAMVALUE) IS NULL OR TRY_CONVERT(INT, PARAMVALUE) <= 0
+    )
+        THROW 50077, 'sp_MinMaxEngine_Classify: branch LT/FRECVENTA overrides must be positive integers.', 1;
+
     DECLARE @NrSaptamani INT;
     DECLARE @WinsorPct FLOAT;
     DECLARE @WinsorMinLinii INT;
@@ -672,8 +698,8 @@ BEGIN
             END
         ) AS SL,
         @SsfGlobal AS SSF,
-        @LtZileGlobal AS LT_ZILE,
-        @FrecventaZileGlobal AS FRECVENTA_ZILE,
+        COALESCE(TRY_CONVERT(INT, ltBranch.PARAMVALUE), @LtZileGlobal) AS LT_ZILE,
+        COALESCE(TRY_CONVERT(INT, freqBranch.PARAMVALUE), @FrecventaZileGlobal) AS FRECVENTA_ZILE,
         xc.AVG_DEMAND AS [AVG],
         CONVERT(DECIMAL(28, 8), xc.AVG_DEMAND / 30.0) AS ad,
         xc.PREV_CUMULATIVE_PCT, xc.CUMULATIVE_PCT, xc.GRP_TOTAL_VAL, xc.GRP_ITEM_COUNT,
@@ -681,7 +707,11 @@ BEGIN
     INTO #MinMaxClassified
     FROM Step4_XyzAndClass xc
     LEFT JOIN CCCMINMAXCOV cov
-        ON cov.CLASA = xc.CLASA AND cov.MARIME = xc.MARIME;
+        ON cov.CLASA = xc.CLASA AND cov.MARIME = xc.MARIME
+    LEFT JOIN #ResolvedOverrides ltBranch
+        ON ltBranch.BRANCH = xc.BRANCH AND ltBranch.PARAMKEY = 'LT_ZILE'
+    LEFT JOIN #ResolvedOverrides freqBranch
+        ON freqBranch.BRANCH = xc.BRANCH AND freqBranch.PARAMKEY = 'FRECVENTA_ZILE';
 
     -- ---------------------------------------------------------------
     -- 13. Persistenta rularii in CCCMINMAXRUN + CCCMINMAXDET

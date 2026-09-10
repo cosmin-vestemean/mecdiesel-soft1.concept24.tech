@@ -74,6 +74,16 @@ BEGIN
             THROW 50055, 'sp_MinMaxEngine_StartRun: SIGMA_MIN must not be negative.', 1;
     END;
 
+    IF EXISTS (
+        SELECT 1
+        FROM CCCMINMAXPARAMOVERRIDE
+        WHERE BRANCH > 0
+            AND PREFIX = ''
+            AND PARAMKEY IN ('LT_ZILE', 'FRECVENTA_ZILE')
+            AND (TRY_CONVERT(INT, PARAMVALUE) IS NULL OR TRY_CONVERT(INT, PARAMVALUE) <= 0)
+    )
+        THROW 50056, 'sp_MinMaxEngine_StartRun: branch LT/FRECVENTA overrides must be positive integers.', 1;
+
     BEGIN TRANSACTION;
 
     IF EXISTS (
@@ -100,7 +110,7 @@ BEGIN
     -- apoi suprascrie MOD_ATRIBUIRE_FILIALA/CALIBRARE_MOD cu valorile
     -- rezolvate ale acestei rulari (pot veni din parametrul explicit al
     -- apelului, nu doar din CCCMINMAXPARAMS). BRANCH=0/PREFIX='' = GLOBAL;
-    -- override-urile per filiala/prefix (P6) nu sunt inca implementate.
+    -- override-urile branch-only P6 sunt copiate separat mai jos.
     INSERT INTO CCCMINMAXRUNPARAM (RUNID, BRANCH, PREFIX, PARAMKEY, PARAMVALUE)
     SELECT @RunId, 0, '', p.PARAMKEY, p.PARAMVALUE
     FROM CCCMINMAXPARAMS p
@@ -111,6 +121,15 @@ BEGIN
     VALUES
         (@RunId, 0, '', 'MOD_ATRIBUIRE_FILIALA', @BranchAssignmentMode),
         (@RunId, 0, '', 'CALIBRARE_MOD', @CalibrareMod);
+
+    -- P6 etapa 1: ingheata numai override-urile per filiala. Randurile cu
+    -- PREFIX nenul raman rezervate resolverului longest-prefix (N5).
+    INSERT INTO CCCMINMAXRUNPARAM (RUNID, BRANCH, PREFIX, PARAMKEY, PARAMVALUE)
+    SELECT @RunId, o.BRANCH, '', o.PARAMKEY, o.PARAMVALUE
+    FROM CCCMINMAXPARAMOVERRIDE o
+    WHERE o.BRANCH > 0
+        AND o.PREFIX = ''
+        AND o.PARAMKEY IN ('LT_ZILE', 'FRECVENTA_ZILE');
 
     COMMIT TRANSACTION;
 

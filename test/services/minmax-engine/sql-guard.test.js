@@ -111,10 +111,10 @@ describe('minmax-engine sql-guard', () => {
       assert.match(result.reason, /Table FINDOC is not in the minmax-engine write whitelist/)
     })
 
-    it('exposes the exact same four tables as WRITABLE_TABLES', () => {
+    it('exposes the exact same five tables as WRITABLE_TABLES', () => {
       assert.deepStrictEqual(
         [...WRITABLE_TABLES].sort(),
-        ['CCCMINMAXBRANCH', 'CCCMINMAXCOV', 'CCCMINMAXPARAMS', 'CCCMINMAXTEMPLATE']
+        ['CCCMINMAXBRANCH', 'CCCMINMAXCOV', 'CCCMINMAXPARAMOVERRIDE', 'CCCMINMAXPARAMS', 'CCCMINMAXTEMPLATE']
       )
     })
   })

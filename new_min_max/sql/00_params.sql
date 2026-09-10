@@ -72,7 +72,29 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='IX_CCCMINMAXTEMPLATE_PREFIX
 CREATE INDEX IX_CCCMINMAXTEMPLATE_PREFIX ON CCCMINMAXTEMPLATE(PREFIX);
 
 --=====================================================================
--- 5. SEED — parametri globali
+-- 5. CCCMINMAXPARAMOVERRIDE — override-uri operationale per filiala/prefix
+--    P6 etapa 1: API-ul expune numai PREFIX='' (override per filiala).
+--=====================================================================
+
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='CCCMINMAXPARAMOVERRIDE' AND xtype='U')
+CREATE TABLE CCCMINMAXPARAMOVERRIDE (
+    ID INT NOT NULL IDENTITY(1,1) PRIMARY KEY,
+    PARAMKEY VARCHAR(50) NOT NULL,
+    BRANCH SMALLINT NOT NULL DEFAULT 0,
+    PREFIX VARCHAR(50) NOT NULL DEFAULT '',
+    PARAMVALUE VARCHAR(255) NOT NULL,
+    UPDATEDAT DATETIME NULL DEFAULT GETDATE(),
+    UPDATEDBY INT NULL,
+    CONSTRAINT UQ_CCCMINMAXPARAMOVERRIDE UNIQUE (PARAMKEY, BRANCH, PREFIX),
+    CONSTRAINT CK_CCCMINMAXPARAMOVERRIDE_KEY CHECK (PARAMKEY IN ('LT_ZILE', 'FRECVENTA_ZILE')),
+    CONSTRAINT CK_CCCMINMAXPARAMOVERRIDE_SCOPE CHECK (BRANCH <> 0 OR PREFIX <> ''),
+    CONSTRAINT CK_CCCMINMAXPARAMOVERRIDE_VALUE CHECK (
+        TRY_CONVERT(INT, PARAMVALUE) IS NOT NULL AND TRY_CONVERT(INT, PARAMVALUE) > 0
+    )
+);
+
+--=====================================================================
+-- 6. SEED — parametri globali
 --    Insereaza doar cheile lipsa; valorile deja editate raman neatinse.
 --=====================================================================
 
@@ -150,7 +172,7 @@ WHERE NOT EXISTS (
 );
 
 --=====================================================================
--- 6. SEED — matricea COV_TGT
+-- 7. SEED — matricea COV_TGT
 --    MEDIU porneste egal cu MIC (fallback pana la completarea de catre client).
 --=====================================================================
 

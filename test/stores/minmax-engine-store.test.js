@@ -582,4 +582,28 @@ describe('minmax-engine-store — request sequencing (§12.7)', () => {
     assert.strictEqual(store.getState().params.params[0].PARAMKEY, 'B', 'the stale response must not overwrite the newer params');
     assert.strictEqual(store.getState().params.loading, false);
   });
+
+  it('saveParams(): forwards branch overrides and verifies them after read-back', async () => {
+    const store = new MinmaxEngineStore();
+    let sent;
+    const fresh = {
+      branches: [],
+      cov: [],
+      overrides: [{ BRANCH: 2200, PARAMKEY: 'LT_ZILE', PARAMVALUE: '21', PREFIX: null }],
+      params: [],
+      writesEnabled: true
+    };
+    store._authenticatedService = async () => ({
+      params: async () => fresh,
+      saveParams: async (payload) => { sent = payload; }
+    });
+
+    const ok = await store.saveParams({
+      overrideUpdates: [{ branch: 2200, paramKey: 'LT_ZILE', paramValue: '21' }]
+    });
+
+    assert.strictEqual(ok, true);
+    assert.deepStrictEqual(sent.overrideUpdates, [{ branch: 2200, paramKey: 'LT_ZILE', paramValue: '21' }]);
+    assert.deepStrictEqual(store.getState().params.overrides, fresh.overrides);
+  });
 });

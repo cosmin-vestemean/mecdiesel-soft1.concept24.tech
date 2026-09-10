@@ -9,11 +9,10 @@
   `(FURNIZOR, BRANCH, PREFIX)`. Gol de schemă: `CCCMINMAXTEMPLATE` are unicitate pe `NUME`, dar nu
   are coloană `BRANCH`. De decis: cum tratăm rândul HQ (branch 1000, nu e locație fizică) — șabloane
   proprii sau cădere pe `GLOBAL`. În afara iterației 1 a Fazei 5 (cere AJS nou + deploy).
-- **`LT_ZILE`/`FRECVENTA_ZILE`** ar trebui să varieze per prefix, dar sunt citiți doar
-  `SCOPE='GLOBAL'` (fallback marcat explicit în seed: 30 și 14, „de confirmat cu clientul").
-  Consecință: calibrarea `FLAG` nu poate fi validată definitiv cât timp `LT` e presupus — intră
-  liniar în `LT_STOCK` și sub radical în `SAFETY`. `CCCMINMAXDET` are deja `LT_ZILE`/`FRECVENTA_ZILE`
-  per rând, deci urma de audit există; cablarea pe șabloane e aditivă.
+- **`LT_ZILE`/`FRECVENTA_ZILE` per prefix:** override-ul per filială este implementat și validat
+  live pe RUNID 9 prin `CCCMINMAXPARAMOVERRIDE`, snapshot și rezoluția `BRANCH > GLOBAL`. Rămâne blocată numai extensia
+  `BRANCH+PREFIX > BRANCH > PREFIX > GLOBAL`: lipsesc lista canonică N5, normalizarea și valorile
+  DEFAULT (fallback-ul global este încă 30/14). `CCCMINMAXDET` păstrează valorile efective per rând.
 - **D2a:** cele 25 linii `ORD_FURN` de pe depozitul 8002 „BONURI VALORICE" (`FPRMS 4500`, factură
   fără stoc) nu au `CCCBRANCH`. Azi incluse în rândul HQ, excluse de pe filiale. De decis dacă se
   exclud complet.
