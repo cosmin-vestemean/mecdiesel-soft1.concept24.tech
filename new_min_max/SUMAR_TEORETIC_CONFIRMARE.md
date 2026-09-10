@@ -32,6 +32,20 @@ Fiecare element are un identificator (`I` = ipoteză, `F` = formulă, `E` = caz-
 
 Vă rugăm să răspundeți punctual, pe identificator (ex. „I7 — Document", „E12 — varianta B").
 
+## Reconciliere editorială C1-C5 (10.09.2026)
+
+Următoarele corecții repară documentația noastră; nu aprobă formule noi și nu modifică implementarea.
+
+| ID | Corecție aplicată | Stare după reconciliere |
+|---|---|---|
+| C1 | F2 rămâne regula standard: la cumulativ peste 95%, clasa este `C`. E17 nu mai prezintă `A` ca rezultat automat; o eventuală excepție pentru grupa cu un singur articol rămâne propunere neconfirmată. | Întrebarea de business rămâne deschisă separat de formula ABC. |
+| C2 | La E11 se explică faptul că, în condiția `MIN > MAX`, atribuirea `MAX = MIN` are același rezultat numeric ca `MAX = max(MAX, MIN)`. Se păstrează însă formularea confirmată ca regulă explicită: maximul devine strict egal cu minimul. | Corecție matematică, fără schimbare de regulă. |
+| C3 | Comparația COV este corectată: `CX = 2,00` este egal cu `BY = 2,00` și mai mare decât `BZ = 1,75`. | Întrebarea despre intenția matricei rămâne separată și deschisă. |
+| C4 | Proveniența și aprobarea sunt separate. `F5` este marcat `[E]` deoarece confirmarea este atribuită unui e-mail; `L4` nu mai conține o întrebare reziduală după confirmarea lui `SSF = 1,28` flat. | Confirmările consemnate rămân trasabile, fără a transforma o deducție în aprobare. |
+| C5 | Cerința este netting per `(SKU, client, fereastră)`. Netting-ul săptămânal urmat de însumare este o posibilă abatere internă de implementare, nu o schimbare cerută de beneficiar. | Documentul nu autorizează prin această notă o modificare de cod. |
+
+Aceste corecții nu rescriu retroactiv confirmările din august și nu aleg implicit între documentele aflate în conflict. A1-A4, B2 și întrebările încă deschise rămân în registrul lor de decizie.
+
 ---
 
 # PARTEA I — IPOTEZE
@@ -155,6 +169,8 @@ Ordinea contează practic: winsorizarea este definită **per linie de vânzare**
 
 > **Confirmat de client (14.08.2026):** rămâne ordinea din specificație, exact cum e redată mai sus. Documentele noastre anterioare care inversau pașii (`netting → winsorizare`) sunt corectate — nu se mai folosesc.
 
+**Reconciliere C5 (10.09.2026):** cerința de business este compensarea per `(SKU, client, fereastră)`. Dacă implementarea face netting săptămânal și însumează ulterior ferestrele, aceasta este o abatere internă de verificat separat, nu o schimbare cerută de beneficiar și nu o autorizare de modificare a codului prin acest sumar.
+
 ### I12 ✅ `[S]` Zerourile intră în deviația standard — confirmat (14.08.2026)
 Cele 52 de bucket-uri săptămânale trebuie să includă și săptămânile **fără** vânzări. Excluderea lor ar produce un `σ` artificial mic tocmai pentru articolele sporadice — cele mai riscante. Confirmat explicit de client prin e-mail, odată cu F5: „zerourile incluse, pe date winsorizate p95".
 
@@ -230,7 +246,7 @@ Ferestrele sunt **normalizate la lună** (împărțite la 3, 6, respectiv 12) �
 
 ### F5 — Componentele bufferului
 
-> ✅ **`[D]` Confirmat de client prin e-mail (14.08.2026, Constantin Oprea).**
+> ✅ **`[E]` Confirmat de client prin e-mail (14.08.2026, Constantin Oprea).**
 > `Spec_ERP_MinMax_v5_FINAL.docx` §3.9 folosea o **aproximare** a variabilității cererii:
 > `safety = (AVG × 0,30 / 30) × SSF × sqrt(LT)`, cu `SSF` între 1,28 și 1,65 per prefix de furnizor.
 > Clientul confirmă înlocuirea ei cu deviația standard reală `σ_WK`, prezentată mai jos — propunerea provine dintr-o revizie internă din 13.08.2026, pe baza sugestiei echipei din Italia, și este acum **metoda confirmată**, nu doar propunerea noastră.
@@ -362,7 +378,7 @@ Până la stabilirea coloanei `MEDIU`, aceasta va fi egală cu `MIC` — comport
 
 > ✅ **Confirmat de client (14.08.2026):** matricea `COV_TGT` este complet **parametrizată și editabilă manual** (nu doar valorile din tabel, ci și maparea filială → categorie). Beneficiarul poate muta oricând o filială din `MARE` în `MEDIU`/`MIC` (sau invers), în funcție de propria evaluare de business — nu există o regulă fixă de încadrare derivată automat din date. Acoperit deja de modelul de date (`CCCMINMAXCOV` pentru matrice, `CCCMINMAXBRANCH.MARIME` pentru mapare) și de panoul UI `minmax-params-panel.js` (editare parametri + matrice COV + configurare filiale). Rămâne deschisă doar completarea valorilor concrete pentru coloana `MEDIU`.
 
-> ⚠️ **De confirmat (I2 din analiza anterioară):** `CX = 2,00` este mai mare decât `BY = 2,00` și decât `BZ = 1,75`. Un articol din clasa C, dar cu cerere stabilă, primește acoperire mai mare decât unul din clasa B cu cerere volatilă. Este deliberat?
+> ⚠️ **De confirmat (I2 din analiza anterioară):** `CX = 2,00` este egal cu `BY = 2,00` și mai mare decât `BZ = 1,75`. Un articol din clasa C, dar cu cerere stabilă, primește o acoperire egală cu cea a clasei B și mai mare decât cea a clasei B cu cerere volatilă. Este deliberat?
 
 ### Alți parametri
 
@@ -446,7 +462,7 @@ Apare când `CAP6 = 0` (cerere sub prag de rotunjire) sau la flag de blocare.
 
 ### E11 ✅ Podeaua București creează `MIN > MAX` — rezolvat (14.08.2026)
 Regula ridică `ENG_MIN_BUC`, dar **specificația nu spune ce se întâmplă cu `ENG_MAX_BUC`**. Dacă `ENG_MIN_HQ × 30%` depășește `ENG_MAX_BUC` calculat independent, rezultă o inconsistență (minim peste maxim).
-**Confirmat de client (14.08.2026):** în acest caz `ENG_MAX_BUC = ENG_MIN_BUC` (nu `max(ENG_MAX_BUC, ENG_MIN_BUC)` — maximul nu doar se aliniază la minim, ci devine strict egal cu el).
+**Confirmat de client (14.08.2026):** în acest caz `ENG_MAX_BUC = ENG_MIN_BUC`. Deoarece condiția este `ENG_MIN_BUC > ENG_MAX_BUC`, rezultatul numeric este același ca pentru `max(ENG_MAX_BUC, ENG_MIN_BUC)`; formularea confirmată este totuși atribuirea explicită `MAX = MIN`, adică maximul devine strict egal cu minimul.
 
 ### E12 ✅ Articol auto-creat în București — rezolvat (14.08.2026)
 Regula introduce codul lipsă cu `ENG_MIN_BUC = ⌈ENG_MIN_HQ × 30%⌉`, dar **nu definea `ENG_MAX_BUC`**.
@@ -476,8 +492,8 @@ Regula podelei presupune acest lucru implicit. Datele actuale o confirmă (124.8
 ## 8. Clasificare
 
 ### E17 ⚠️ Grupă cu un singur articol
-Cumulativul atinge 100% la primul articol → clasificat automat `A`.
-**Propunere:** comportament acceptat (articolul este, prin definiție, cel mai important din grupa lui). Semnalăm grupele cu sub 5 articole.
+Cumulativul atinge 100% la primul articol → conform F2, articolul este clasificat `C`, deoarece depășește pragul de 95%.
+**Propunere neconfirmată:** o excepție care ar clasifica automat articolul unic drept `A`, pe motiv că este cel mai important din grupa lui. Semnalăm grupele cu sub 5 articole și păstrăm excepția separată de formula standard până la o decizie explicită.
 
 ### E18 ⚠️ Articol fără grupă atribuită
 **Propunere:** se tratează ca o grupă distinctă „nedefinit". De verificat câte articole sunt în această situație înainte de prima rulare.
@@ -524,7 +540,7 @@ Clasa C — cea mai puțin importantă — primește **de 6 ori** mai multă rez
 
 Cu `SSF = 1,28` pentru toate articolele, stocul de siguranță corespunde unui nivel de serviciu de ~90%, indiferent de clasă. Clasa A nu mai primește protecție statistică suplimentară.
 
-> **Confirmat de client (14.08.2026):** rămâne așa cum a fost cerut inițial — `SSF = 1,28 flat` pentru toate clasele. Varianta variabilă per clasă (tabelul de mai jos) **nu se implementează**; rămâne doar ca alternativă documentată teoretic.
+> **Proveniență și aprobare (14.08.2026):** clientul a confirmat că rămâne așa cum a fost cerut inițial — `SSF = 1,28 flat` pentru toate clasele. Varianta variabilă per clasă (tabelul de mai jos) **nu se implementează**; rămâne doar ca alternativă documentată teoretic. L4 nu mai este o întrebare deschisă în acest sumar.
 
 **Alternativa aliniată teoretic** (neaplicată, păstrată doar informativ), coerentă cu tabelul SL deja definit:
 
@@ -533,8 +549,6 @@ Cu `SSF = 1,28` pentru toate articolele, stocul de siguranță corespunde unui n
 | A | 95% | 1,645 |
 | B | 85% | 1,036 |
 | C | 75% | 0,674 |
-
-> **De confirmat:** `SSF` rămâne 1,28 flat, sau devine variabil per clasă ABC conform tabelului de mai sus?
 
 ---
 
@@ -556,7 +570,7 @@ Cu `SSF = 1,28` pentru toate articolele, stocul de siguranță corespunde unui n
 | F10 | `ERP_MAX` = `MAX_MANUAL` (nu `max(MAX_MANUAL, MAX_CALCULAT)`) | ✅ Confirmat (14.08.2026) |
 | — | Matricea `COV_TGT` + maparea filială → MARE/MEDIU/MIC editabile manual de beneficiar | ✅ Confirmat (14.08.2026) |
 | — | Valorile `COV_MEDIU` + maparea filială → MARE/MEDIU/MIC | Tabel de completat |
-| — | `CX = 2,00 > BZ = 1,75` — deliberat? | Da / Corectat |
+| — | `CX = 2,00 = BY = 2,00` și `CX > BZ = 1,75` — deliberat? | Da / Corectat |
 | E2 | Tratament pentru articolele cu < 8 linii | ✅ Alternativă (confirmat 14.08.2026: se plafonează chiar și sub prag) |
 | E1 | Articol cu retururi care anulează vânzările → `ON DEMAND` | ✅ Confirmat (14.08.2026) |
 | E3 | Plancher minim de siguranță când `σ_WK = 0` | ✅ Da (confirmat 14.08.2026) — plancher `σ_WK = 1,3` |
