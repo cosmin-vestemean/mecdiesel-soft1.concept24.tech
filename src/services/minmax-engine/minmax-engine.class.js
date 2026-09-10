@@ -159,6 +159,14 @@ function normalizeBranchAssignmentMode (value) {
   return mode
 }
 
+function normalizeCalibrareMod (value) {
+  const mode = requireString(value, 'calibrareMod').toUpperCase()
+  if (!new Set(['A', 'B', 'C']).has(mode)) {
+    throw new Error('calibrareMod must be A, B or C')
+  }
+  return mode
+}
+
 function requireToken (data) {
   const token = data && data.token
   if (typeof token !== 'string' || token.trim() === '') {
@@ -728,10 +736,13 @@ export class MinmaxEngineService {
     const branch = sqlInt(data.branch, 'branch')
     const mtrl = sqlInt(data.mtrl, 'mtrl')
 
-    const [headerRes, rowRes, winsorRes, weekRes] = await Promise.all([
+    const [headerRes, runParamsRes, rowRes, winsorRes, weekRes] = await Promise.all([
       this._execSql(
-        'SELECT RUNID, COMPANY, AZI, PARAMSJSON, COMPUTE_PARAMSJSON, GROUP_PARAMSJSON, ' +
-        'STARTEDAT, COMPUTE_STARTEDAT FROM CCCMINMAXRUN WHERE RUNID = :1',
+        'SELECT RUNID, COMPANY, AZI, STARTEDAT, COMPUTE_STARTEDAT FROM CCCMINMAXRUN WHERE RUNID = :1',
+        [runId], token
+      ),
+      this._execSql(
+        "SELECT PARAMKEY, PARAMVALUE FROM CCCMINMAXRUNPARAM WHERE RUNID = :1 AND BRANCH = 0 AND PREFIX = ''",
         [runId], token
       ),
       this._execSql(
@@ -766,6 +777,7 @@ export class MinmaxEngineService {
     return {
       det: rows[0],
       run: extractRows(headerRes)[0],
+      runParams: extractRows(runParamsRes),
       weeklySeries: extractRows(weekRes),
       winsor: extractRows(winsorRes)[0]
     }
@@ -898,6 +910,7 @@ export class MinmaxEngineService {
     }
     const token = requireToken(data)
     const branchAssignmentMode = normalizeBranchAssignmentMode(data.branchAssignmentMode || 'CLIENT')
+    const calibrareMod = normalizeCalibrareMod(data.calibrareMod || 'C')
     const authPayload = params && params.authentication && params.authentication.payload
     const createdBy = authPayload && authPayload.sub !== undefined
       ? sqlInt(authPayload.sub, 'authenticated REFID')
@@ -905,6 +918,7 @@ export class MinmaxEngineService {
 
     const startResponse = await this._callAjs('startRun', {
       branchAssignmentMode,
+      calibrareMod,
       createdBy,
       mtrl: data.mtrl,
       scope: data.scope || 'FULL'
@@ -921,7 +935,7 @@ export class MinmaxEngineService {
       throw new Error('startRun did not return a runId.')
     }
 
-    this._audit('runEngine', params, { branchAssignmentMode, runId, stage: 'session-opened' })
+    this._audit('runEngine', params, { branchAssignmentMode, calibrareMod, runId, stage: 'session-opened' })
 
     const phasesResponse = await this._callAjs('runPhases', { runId }, token)
     if (!phasesResponse || phasesResponse.success === false) {

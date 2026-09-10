@@ -227,8 +227,9 @@ async function main () {
   if (references.length !== pairs.length) throw new Error('Un triplet selectat nu mai exista exact o data in CCCMINMAXDET.')
 
   const keys = new Set(pairs.map(({ BRANCH, MTRL }) => `${BRANCH}|${MTRL}`))
-  const [run, winsor, weeks] = await Promise.all([
-    execSql(`SELECT RUNID, COMPANY, AZI, PARAMSJSON, COMPUTE_PARAMSJSON FROM CCCMINMAXRUN WHERE RUNID = ${RUN_ID} AND COMPANY = ${COMPANY}`),
+  const [run, runParams, winsor, weeks] = await Promise.all([
+    execSql(`SELECT RUNID, COMPANY, AZI FROM CCCMINMAXRUN WHERE RUNID = ${RUN_ID} AND COMPANY = ${COMPANY}`),
+    execSql(`SELECT PARAMKEY, PARAMVALUE FROM CCCMINMAXRUNPARAM WHERE RUNID = ${RUN_ID} AND BRANCH = 0 AND PREFIX = ''`),
     execSql(`SELECT MTRL, POSITIVE_LINE_COUNT, CONVERT(VARCHAR(40), P95_QTY) AS P95_QTY, CONVERT(VARCHAR(40), MEDIAN_QTY) AS MEDIAN_QTY, PRAG_APLICAT, NR_LINII_PLAFONATE, CONVERT(VARCHAR(40), QTY_BRUT) AS QTY_BRUT, CONVERT(VARCHAR(40), QTY_WINSORIZAT) AS QTY_WINSORIZAT FROM CCCMINMAXWINSOR WHERE RUNID = ${RUN_ID} AND MTRL IN (${pairs.map(({ MTRL }) => Number(MTRL)).join(',')}) ORDER BY MTRL`),
     execSql(`SELECT BRANCH, MTRL, WEEK_INDEX, CONVERT(VARCHAR(40), QTY) AS QTY, CONVERT(VARCHAR(40), SALES_VALUE) AS SALES_VALUE, LAST_POSITIVE_SALE FROM CCCMINMAXWEEK WHERE RUNID = ${RUN_ID} AND (${pairs.map(({ BRANCH, MTRL }) => `(BRANCH = ${Number(BRANCH)} AND MTRL = ${Number(MTRL)})`).join(' OR ')}) ORDER BY BRANCH, MTRL, WEEK_INDEX`)
   ])
@@ -240,7 +241,7 @@ async function main () {
     labels: sampleLabels.sort(),
     reference: byKey.get(key)
   })).sort((left, right) => left.triplet.branch - right.triplet.branch || left.triplet.mtrl - right.triplet.mtrl)
-  const computeParams = JSON.parse(run[0].COMPUTE_PARAMSJSON)
+  const computeParams = Object.fromEntries(runParams.map((row) => [row.PARAMKEY, Number(row.PARAMVALUE)]))
   const verification = sample.map(({ triplet, reference }) => verifyReference(triplet, reference, computeParams))
   const failures = verification.filter(({ verdict }) => verdict === 'FAIL')
   if (failures.length) {
@@ -255,6 +256,7 @@ async function main () {
     calculationMethod: 'Recalcul independent al formulelor din 03_compute.sql, cu rotunjire DECIMAL(28,8) dupa fiecare etapa. SUM_BR_MAX si HQ_ENG_MIN sunt dependente persistate ale formulelor HQ/podea.',
     decimalTolerance: DECIMAL_TOLERANCE,
     run: run[0],
+    runParams,
     requiredLabels: REQUIRED_LABELS,
     unavailableLabels: UNAVAILABLE_LABELS,
     coverage: Object.fromEntries(REQUIRED_LABELS.map((label) => [label, labels.filter((row) => row.SAMPLE_LABEL === label).map((row) => ({ branch: Number(row.BRANCH), mtrl: Number(row.MTRL) }))])),

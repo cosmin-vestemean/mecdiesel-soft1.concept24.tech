@@ -21,12 +21,14 @@ const STATUS_BADGE_CLASS = {
 // text so the three green "DONE" badges per row stop diluting the signal.
 const QUIET_STATUSES = new Set(['DONE']);
 const BRANCH_ASSIGNMENT_MODES = new Set(['DOC', 'AGENT', 'CLIENT']);
+const CALIBRARE_MODES = new Set(['A', 'B', 'C']);
 
 export class MinmaxRunPanel extends LitElement {
   static get properties () {
     return {
       historyError: { type: String },
       branchAssignmentMode: { type: String },
+      calibrareMod: { type: String },
       canEdit: { type: Boolean },
       loading: { type: Boolean },
       loadingHistory: { type: Boolean },
@@ -43,6 +45,7 @@ export class MinmaxRunPanel extends LitElement {
 
     this.historyError = '';
     this.branchAssignmentMode = 'CLIENT';
+    this.calibrareMod = 'C';
     this.canEdit = false;
     this.loading = false;
     this.loadingHistory = false;
@@ -52,6 +55,7 @@ export class MinmaxRunPanel extends LitElement {
     this.runId = null;
     this.writesEnabled = false;
     this._branchAssignmentModeTouched = false;
+    this._calibrareModTouched = false;
 
     this._storeConsumer = new ContextConsumer(this, {
       callback: (store) => {
@@ -105,6 +109,15 @@ export class MinmaxRunPanel extends LitElement {
         this.branchAssignmentMode = normalizedMode;
       }
     }
+    if (!this._calibrareModTouched) {
+      const configuredMode = (state.params && state.params.params || []).find((param) =>
+        param.PARAMKEY === 'CALIBRARE_MOD' && param.SCOPE === 'GLOBAL' && !param.SCOPEKEY
+      );
+      const normalizedMode = configuredMode && String(configuredMode.PARAMVALUE).trim().toUpperCase();
+      if (CALIBRARE_MODES.has(normalizedMode)) {
+        this.calibrareMod = normalizedMode;
+      }
+    }
   }
 
   // --- Actions ---
@@ -133,9 +146,9 @@ export class MinmaxRunPanel extends LitElement {
 
   _startRun () {
     if (!this._store) return;
-    if (!window.confirm(`Pornesti o sesiune MIN/MAX noua cu atribuirea vanzarilor dupa ${this.branchAssignmentMode}?`)) return;
+    if (!window.confirm(`Pornesti o sesiune MIN/MAX noua cu atribuirea vanzarilor dupa ${this.branchAssignmentMode} si metrica ${this.calibrareMod}?`)) return;
     this.dispatchEvent(new CustomEvent('run-start', { bubbles: true, composed: true }));
-    this._store.runEngine({ branchAssignmentMode: this.branchAssignmentMode });
+    this._store.runEngine({ branchAssignmentMode: this.branchAssignmentMode, calibrareMod: this.calibrareMod });
   }
 
   _setBranchAssignmentMode (event) {
@@ -143,6 +156,13 @@ export class MinmaxRunPanel extends LitElement {
     if (!BRANCH_ASSIGNMENT_MODES.has(mode)) return;
     this._branchAssignmentModeTouched = true;
     this.branchAssignmentMode = mode;
+  }
+
+  _setCalibrareMod (event) {
+    const mode = String(event.target.value || '').trim().toUpperCase();
+    if (!CALIBRARE_MODES.has(mode)) return;
+    this._calibrareModTouched = true;
+    this.calibrareMod = mode;
   }
 
   _notifyRunHoverStart () {
@@ -202,6 +222,22 @@ export class MinmaxRunPanel extends LitElement {
                 <option value="CLIENT">Client (TRDBRANCH)</option>
                 <option value="DOC">Document (FINDOC)</option>
                 <option value="AGENT">Agent (PRSN)</option>
+              </select>
+            </label>
+            <label class="d-flex align-items-center gap-2 mb-0 small" for="minmax-calibrare-mod">
+              Calibrare
+              <select
+                id="minmax-calibrare-mod"
+                class="form-select form-select-sm"
+                style="width:auto;"
+                title="Metrica de calibrare evidentiata pentru sesiune"
+                .value="${this.calibrareMod}"
+                ?disabled="${Boolean(openRun) || this.runLaunch.starting || this.runLaunch.polling}"
+                @change="${this._setCalibrareMod}"
+              >
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
               </select>
             </label>
             <button

@@ -1,15 +1,15 @@
 # Current Focus
 
 ## Last Updated
-- 10.09.2026 (session 3)
+- 10.09.2026 (session 4)
 
 ## Current Goal
-- Faza 1 este deblocată pentru pașii 1-5 din matricea executabilă (P14, P9, P8, P3, P7); implementarea se face într-o sesiune Sonnet dedicată.
+- Primul bloc aprobat al Fazei 1 este implementat local: retragere Prepare, P14, P8, snapshot unic, P3 și P7. Nu a fost făcut deploy AJS și nu a fost rulată o sesiune nouă.
 - Restul registrului rămâne pentru sesiuni ulterioare: netting P1/P2 și univers P4 au dependențele proprii; P6 este neblocat pentru override-urile per filială, iar numai extensia de prefix așteaptă lista N5.
 
 ## Active Area
-- MIN/MAX v5: I7/D05 este implementat per rulare; codul curent salvează încă `DOC`/`AGENT`/`CLIENT` în `PARAMSJSON`, dar decizia de implementare este eliminarea celor trei JSON-uri și migrarea la `CCCMINMAXRUNPARAM` ca snapshot unic.
-- Ultima lucrare a fost documentară: C1-C5 sunt corecții editoriale, nu aprobări de formule sau autorizații de cod. Workspace-ul este curat după commitul `bbd7ad4`.
+- MIN/MAX v5: `CCCMINMAXRUNPARAM` este snapshot-ul unic, copiat o dată de `StartRun`; Classify, ClassifyGroup și Compute îl consumă pentru rulările persistate. Coloanele `PARAMSJSON`, `GROUP_PARAMSJSON` și `COMPUTE_PARAMSJSON` sunt eliminate idempotent din `CCCMINMAXRUN`; Explain și freeze sample citesc snapshot-ul.
+- P3/P7 sunt implementate simetric în Classify și ClassifyGroup. P14 raportează CLI A/B/C și UI-ul de lansare transmite `calibrareMod` A/B/C (default C), înghețat la StartRun. P8 acceptă explicit `SIGMA_MIN=0`, cu NULL/absent -> 1.3 și erori pentru negativ/nenumeric.
 
 ## Relevant Files
 - [Matrice executabilă P1-P15](../../new_min_max/10.09.2026/MATRICE_EXECUTABILA_P1-P15_2026-09-10.md): sursa de adevăr pentru deciziile luate, ordinea de implementare și locațiile de cod verificate.
@@ -18,7 +18,7 @@
 - [Sumar reconciliat](../../new_min_max/SUMAR_TEORETIC_CONFIRMARE.md): C1-C5 aplicate în commitul `bbd7ad4`.
 - [Model wiki](../wiki/minmax-engine-model.md) și [formule wiki](../wiki/minmax-engine-formulas.md): arhitectură și formule durabile.
 - [Open items wiki](../wiki/minmax-engine-open-items.md): întrebări business încă neînchise.
-- [AJS NewMinMax](../../S1-MEC/AJS/NewMinMax.js): implementare deployată; nu a fost modificată în această fază.
+- [AJS NewMinMax](../../S1-MEC/AJS/NewMinMax.js): oglindește sursele SQL actualizate; nu a fost făcut deploy.
 
 ## Confirmed Decisions
 - P6 folosește o politică mixtă: `NRSAPT`, pragurile lifecycle, `SIGMA_MIN` și `SL_A/B/C` sunt globale; `SSF` este global și doar informativ (iese din formula safety); numai `LT_ZILE` și `FRECVENTA_ZILE` acceptă override cu precedența `BRANCH+PREFIX > BRANCH > PREFIX > GLOBAL`. HQ este explicit `BRANCH=1000`; `BRANCH=0` înseamnă fără interes local. Constanța lunară este recomandare + snapshot, nu hard lock.
@@ -43,6 +43,13 @@
 - Intenția matricei COV rămâne deschisă, deși comparația numerică este corectată la `CX = BY = 2,00 > BZ = 1,75`.
 
 ## Next Step
-- Sesiune Sonnet: urmează ordinea revizuită din matrice — retragere Prepare → P14 CLI → P8 → snapshot unic și eliminare JSON → P3a/P3b în 01+02 → P7 în 01+02. `node new_min_max/tools/sync-check.cjs` după orice editare SQL; rularea engine-ului și deploy-ul AJS rămân manuale, la utilizator.
-- Ulterior P6 adaugă `CCCMINMAXPARAMOVERRIDE`, resolverul LT/frecvență, UI-ul și scope-ul analitic `SUPPLIER`; longest-prefix rămâne condiționat de N5.
+- Înainte de deploy controlat, se recomandă review într-o sesiune Opus cu context mic. Deploy-ul AJS și orice rulare nouă rămân manuale, la utilizator. După orice editare SQL rulează `node new_min_max/tools/sync-check.cjs`.
+- Următoarea implementare autorizată este P6 pentru override branch al `LT_ZILE`/`FRECVENTA_ZILE`, fără extensia longest-prefix până la N5; apoi P1. Rămân excluse P2, P4/N9-N10, P5, P10-P13 până la deciziile lor explicite.
+
+## Validation
+- `node new_min_max/tools/sync-check.cjs`: toate cele 12 perechi SQL-AJS în sync.
+- `node --check S1-MEC/AJS/NewMinMax.js`, `node --check new_min_max/tools/validate-minmax-invariants.cjs` și `node --check new_min_max/tools/freeze-minmax-sample.cjs`: trec.
+- `npx mocha test/services/minmax-engine/ --recursive`: 114 passing.
+- `npx mocha test/services/minmax-engine/ test/stores/minmax-engine-store.test.js --recursive`: 144 passing.
+- `npx mocha test/components/minmax-engine/minmax-run-panel.test.js --recursive`: 8 passing.
 

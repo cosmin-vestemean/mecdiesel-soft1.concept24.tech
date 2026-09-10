@@ -173,30 +173,16 @@ export class MinmaxExplainDrawer extends LitElement {
     return this._formatNumber(value);
   }
 
-  _formatJson (raw) {
-    if (!raw) return '-';
-    try {
-      return JSON.stringify(JSON.parse(raw), null, 2);
-    } catch {
-      return raw;
-    }
-  }
-
   // Anexa §B11: render the ENG_MIN/ENG_MAX formula chain with the actual
   // values substituted, above the raw parameter tables. Formulas transcribed
   // from new_min_max/sql/03_compute.sql Step1-Step6 + §7a-7c (read-only
   // display; the authoritative calculation stays in the stored procedure).
-  // Constants (InflatieHq, HqCapFactor, ...) come from run.COMPUTE_PARAMSJSON
-  // with the same fallbacks as 03_compute.sql, since they aren't persisted
-  // per-row on CCCMINMAXDET.
-  _parseComputeParams (run) {
-    const raw = run && run.COMPUTE_PARAMSJSON;
-    if (!raw) return {};
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return {};
-    }
+  // Constants (InflatieHq, HqCapFactor, ...) come from the CCCMINMAXRUNPARAM
+  // snapshot (BRANCH=0/PREFIX=''), with the same fallbacks as 03_compute.sql,
+  // since they aren't persisted per-row on CCCMINMAXDET.
+  _paramsMap (runParams) {
+    const rows = Array.isArray(runParams) ? runParams : [];
+    return Object.fromEntries(rows.map((row) => [row.PARAMKEY, row.PARAMVALUE]));
   }
 
   // KaTeX renders the symbolic/substituted math (Anexa feedback 08.09.2026:
@@ -216,14 +202,14 @@ export class MinmaxExplainDrawer extends LitElement {
     return String(Math.round(num * 10000) / 10000);
   }
 
-  _renderFormula (det, run) {
+  _renderFormula (det, runParams) {
     if (!det) return '';
     const n = (v) => this._formatNumber(v);
     const t = (v) => this._texNum(v);
     const k = (tex) => this._katex(tex);
     const num = (v) => (v === null || v === undefined ? 0 : Number(v));
     const lifecycle = det.LIFECYCLE;
-    const cp = this._parseComputeParams(run);
+    const cp = this._paramsMap(run);
 
     const inflatieHq = num(cp.INFLATIE_HQ) || 1.30;
     const hqCapFactor = num(cp.HQ_CAP_FACTOR) || 1.5;
@@ -327,8 +313,9 @@ export class MinmaxExplainDrawer extends LitElement {
     `;
   }
 
-  _renderRunHeader (run) {
+  _renderRunHeader (run, runParams) {
     if (!run) return '';
+    const rows = Array.isArray(runParams) ? runParams : [];
     return html`
       <div class="mb-3">
         <h6 class="text-muted">Sesiune (CCCMINMAXRUN)</h6>
@@ -342,12 +329,12 @@ export class MinmaxExplainDrawer extends LitElement {
           </tbody>
         </table>
         <details>
-          <summary class="small text-muted" style="cursor: pointer;">Parametri (JSON)</summary>
-          <pre class="small bg-light p-2 mb-0">PARAMSJSON: ${this._formatJson(run.PARAMSJSON)}
-
-COMPUTE_PARAMSJSON: ${this._formatJson(run.COMPUTE_PARAMSJSON)}
-
-GROUP_PARAMSJSON: ${this._formatJson(run.GROUP_PARAMSJSON)}</pre>
+          <summary class="small text-muted" style="cursor: pointer;">Parametri (CCCMINMAXRUNPARAM, snapshot)</summary>
+          <table class="table table-sm table-bordered mb-0">
+            <tbody>
+              ${rows.map((row) => html`<tr><th>${row.PARAMKEY}</th><td>${row.PARAMVALUE}</td></tr>`)}
+            </tbody>
+          </table>
         </details>
       </div>
     `;
@@ -422,8 +409,8 @@ GROUP_PARAMSJSON: ${this._formatJson(run.GROUP_PARAMSJSON)}</pre>
               </table>
             </div>
 
-            ${this._renderRunHeader(this.data.run)}
-            ${this._renderFormula(det, this.data.run)}
+            ${this._renderRunHeader(this.data.run, this.data.runParams)}
+            ${this._renderFormula(det, this.data.runParams)}
             ${this._renderFieldTable('Intrari', INPUT_FIELDS, det)}
             ${this._renderFieldTable('Lant de calcul', CHAIN_FIELDS, det)}
             ${this.data.winsor

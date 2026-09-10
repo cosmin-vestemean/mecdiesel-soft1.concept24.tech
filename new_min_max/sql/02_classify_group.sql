@@ -34,73 +34,113 @@ BEGIN
     END;
 
     -- ---------------------------------------------------------------
-    -- 1. Citire parametri din CCCMINMAXPARAMS
+    -- 1. Rezolvarea parametrilor: snapshot inghetat CCCMINMAXRUNPARAM cand
+    --    @Persist = 1 (populat o singura data in StartRun), altfel valorile
+    --    live din CCCMINMAXPARAMS (previzualizare fara sesiune).
     -- ---------------------------------------------------------------
     DECLARE @NrSaptamani INT;
     DECLARE @WinsorPct FLOAT;
     DECLARE @WinsorMinLinii INT;
     DECLARE @WinsorSubPrag VARCHAR(10);
     DECLARE @ModAtribuire VARCHAR(10);
+    DECLARE @SigmaMinRaw VARCHAR(255);
     DECLARE @SigmaMin DECIMAL(28, 8);
     DECLARE @HqDinAgregatCompanie BIT;
     DECLARE @PragRecHq INT;
     DECLARE @PragRecBr INT;
+    -- P7: praguri lifecycle/ABC/XYZ/forced-Z (C11); fara ponderi AVG (ClassifyGroup nu calculeaza AVG_DEMAND)
+    DECLARE @StandardMinSapt INT;
+    DECLARE @NouMinSapt8 INT;
+    DECLARE @NouNecesitaVz26 BIT;
+    DECLARE @AbcA DECIMAL(10, 4);
+    DECLARE @AbcB DECIMAL(10, 4);
+    DECLARE @XyzX DECIMAL(10, 4);
+    DECLARE @XyzY DECIMAL(10, 4);
+    DECLARE @ForceZLunaDominanta DECIMAL(10, 4);
+    DECLARE @ForceZMinLuni INT;
+    -- P3: comutatoare ABC
+    DECLARE @AbcConventieCumul VARCHAR(10);
+    DECLARE @AbcPopulatie VARCHAR(10);
+    DECLARE @AbcPrimArticolA BIT;
     DECLARE @Azi DATE;
     DECLARE @PercentileSql NVARCHAR(MAX);
     DECLARE @WinsorPctSql VARCHAR(32);
-    DECLARE @ParamsJson NVARCHAR(MAX);
     DECLARE @StartedAt DATETIME = GETDATE();
 
-    SELECT @NrSaptamani = TRY_CONVERT(INT, PARAMVALUE)
-    FROM CCCMINMAXPARAMS
-    WHERE PARAMKEY = 'NRSAPT' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
-
-    SELECT @WinsorPct = TRY_CONVERT(FLOAT, PARAMVALUE)
-    FROM CCCMINMAXPARAMS
-    WHERE PARAMKEY = 'WINSOR_PCT' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
-
-    SELECT @WinsorMinLinii = TRY_CONVERT(INT, PARAMVALUE)
-    FROM CCCMINMAXPARAMS
-    WHERE PARAMKEY = 'WINSOR_MIN_LINII' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
-
-    SELECT @WinsorSubPrag = UPPER(LTRIM(RTRIM(PARAMVALUE)))
-    FROM CCCMINMAXPARAMS
-    WHERE PARAMKEY = 'WINSOR_SUB_PRAG' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
-
-    SELECT @ModAtribuire = UPPER(LTRIM(RTRIM(PARAMVALUE)))
-    FROM CCCMINMAXPARAMS
-    WHERE PARAMKEY = 'MOD_ATRIBUIRE_FILIALA' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
+    CREATE TABLE #ResolvedParams (
+        PARAMKEY VARCHAR(50) NOT NULL PRIMARY KEY,
+        PARAMVALUE VARCHAR(255) NULL
+    );
 
     IF @Persist = 1
-        SELECT @ModAtribuire = UPPER(LTRIM(RTRIM(JSON_VALUE(PARAMSJSON, '$.MOD_ATRIBUIRE_FILIALA'))))
-        FROM CCCMINMAXRUN
-        WHERE RUNID = @RunId AND COMPANY = @Company AND SESSION_STATUS = 'OPEN';
+        INSERT INTO #ResolvedParams (PARAMKEY, PARAMVALUE)
+        SELECT PARAMKEY, PARAMVALUE
+        FROM CCCMINMAXRUNPARAM
+        WHERE RUNID = @RunId AND BRANCH = 0 AND PREFIX = '';
+    ELSE
+        INSERT INTO #ResolvedParams (PARAMKEY, PARAMVALUE)
+        SELECT PARAMKEY, PARAMVALUE
+        FROM CCCMINMAXPARAMS
+        WHERE SCOPE = 'GLOBAL' AND SCOPEKEY = '';
 
-    SELECT @SigmaMin = TRY_CONVERT(DECIMAL(28, 8), PARAMVALUE)
-    FROM CCCMINMAXPARAMS
-    WHERE PARAMKEY = 'SIGMA_MIN' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
+    SELECT @NrSaptamani = TRY_CONVERT(INT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'NRSAPT';
+    SELECT @WinsorPct = TRY_CONVERT(FLOAT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'WINSOR_PCT';
+    SELECT @WinsorMinLinii = TRY_CONVERT(INT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'WINSOR_MIN_LINII';
+    SELECT @WinsorSubPrag = UPPER(LTRIM(RTRIM(PARAMVALUE))) FROM #ResolvedParams WHERE PARAMKEY = 'WINSOR_SUB_PRAG';
+    SELECT @ModAtribuire = UPPER(LTRIM(RTRIM(PARAMVALUE))) FROM #ResolvedParams WHERE PARAMKEY = 'MOD_ATRIBUIRE_FILIALA';
 
-    SELECT @HqDinAgregatCompanie = TRY_CONVERT(BIT, PARAMVALUE)
-    FROM CCCMINMAXPARAMS
-    WHERE PARAMKEY = 'HQ_DIN_AGREGAT_COMPANIE' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
+    -- P8: absent/NULL -> 1.3 (fallback), 0 explicit e valid (safety zero),
+    -- negativ/nenumeric e o eroare de configurare, nu un fallback tacit.
+    SELECT @SigmaMinRaw = PARAMVALUE FROM #ResolvedParams WHERE PARAMKEY = 'SIGMA_MIN';
+    IF @SigmaMinRaw IS NULL
+        SET @SigmaMin = 1.3;
+    ELSE
+    BEGIN
+        SET @SigmaMin = TRY_CONVERT(DECIMAL(28, 8), @SigmaMinRaw);
+        IF @SigmaMin IS NULL
+            THROW 50072, 'sp_MinMaxEngine_ClassifyGroup: SIGMA_MIN must be numeric.', 1;
+        IF @SigmaMin < 0
+            THROW 50073, 'sp_MinMaxEngine_ClassifyGroup: SIGMA_MIN must not be negative.', 1;
+    END;
 
-    SELECT @PragRecHq = TRY_CONVERT(INT, PARAMVALUE)
-    FROM CCCMINMAXPARAMS
-    WHERE PARAMKEY = 'PRAG_REC_HQ' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
+    SELECT @HqDinAgregatCompanie = TRY_CONVERT(BIT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'HQ_DIN_AGREGAT_COMPANIE';
+    SELECT @PragRecHq = TRY_CONVERT(INT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'PRAG_REC_HQ';
+    SELECT @PragRecBr = TRY_CONVERT(INT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'PRAG_REC_BR';
 
-    SELECT @PragRecBr = TRY_CONVERT(INT, PARAMVALUE)
-    FROM CCCMINMAXPARAMS
-    WHERE PARAMKEY = 'PRAG_REC_BR' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
+    SELECT @StandardMinSapt = TRY_CONVERT(INT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'STANDARD_MIN_SAPT';
+    SELECT @NouMinSapt8 = TRY_CONVERT(INT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'NOU_MIN_SAPT_8';
+    SELECT @NouNecesitaVz26 = TRY_CONVERT(BIT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'NOU_NECESITA_VZ26';
+    SELECT @AbcA = TRY_CONVERT(DECIMAL(10, 4), PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'ABC_A';
+    SELECT @AbcB = TRY_CONVERT(DECIMAL(10, 4), PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'ABC_B';
+    SELECT @XyzX = TRY_CONVERT(DECIMAL(10, 4), PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'XYZ_X';
+    SELECT @XyzY = TRY_CONVERT(DECIMAL(10, 4), PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'XYZ_Y';
+    SELECT @ForceZLunaDominanta = TRY_CONVERT(DECIMAL(10, 4), PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'FORCE_Z_LUNA_DOMINANTA';
+    SELECT @ForceZMinLuni = TRY_CONVERT(INT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'FORCE_Z_MIN_LUNI';
+
+    SELECT @AbcConventieCumul = UPPER(LTRIM(RTRIM(PARAMVALUE))) FROM #ResolvedParams WHERE PARAMKEY = 'ABC_CONVENTIE_CUMUL';
+    SELECT @AbcPopulatie = UPPER(LTRIM(RTRIM(PARAMVALUE))) FROM #ResolvedParams WHERE PARAMKEY = 'ABC_POPULATIE';
+    SELECT @AbcPrimArticolA = TRY_CONVERT(BIT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'ABC_PRIM_ARTICOL_A';
 
     IF COALESCE(@NrSaptamani, 0) <= 0 SET @NrSaptamani = 52;
     IF @WinsorPct IS NULL OR @WinsorPct <= 0 OR @WinsorPct > 1 SET @WinsorPct = 0.95;
     IF COALESCE(@WinsorMinLinii, 0) <= 0 SET @WinsorMinLinii = 8;
     IF @WinsorSubPrag NOT IN ('NONE', 'MEDIANA') OR @WinsorSubPrag IS NULL SET @WinsorSubPrag = 'MEDIANA';
     IF @ModAtribuire NOT IN ('DOC', 'AGENT', 'CLIENT') OR @ModAtribuire IS NULL SET @ModAtribuire = 'CLIENT';
-    IF COALESCE(@SigmaMin, 0) <= 0 SET @SigmaMin = 1.3;
     SET @HqDinAgregatCompanie = COALESCE(@HqDinAgregatCompanie, 1);
     IF COALESCE(@PragRecHq, 0) <= 0 SET @PragRecHq = 39;
     IF COALESCE(@PragRecBr, 0) <= 0 SET @PragRecBr = 26;
+    IF COALESCE(@StandardMinSapt, 0) <= 0 SET @StandardMinSapt = 3;
+    IF COALESCE(@NouMinSapt8, 0) <= 0 SET @NouMinSapt8 = 2;
+    SET @NouNecesitaVz26 = COALESCE(@NouNecesitaVz26, 1);
+    IF @AbcA IS NULL OR @AbcA <= 0 OR @AbcA >= 1 SET @AbcA = 0.80;
+    IF @AbcB IS NULL OR @AbcB <= @AbcA OR @AbcB >= 1 SET @AbcB = 0.95;
+    IF @XyzX IS NULL OR @XyzX <= 0 SET @XyzX = 0.50;
+    IF @XyzY IS NULL OR @XyzY <= @XyzX SET @XyzY = 1.00;
+    IF @ForceZLunaDominanta IS NULL OR @ForceZLunaDominanta <= 0 SET @ForceZLunaDominanta = 0.60;
+    IF COALESCE(@ForceZMinLuni, 0) <= 0 SET @ForceZMinLuni = 2;
+    IF @AbcConventieCumul NOT IN ('INCLUSIV', 'PRECEDENT') OR @AbcConventieCumul IS NULL SET @AbcConventieCumul = 'INCLUSIV';
+    IF @AbcPopulatie NOT IN ('STANDARD', 'TOATE') OR @AbcPopulatie IS NULL SET @AbcPopulatie = 'STANDARD';
+    SET @AbcPrimArticolA = COALESCE(@AbcPrimArticolA, 1);
 
     -- ---------------------------------------------------------------
     -- 2. Extragere linii vânzări eligibile
@@ -421,11 +461,11 @@ BEGIN
                 CASE WHEN ms.MEAN_MTH > 0 THEN ms.SIGMA_MTH / ms.MEAN_MTH ELSE NULL END
             ) AS CV,
             CASE
-                WHEN ba.SAPT_VZ >= 3
+                WHEN ba.SAPT_VZ >= @StandardMinSapt
                     AND ba.SAPT_FARA <= (CASE WHEN ba.ESTE_HQ = 1 THEN @PragRecHq ELSE @PragRecBr END)
                     AND ba.VZ_52S > 0
                 THEN 'STANDARD'
-                WHEN ba.SAPT_8S >= 2 AND ba.VZ_26S > 0
+                WHEN ba.SAPT_8S >= @NouMinSapt8 AND (@NouNecesitaVz26 = 0 OR ba.VZ_26S > 0)
                 THEN 'NOU'
                 ELSE 'OD'
             END AS LIFECYCLE
@@ -436,18 +476,27 @@ BEGIN
     Step2_AbcPareto AS (
         SELECT
             sl.*,
-            -- Cumulativ pe VAL_52S per BRANCH: grupele concurează între ele în filială
-            SUM(sl.VAL_52S) OVER (
+            -- P3: contributie conditionata (STANDARD sau TOATE); NOU/OD raman
+            -- in secventa (ordonare), dar nu consuma valoare cand @AbcPopulatie=STANDARD
+            CONVERT(DECIMAL(28, 8),
+                CASE WHEN @AbcPopulatie = 'TOATE' OR sl.LIFECYCLE = 'STANDARD' THEN sl.VAL_52S ELSE 0 END
+            ) AS VAL_CONTRIB,
+            -- Cumulativ per BRANCH: grupele concurează între ele în filială
+            SUM(CASE WHEN @AbcPopulatie = 'TOATE' OR sl.LIFECYCLE = 'STANDARD' THEN sl.VAL_52S ELSE 0 END) OVER (
                 PARTITION BY sl.BRANCH
             ) AS BR_TOTAL_VAL,
             COUNT(*) OVER (
                 PARTITION BY sl.BRANCH
             ) AS BR_GROUP_COUNT,
-            SUM(sl.VAL_52S) OVER (
+            SUM(CASE WHEN @AbcPopulatie = 'TOATE' OR sl.LIFECYCLE = 'STANDARD' THEN sl.VAL_52S ELSE 0 END) OVER (
                 PARTITION BY sl.BRANCH
                 ORDER BY sl.VAL_52S DESC, sl.MTRGROUP_CODE ASC
                 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-            ) AS RUNNING_BR_VAL
+            ) AS RUNNING_BR_VAL,
+            ROW_NUMBER() OVER (
+                PARTITION BY sl.BRANCH
+                ORDER BY sl.VAL_52S DESC, sl.MTRGROUP_CODE ASC
+            ) AS RN
         FROM Step1_Lifecycle sl
     ),
     Step3_AbcClassified AS (
@@ -455,7 +504,7 @@ BEGIN
             ap.*,
             CONVERT(DECIMAL(28, 8),
                 CASE
-                    WHEN ap.BR_TOTAL_VAL > 0 THEN (ap.RUNNING_BR_VAL - ap.VAL_52S) / ap.BR_TOTAL_VAL
+                    WHEN ap.BR_TOTAL_VAL > 0 THEN (ap.RUNNING_BR_VAL - ap.VAL_CONTRIB) / ap.BR_TOTAL_VAL
                     ELSE 0.0
                 END
             ) AS PREV_CUMULATIVE_PCT,
@@ -465,29 +514,40 @@ BEGIN
                     ELSE 1.0
                 END
             ) AS CUMULATIVE_PCT,
+            -- P3: rangul primului articol eligibil (contributie pozitiva si VAL_52S>0)
+            -- din aceeasi ordonare; folosit de ABC_PRIM_ARTICOL_A mai jos
+            MIN(CASE WHEN ap.VAL_CONTRIB > 0 AND ap.VAL_52S > 0 THEN ap.RN END) OVER (
+                PARTITION BY ap.BRANCH
+            ) AS FIRST_ELIGIBLE_RN
+        FROM Step2_AbcPareto ap
+    ),
+    Step3b_AbcLetter AS (
+        SELECT
+            ac.*,
             CASE
-                WHEN ap.BR_TOTAL_VAL <= 0 OR ap.VAL_52S <= 0 THEN 'C'
-                WHEN (ap.RUNNING_BR_VAL - ap.VAL_52S) / ap.BR_TOTAL_VAL < 0.80 THEN 'A'
-                WHEN (ap.RUNNING_BR_VAL - ap.VAL_52S) / ap.BR_TOTAL_VAL < 0.95 THEN 'B'
+                WHEN @AbcPrimArticolA = 1 AND ac.RN = ac.FIRST_ELIGIBLE_RN THEN 'A'
+                WHEN ac.BR_TOTAL_VAL <= 0 OR ac.VAL_52S <= 0 THEN 'C'
+                WHEN (CASE WHEN @AbcConventieCumul = 'INCLUSIV' THEN ac.CUMULATIVE_PCT ELSE ac.PREV_CUMULATIVE_PCT END) <= @AbcA THEN 'A'
+                WHEN (CASE WHEN @AbcConventieCumul = 'INCLUSIV' THEN ac.CUMULATIVE_PCT ELSE ac.PREV_CUMULATIVE_PCT END) <= @AbcB THEN 'B'
                 ELSE 'C'
             END AS ABC,
             CASE
-                WHEN ap.LIFECYCLE IN ('NOU', 'OD')
-                    OR ap.MAX_LUNA_QTY > 0.60 * ap.VZ_52S
-                    OR ap.LUNI_VZ < 2
-                    OR ap.VZ_52S <= 0
+                WHEN ac.LIFECYCLE IN ('NOU', 'OD')
+                    OR ac.MAX_LUNA_QTY > @ForceZLunaDominanta * ac.VZ_52S
+                    OR ac.LUNI_VZ < @ForceZMinLuni
+                    OR ac.VZ_52S <= 0
                 THEN 1
                 ELSE 0
             END AS IS_FORCED_Z
-        FROM Step2_AbcPareto ap
+        FROM Step3_AbcClassified ac
     ),
     Step4_XyzAndClass AS (
         SELECT
             ac.*,
             CASE
                 WHEN ac.IS_FORCED_Z = 1 THEN 'Z'
-                WHEN ac.CV <= 0.50 THEN 'X'
-                WHEN ac.CV <= 1.00 THEN 'Y'
+                WHEN ac.CV <= @XyzX THEN 'X'
+                WHEN ac.CV <= @XyzY THEN 'Y'
                 ELSE 'Z'
             END AS XYZ,
             CASE
@@ -495,12 +555,12 @@ BEGIN
                 WHEN ac.LIFECYCLE = 'OD' THEN 'OD'
                 ELSE ac.ABC + CASE
                     WHEN ac.IS_FORCED_Z = 1 THEN 'Z'
-                    WHEN ac.CV <= 0.50 THEN 'X'
-                    WHEN ac.CV <= 1.00 THEN 'Y'
+                    WHEN ac.CV <= @XyzX THEN 'X'
+                    WHEN ac.CV <= @XyzY THEN 'Y'
                     ELSE 'Z'
                 END
             END AS CLASA
-        FROM Step3_AbcClassified ac
+        FROM Step3b_AbcLetter ac
     )
     SELECT
         COMPANY, AZI, BRANCH, MARIME, ESTE_HQ, ESTE_PODEA,
@@ -521,25 +581,12 @@ BEGIN
     -- ---------------------------------------------------------------
     IF @Persist = 1
     BEGIN
-        SET @ParamsJson =
-            N'{"NRSAPT":' + CONVERT(NVARCHAR(32), @NrSaptamani) +
-            N',"WINSOR_PCT":' + CONVERT(NVARCHAR(32), CONVERT(DECIMAL(10, 4), @WinsorPct)) +
-            N',"WINSOR_MIN_LINII":' + CONVERT(NVARCHAR(32), @WinsorMinLinii) +
-            N',"WINSOR_SUB_PRAG":"' + @WinsorSubPrag + N'"' +
-            N',"MOD_ATRIBUIRE_FILIALA":"' + @ModAtribuire + N'"' +
-            N',"SIGMA_MIN":' + CONVERT(NVARCHAR(32), @SigmaMin) +
-            N',"HQ_DIN_AGREGAT_COMPANIE":' + CONVERT(NVARCHAR(32), CONVERT(TINYINT, @HqDinAgregatCompanie)) +
-            N',"PRAG_REC_HQ":' + CONVERT(NVARCHAR(32), @PragRecHq) +
-            N',"PRAG_REC_BR":' + CONVERT(NVARCHAR(32), @PragRecBr) +
-            N'}';
-
         UPDATE CCCMINMAXRUN
         SET GROUP_STATUS = 'RUNNING',
             GROUP_STARTEDAT = @StartedAt,
             GROUP_FINISHEDAT = NULL,
             GROUP_DURATA_SEC = NULL,
             GROUP_NR_RANDURI = NULL,
-            GROUP_PARAMSJSON = @ParamsJson,
             GROUP_ERRORMSG = NULL
         WHERE RUNID = @RunId;
 

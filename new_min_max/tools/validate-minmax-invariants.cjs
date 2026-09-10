@@ -309,12 +309,12 @@ function buildInvariants (runId) {
       }
     },
     {
-      id: 'calibrare_flag',
-      label: 'RAPORTARE (nu pass/fail): % populatie curata in banda FLAG_RATIO 0.50-2.00 (prag client: >80%)',
+      id: 'calibrare_a',
+      label: 'RAPORTARE A (nu pass/fail): FLAG_RATIO 0.50-2.00 pe populatia curata',
       async run () {
         const [row] = await execSql(
           `SELECT COUNT(*) AS TOTAL_POPULATIE_CURATA,
-                  SUM(CASE WHEN FLAG_RATIO BETWEEN 0.50 AND 2.00 THEN 1 ELSE 0 END) AS IN_BANDA
+                  SUM(CASE WHEN FLAG_RATIO BETWEEN 0.50 AND 2.00 THEN 1 ELSE 0 END) AS IN_CRITERIU
            FROM CCCMINMAXDET
            WHERE RUNID = ${runId}
              AND LIFECYCLE IN ('STANDARD', 'NOU')
@@ -324,13 +324,61 @@ function buildInvariants (runId) {
              AND ERP_MAX IS NOT NULL AND ERP_MAX <> 0`
         )
         const total = n(row.TOTAL_POPULATIE_CURATA) || 0
-        const inBanda = n(row.IN_BANDA) || 0
-        const pct = total > 0 ? (100 * inBanda / total) : NaN
+        const inCriteriu = n(row.IN_CRITERIU) || 0
+        const pct = total > 0 ? (100 * inCriteriu / total) : NaN
         return {
           pass: null,
           detail: total > 0
-            ? `${inBanda}/${total} = ${pct.toFixed(1)}% in banda (prag client: >80%)`
+            ? `${inCriteriu}/${total} = ${pct.toFixed(1)}% in criteriu`
             : 'populatie curata goala - nimic de calibrat'
+        }
+      }
+    },
+    {
+      id: 'calibrare_b',
+      label: "RAPORTARE B (nu pass/fail): FLAG_TXT='OK' pe populatia curata",
+      async run () {
+        const [row] = await execSql(
+          `SELECT COUNT(*) AS TOTAL_POPULATIE_CURATA,
+                  SUM(CASE WHEN FLAG_TXT = 'OK' THEN 1 ELSE 0 END) AS IN_CRITERIU
+           FROM CCCMINMAXDET
+           WHERE RUNID = ${runId}
+             AND LIFECYCLE IN ('STANDARD', 'NOU')
+             AND COALESCE(FLAG_LICHIDARE, 0) = 0
+             AND COALESCE(FLAG_BLOCAT, 0) = 0
+             AND COALESCE(FLAG_EXCLUS, 0) = 0
+             AND ERP_MAX IS NOT NULL AND ERP_MAX <> 0`
+        )
+        const total = n(row.TOTAL_POPULATIE_CURATA) || 0
+        const inCriteriu = n(row.IN_CRITERIU) || 0
+        const pct = total > 0 ? (100 * inCriteriu / total) : NaN
+        return {
+          pass: null,
+          detail: total > 0
+            ? `${inCriteriu}/${total} = ${pct.toFixed(1)}% in criteriu`
+            : 'populatie curata goala - nimic de calibrat'
+        }
+      }
+    },
+    {
+      id: 'calibrare_c',
+      label: "RAPORTARE C (nu pass/fail): FLAG_TXT='OK' pe toate randurile cu ERP_MAX > 0",
+      async run () {
+        const [row] = await execSql(
+          `SELECT COUNT(*) AS TOTAL_POPULATIE_S8,
+                  SUM(CASE WHEN FLAG_TXT = 'OK' THEN 1 ELSE 0 END) AS IN_CRITERIU
+           FROM CCCMINMAXDET
+           WHERE RUNID = ${runId}
+             AND ERP_MAX > 0`
+        )
+        const total = n(row.TOTAL_POPULATIE_S8) || 0
+        const inCriteriu = n(row.IN_CRITERIU) || 0
+        const pct = total > 0 ? (100 * inCriteriu / total) : NaN
+        return {
+          pass: null,
+          detail: total > 0
+            ? `${inCriteriu}/${total} = ${pct.toFixed(1)}% in criteriu S 8`
+            : 'populatie S 8 goala - nimic de calibrat'
         }
       }
     }

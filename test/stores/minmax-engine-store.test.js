@@ -198,6 +198,7 @@ describe('minmax-engine-store — Phase 6 run lifecycle', () => {
 
     assert.strictEqual(ok, true);
     assert.strictEqual(payload.branchAssignmentMode, 'CLIENT');
+    assert.strictEqual(payload.calibrareMod, 'C');
     assert.strictEqual(payload.scope, 'FULL');
     assert.strictEqual(payload.token, 'test-token');
     assert.strictEqual(Object.prototype.hasOwnProperty.call(payload, 'authKey'), false);
@@ -215,10 +216,11 @@ describe('minmax-engine-store — Phase 6 run lifecycle', () => {
       }
     });
 
-    const ok = await store.runEngine({ branchAssignmentMode: ' agent ', poll: false });
+    const ok = await store.runEngine({ branchAssignmentMode: ' agent ', calibrareMod: ' a ', poll: false });
 
     assert.strictEqual(ok, true);
     assert.strictEqual(payload.branchAssignmentMode, 'AGENT');
+    assert.strictEqual(payload.calibrareMod, 'A');
   });
 
   it('rejects an unknown branch assignment mode before calling the service', async () => {

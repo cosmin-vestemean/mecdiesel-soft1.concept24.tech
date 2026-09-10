@@ -500,8 +500,10 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
       nock(FAKE_BASE_URL)
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('ESTE_CURENT = 1'))
         .reply(200, reply([{ RUNID: 5 }]))
-        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('PARAMSJSON'))
-        .reply(200, reply([{ PARAMSJSON: '{}', RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('COMPUTE_STARTEDAT FROM CCCMINMAXRUN'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXRUNPARAM'))
+        .reply(200, reply([{ PARAMKEY: 'CALIBRARE_MOD', PARAMVALUE: 'C' }]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXDET d'))
         .reply(200, reply([{ BRANCH: 1000, ENG_MAX: 10, MTRL: 42, RUNID: 5 }]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXWINSOR'))
@@ -514,13 +516,16 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
 
       assert.strictEqual(result.det.RUNID, 5)
       assert.strictEqual(result.run.RUNID, 5)
+      assert.deepStrictEqual(result.runParams, [{ PARAMKEY: 'CALIBRARE_MOD', PARAMVALUE: 'C' }])
     })
 
     it('rejects when there is no persisted CCCMINMAXDET row for the given key', async () => {
       nock(FAKE_BASE_URL)
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
         .reply(200, reply([{ RUNID: 5 }]))
-        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('PARAMSJSON'))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('COMPUTE_STARTEDAT FROM CCCMINMAXRUN'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXRUNPARAM'))
         .reply(200, reply([{ RUNID: 5 }]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXDET d'))
         .reply(200, reply([]))
@@ -540,8 +545,10 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
       nock(FAKE_BASE_URL)
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
         .reply(200, reply([{ RUNID: 5 }]))
-        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('PARAMSJSON'))
-        .reply(200, reply([{ PARAMSJSON: '{}', RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('COMPUTE_STARTEDAT FROM CCCMINMAXRUN'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXRUNPARAM'))
+        .reply(200, reply([]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXDET d'))
         .reply(200, reply([{ BRANCH: 1000, ENG_MAX: 10, MTRL: 42, RUNID: 5 }]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXWINSOR'))
@@ -563,8 +570,10 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
       nock(FAKE_BASE_URL)
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
         .reply(200, reply([{ RUNID: 5 }]))
-        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('PARAMSJSON'))
-        .reply(200, reply([{ PARAMSJSON: '{}', RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('COMPUTE_STARTEDAT FROM CCCMINMAXRUN'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXRUNPARAM'))
+        .reply(200, reply([]))
         .post(EXEC_SQL_PATH, (body) => {
           const isDet = body.sqlQuery.includes('FROM CCCMINMAXDET d')
           if (isDet) detSql = body.sqlQuery
@@ -604,8 +613,10 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
       nock(FAKE_BASE_URL)
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.startsWith('SELECT RUNID FROM CCCMINMAXRUN'))
         .reply(200, reply([{ RUNID: 5 }]))
-        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('PARAMSJSON'))
-        .reply(200, reply([{ PARAMSJSON: '{}', RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('COMPUTE_STARTEDAT FROM CCCMINMAXRUN'))
+        .reply(200, reply([{ RUNID: 5 }]))
+        .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXRUNPARAM'))
+        .reply(200, reply([]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXDET d'))
         .reply(200, reply([{ BRANCH: 1000, MTRL: 42, RUNID: 5 }]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXWINSOR'))
@@ -930,6 +941,7 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
         assert.deepStrictEqual(result, { runId: 6 })
         assert.strictEqual(startBody.authKey, 'unit-test-secret')
         assert.strictEqual(JSON.parse(startBody.JSONDATA).branchAssignmentMode, 'AGENT')
+        assert.strictEqual(JSON.parse(startBody.JSONDATA).calibrareMod, 'C')
         assert.strictEqual(JSON.parse(startBody.JSONDATA).createdBy, 104, 'CREATEDBY must come from the signed JWT, not request data')
         assert.strictEqual(JSON.parse(phasesBody.JSONDATA).runId, 6)
       })
@@ -939,6 +951,14 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
         await assert.rejects(
           service.runEngine({ branchAssignmentMode: 'OTHER', token: 'tok' }),
           /branchAssignmentMode must be DOC, AGENT or CLIENT/
+        )
+      })
+
+      it('rejects an unknown calibration metric before calling AJS', async () => {
+        const service = makeService({ writesEnabled: true })
+        await assert.rejects(
+          service.runEngine({ calibrareMod: 'OTHER', token: 'tok' }),
+          /calibrareMod must be A, B or C/
         )
       })
 

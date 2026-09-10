@@ -108,6 +108,27 @@ CREATE INDEX IX_CCCMINMAXTEMPLATE_PREFIX ON CCCMINMAXTEMPLATE(PREFIX);
         ('EXCLUDERI_PREFIXE',      'DISC.,OTHER.',    'LIST', 'GLOBAL', '', 'Prefixe de cod articol excluse din calcul'),
         ('MOD_ATRIBUIRE_FILIALA',  'CLIENT',          'STR',  'GLOBAL', '', 'DOC (FINDOC.BRANCH) / AGENT (PRSN.BRANCH) / CLIENT (TRDBRANCH.BRANCH) - I7, de confirmat'),
         ('HQ_DIN_AGREGAT_COMPANIE','1',               'BOOL', 'GLOBAL', '', 'HQ se dimensioneaza pe vanzarile insumate ale filialelor; HQ nu are cerere proprie (I6)'),
+        ('CALIBRARE_MOD',          'C',               'STR',  'GLOBAL', '', 'Metrica de calibrare raportata ca principala la lansare: A/B/C (P14)'),
+
+        -- P7: praguri lifecycle/ABC/XYZ/forced-Z si ponderi AVG, extrase din cod (C11)
+        ('STANDARD_MIN_SAPT',      '3',               'NUM',  'GLOBAL', '', 'Numar minim de saptamani cu vanzare pentru LIFECYCLE=STANDARD'),
+        ('NOU_MIN_SAPT_8',         '2',               'NUM',  'GLOBAL', '', 'Numar minim de saptamani cu vanzare in ultimele 8 pentru LIFECYCLE=NOU'),
+        ('NOU_NECESITA_VZ26',      '1',               'BOOL', 'GLOBAL', '', 'LIFECYCLE=NOU cere si VZ_26S>0 cand acest flag e activ'),
+        ('ABC_A',                  '0.80',            'NUM',  'GLOBAL', '', 'Prag cumulativ (inclusiv) pentru clasa A'),
+        ('ABC_B',                  '0.95',            'NUM',  'GLOBAL', '', 'Prag cumulativ (inclusiv) pentru clasa B'),
+        ('XYZ_X',                  '0.50',            'NUM',  'GLOBAL', '', 'Prag CV pentru clasa X'),
+        ('XYZ_Y',                  '1.00',            'NUM',  'GLOBAL', '', 'Prag CV pentru clasa Y'),
+        ('FORCE_Z_LUNA_DOMINANTA', '0.60',            'NUM',  'GLOBAL', '', 'Fractiune din VZ_52S: o luna dominanta peste acest prag forteaza Z'),
+        ('FORCE_Z_MIN_LUNI',       '2',               'NUM',  'GLOBAL', '', 'Sub acest numar de luni cu vanzare, XYZ este fortat Z'),
+        ('AVG_WEIGHT_4S',          '0.30',            'NUM',  'GLOBAL', '', 'Pondere VZ_4S in AVG_DEMAND pentru STANDARD'),
+        ('AVG_WEIGHT_13S',         '0.40',            'NUM',  'GLOBAL', '', 'Pondere VZ_13S/3 in AVG_DEMAND pentru STANDARD'),
+        ('AVG_WEIGHT_26S',         '0.15',            'NUM',  'GLOBAL', '', 'Pondere VZ_26S/6 in AVG_DEMAND pentru STANDARD'),
+        ('AVG_WEIGHT_52S',         '0.15',            'NUM',  'GLOBAL', '', 'Pondere VZ_52S/12 in AVG_DEMAND pentru STANDARD'),
+
+        -- P3: comutatoare ABC (conventie cumul, populatie, primul articol)
+        ('ABC_CONVENTIE_CUMUL',    'INCLUSIV',        'STR',  'GLOBAL', '', 'INCLUSIV (cumul pana la randul curent inclusiv) sau PRECEDENT (cumul strict anterior)'),
+        ('ABC_POPULATIE',          'STANDARD',        'STR',  'GLOBAL', '', 'STANDARD (doar LIFECYCLE=STANDARD contribuie la cumul ABC) sau TOATE'),
+        ('ABC_PRIM_ARTICOL_A',     '1',               'BOOL', 'GLOBAL', '', 'Primul articol eligibil (contributie pozitiva, VAL_52S>0) primeste A'),
 
         -- Scriere in ERP
         ('FLAGS_ZERO_LA_APPLY',    '1',               'BOOL', 'GLOBAL', '', 'Articolele cu LICHIDARE/BLOCAT/EXCLUDE se scriu cu MIN=MAX=0; in raport raman valorile calculate (E15)'),

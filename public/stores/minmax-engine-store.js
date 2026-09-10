@@ -565,7 +565,7 @@ export class MinmaxEngineStore {
     }
   }
 
-  async runEngine ({ branchAssignmentMode = 'CLIENT', poll = true } = {}) {
+  async runEngine ({ branchAssignmentMode = 'CLIENT', calibrareMod = 'C', poll = true } = {}) {
     const seq = this._beginRequest('run');
     this._stopRunPolling();
     this.dispatch({ type: 'SET_RUN_LAUNCH', payload: { error: '', polling: false, runId: null, starting: true } });
@@ -574,9 +574,14 @@ export class MinmaxEngineStore {
       if (!BRANCH_ASSIGNMENT_MODES.has(normalizedMode)) {
         throw new Error('Modul de atribuire trebuie sa fie DOC, AGENT sau CLIENT.');
       }
+      const normalizedCalibrareMod = String(calibrareMod).trim().toUpperCase();
+      if (!new Set(['A', 'B', 'C']).has(normalizedCalibrareMod)) {
+        throw new Error('Metrica de calibrare trebuie sa fie A, B sau C.');
+      }
       const service = await this._authenticatedService();
       const response = await service.runEngine({
         branchAssignmentMode: normalizedMode,
+        calibrareMod: normalizedCalibrareMod,
         scope: 'FULL',
         token: this._token()
       });

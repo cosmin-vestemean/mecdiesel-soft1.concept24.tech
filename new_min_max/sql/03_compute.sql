@@ -17,7 +17,6 @@ BEGIN
     SET XACT_ABORT ON;
 
     DECLARE @StartedAt DATETIME = GETDATE();
-    DECLARE @ParamsJson NVARCHAR(MAX);
 
     -- ---------------------------------------------------------------
     -- 1. Validare @RunId (precondiii din FAZA3_HANDOFF.md §4.1)
@@ -48,7 +47,9 @@ BEGIN
         THROW 50017, 'sp_MinMaxEngine_Compute: the session is not OPEN; a finished session is immutable.', 1;
 
     -- ---------------------------------------------------------------
-    -- 2. Citire parametri din CCCMINMAXPARAMS
+    -- 2. Citire parametri din snapshot-ul rularii (CCCMINMAXRUNPARAM)
+    --    @RunId e obligatoriu si se refera intotdeauna la o sesiune
+    --    deschisa cu StartRun, deci snapshot-ul exista deja.
     -- ---------------------------------------------------------------
     DECLARE @InflatieHq DECIMAL(10, 4);
     DECLARE @HqCapFactor DECIMAL(10, 4);
@@ -59,32 +60,32 @@ BEGIN
     DECLARE @FlagsZeroLaApply BIT;
 
     SELECT @InflatieHq = TRY_CONVERT(DECIMAL(10, 4), PARAMVALUE)
-    FROM CCCMINMAXPARAMS
-    WHERE PARAMKEY = 'INFLATIE_HQ' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
+    FROM CCCMINMAXRUNPARAM
+    WHERE RUNID = @RunId AND BRANCH = 0 AND PREFIX = '' AND PARAMKEY = 'INFLATIE_HQ';
 
     SELECT @HqCapFactor = TRY_CONVERT(DECIMAL(10, 4), PARAMVALUE)
-    FROM CCCMINMAXPARAMS
-    WHERE PARAMKEY = 'HQ_CAP_FACTOR' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
+    FROM CCCMINMAXRUNPARAM
+    WHERE RUNID = @RunId AND BRANCH = 0 AND PREFIX = '' AND PARAMKEY = 'HQ_CAP_FACTOR';
 
     SELECT @CapLuni = TRY_CONVERT(DECIMAL(10, 4), PARAMVALUE)
-    FROM CCCMINMAXPARAMS
-    WHERE PARAMKEY = 'CAP_LUNI' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
+    FROM CCCMINMAXRUNPARAM
+    WHERE RUNID = @RunId AND BRANCH = 0 AND PREFIX = '' AND PARAMKEY = 'CAP_LUNI';
 
     SELECT @ProcentPodeaBuc = TRY_CONVERT(DECIMAL(10, 4), PARAMVALUE)
-    FROM CCCMINMAXPARAMS
-    WHERE PARAMKEY = 'PROCENT_PODEA_BUC' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
+    FROM CCCMINMAXRUNPARAM
+    WHERE RUNID = @RunId AND BRANCH = 0 AND PREFIX = '' AND PARAMKEY = 'PROCENT_PODEA_BUC';
 
     SELECT @CzCycleZero = TRY_CONVERT(BIT, PARAMVALUE)
-    FROM CCCMINMAXPARAMS
-    WHERE PARAMKEY = 'CZ_CYCLE_ZERO' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
+    FROM CCCMINMAXRUNPARAM
+    WHERE RUNID = @RunId AND BRANCH = 0 AND PREFIX = '' AND PARAMKEY = 'CZ_CYCLE_ZERO';
 
     SELECT @Vz26CapSentinel = TRY_CONVERT(DECIMAL(28, 8), PARAMVALUE)
-    FROM CCCMINMAXPARAMS
-    WHERE PARAMKEY = 'VZ26_CAP_SENTINEL' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
+    FROM CCCMINMAXRUNPARAM
+    WHERE RUNID = @RunId AND BRANCH = 0 AND PREFIX = '' AND PARAMKEY = 'VZ26_CAP_SENTINEL';
 
     SELECT @FlagsZeroLaApply = TRY_CONVERT(BIT, PARAMVALUE)
-    FROM CCCMINMAXPARAMS
-    WHERE PARAMKEY = 'FLAGS_ZERO_LA_APPLY' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
+    FROM CCCMINMAXRUNPARAM
+    WHERE RUNID = @RunId AND BRANCH = 0 AND PREFIX = '' AND PARAMKEY = 'FLAGS_ZERO_LA_APPLY';
 
     IF COALESCE(@InflatieHq, 0) <= 0 SET @InflatieHq = 1.30;
     IF COALESCE(@HqCapFactor, 0) <= 0 SET @HqCapFactor = 1.5;
@@ -502,22 +503,11 @@ BEGIN
     -- ---------------------------------------------------------------
     IF @Persist = 1
     BEGIN
-        SET @ParamsJson =
-            N'{"INFLATIE_HQ":' + CONVERT(NVARCHAR(32), @InflatieHq) +
-            N',"HQ_CAP_FACTOR":' + CONVERT(NVARCHAR(32), @HqCapFactor) +
-            N',"CAP_LUNI":' + CONVERT(NVARCHAR(32), @CapLuni) +
-            N',"PROCENT_PODEA_BUC":' + CONVERT(NVARCHAR(32), @ProcentPodeaBuc) +
-            N',"CZ_CYCLE_ZERO":' + CONVERT(NVARCHAR(32), CONVERT(TINYINT, @CzCycleZero)) +
-            N',"VZ26_CAP_SENTINEL":' + CONVERT(NVARCHAR(32), @Vz26CapSentinel) +
-            N',"FLAGS_ZERO_LA_APPLY":' + CONVERT(NVARCHAR(32), CONVERT(TINYINT, @FlagsZeroLaApply)) +
-            N'}';
-
         UPDATE CCCMINMAXRUN
         SET COMPUTE_STATUS = 'RUNNING',
             COMPUTE_STARTEDAT = @StartedAt,
             COMPUTE_FINISHEDAT = NULL,
             COMPUTE_DURATA_SEC = NULL,
-            COMPUTE_PARAMSJSON = @ParamsJson,
             COMPUTE_ERRORMSG = NULL
         WHERE RUNID = @RunId;
 
