@@ -135,6 +135,13 @@ function calibrationMode (runParams) {
   return mode
 }
 
+// Acelasi fallback tacit ca in Compute: o valoare necunoscuta cade pe 13_52,
+// baza declarata in S 7, nu opreste validarea.
+function trendBase (runParams) {
+  const base = String(runParams.TREND_BAZA || '').trim().toUpperCase()
+  return new Set(['13_26', '13_52']).has(base) ? base : '13_52'
+}
+
 // runId e deja un intreg validat mai sus -> se interpoleaza direct in SQL,
 // nu ca parametru legat (acelasi motiv ca la OFFSET/FETCH in
 // minmax-engine.class.js: WSMCP nu accepta parametri legati peste tot, si
@@ -144,6 +151,10 @@ function buildInvariants (runId, runParams) {
   const procentPodeaBuc = effectivePositiveParam(runParams, 'PROCENT_PODEA_BUC', 0.30)
   const nrSaptamani = Math.trunc(effectivePositiveParam(runParams, 'NRSAPT', 52))
   const selectedCalibrationMode = calibrationMode(runParams)
+  const selectedTrendBase = trendBase(runParams)
+  const trendExpr = selectedTrendBase === '13_26'
+    ? '2.0 * VZ_13S / NULLIF(VZ_26S, 0) - 1'
+    : '4.0 * VZ_13S / NULLIF(VZ_52S, 0) - 1'
 
   return [
     {
@@ -342,6 +353,49 @@ function buildInvariants (runId, runParams) {
       }
     },
     {
+      id: 'trend',
+      label: `P11 + S 7: TREND_PCT pe baza ${selectedTrendBase}, ca fractie; STATUS_TREND din praguri, cu NOU/OD prioritare`,
+      async run () {
+        const [row] = await execSql(
+          `WITH asteptat AS (
+             SELECT TREND_PCT, STATUS_TREND, LIFECYCLE, VZ_13S,
+                    CONVERT(DECIMAL(28, 8), ${trendExpr}) AS TREND_ASTEPTAT
+             FROM CCCMINMAXDET WHERE RUNID = ${runId}
+           )
+           SELECT COUNT(*) AS TOTAL_ROWS,
+                  SUM(CASE WHEN TREND_PCT IS NULL AND TREND_ASTEPTAT IS NULL THEN 0
+                           WHEN TREND_PCT IS NULL OR TREND_ASTEPTAT IS NULL THEN 1
+                           WHEN ABS(TREND_PCT - TREND_ASTEPTAT) > 0.00000001 THEN 1
+                           ELSE 0 END) AS ABATERI_FORMULA,
+                  SUM(CASE WHEN LIFECYCLE = 'NOU' AND STATUS_TREND <> 'NOU' THEN 1 ELSE 0 END) AS ABATERI_NOU,
+                  SUM(CASE WHEN LIFECYCLE = 'OD' AND STATUS_TREND <> 'OK' THEN 1 ELSE 0 END) AS ABATERI_OD,
+                  SUM(CASE WHEN LIFECYCLE NOT IN ('NOU', 'OD') AND STATUS_TREND <> (
+                        CASE
+                          WHEN TREND_PCT IS NULL THEN 'DECLINE'
+                          WHEN TREND_PCT > 0.10 THEN 'ACTIVE'
+                          WHEN TREND_PCT >= -0.10 THEN 'STABLE'
+                          WHEN TREND_PCT >= -0.30 THEN 'TREND_DOWN'
+                          ELSE 'DECLINE'
+                        END) THEN 1 ELSE 0 END) AS ABATERI_PRAGURI,
+                  SUM(CASE WHEN LIFECYCLE NOT IN ('NOU', 'OD') AND COALESCE(VZ_13S, 0) <= 0
+                    AND STATUS_TREND <> 'DECLINE' THEN 1 ELSE 0 END) AS ABATERI_VZ13_ZERO
+           FROM asteptat`
+        )
+        const formula = n(row.ABATERI_FORMULA) || 0
+        const nou = n(row.ABATERI_NOU) || 0
+        const od = n(row.ABATERI_OD) || 0
+        const praguri = n(row.ABATERI_PRAGURI) || 0
+        const vz13 = n(row.ABATERI_VZ13_ZERO) || 0
+        const problems = []
+        if (formula !== 0) problems.push(`${formula} randuri cu TREND_PCT diferit de baza ${selectedTrendBase}`)
+        if (nou !== 0) problems.push(`${nou} randuri NOU fara STATUS_TREND='NOU'`)
+        if (od !== 0) problems.push(`${od} randuri OD fara STATUS_TREND='OK'`)
+        if (praguri !== 0) problems.push(`${praguri} randuri cu STATUS_TREND in afara pragurilor`)
+        if (vz13 !== 0) problems.push(`${vz13} randuri cu VZ_13S = 0 si STATUS_TREND <> 'DECLINE'`)
+        return { pass: problems.length === 0, detail: problems.join('; ') || `0 abateri din ${row.TOTAL_ROWS} randuri` }
+      }
+    },
+    {
       id: 'warnings',
       label: 'WARN_STOC_MORT / WARN_STOC_NEG / WARN_VZ26_ZERO ca echivalente exacte',
       async run () {
@@ -526,4 +580,4 @@ if (require.main === module) {
   })
 }
 
-module.exports = { buildInvariants, calibrationMode, effectivePositiveParam }
+module.exports = { buildInvariants, calibrationMode, effectivePositiveParam, trendBase }

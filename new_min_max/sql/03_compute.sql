@@ -64,6 +64,7 @@ BEGIN
     DECLARE @CzCycleZero BIT;
     DECLARE @Vz26CapSentinel DECIMAL(28, 8);
     DECLARE @FlagsZeroLaApply BIT;
+    DECLARE @TrendBaza VARCHAR(10);
 
     SELECT @InflatieHq = TRY_CONVERT(DECIMAL(10, 4), PARAMVALUE)
     FROM CCCMINMAXRUNPARAM
@@ -93,6 +94,10 @@ BEGIN
     FROM CCCMINMAXRUNPARAM
     WHERE RUNID = @RunId AND BRANCH = 0 AND PREFIX = '' AND PARAMKEY = 'FLAGS_ZERO_LA_APPLY';
 
+    SELECT @TrendBaza = PARAMVALUE
+    FROM CCCMINMAXRUNPARAM
+    WHERE RUNID = @RunId AND BRANCH = 0 AND PREFIX = '' AND PARAMKEY = 'TREND_BAZA';
+
     IF COALESCE(@InflatieHq, 0) <= 0 SET @InflatieHq = 1.30;
     IF COALESCE(@HqCapFactor, 0) <= 0 SET @HqCapFactor = 1.5;
     IF COALESCE(@CapLuni, 0) <= 0 SET @CapLuni = 6;
@@ -100,6 +105,8 @@ BEGIN
     SET @CzCycleZero = COALESCE(@CzCycleZero, 1);
     IF COALESCE(@Vz26CapSentinel, 0) <= 0 SET @Vz26CapSentinel = 9999;
     SET @FlagsZeroLaApply = COALESCE(@FlagsZeroLaApply, 1);
+    SET @TrendBaza = UPPER(LTRIM(RTRIM(COALESCE(@TrendBaza, ''))));
+    IF @TrendBaza NOT IN ('13_26', '13_52') SET @TrendBaza = '13_52';
 
     -- ---------------------------------------------------------------
     -- 3. #Src — randurile clasificate ale rularii (pipeline §4.2 pas 2)
@@ -517,7 +524,12 @@ BEGIN
     UPDATE #Calc
     SET ACOP_CUR = CONVERT(DECIMAL(28, 8), STOC_QTY / NULLIF([AVG], 0)),
         FLAG_RATIO = CONVERT(DECIMAL(28, 8), ENG_MAX / NULLIF(ERP_MAX, 0)),
-        TREND_PCT = CONVERT(DECIMAL(28, 8), 2.0 * VZ_13S / NULLIF(VZ_26S, 0) - 1),
+        -- P11: unitatea ramane fractie pe ambele baze; pragurile de mai jos sunt fractii.
+        TREND_PCT = CONVERT(DECIMAL(28, 8),
+            CASE
+                WHEN @TrendBaza = '13_26' THEN 2.0 * VZ_13S / NULLIF(VZ_26S, 0) - 1
+                ELSE 4.0 * VZ_13S / NULLIF(VZ_52S, 0) - 1
+            END),
         DISC_FLAG =
             CASE
                 WHEN LAST_RECEIPT IS NULL THEN NULL
@@ -540,6 +552,9 @@ BEGIN
             END,
         STATUS_TREND =
             CASE
+                -- S 7: NOU si OD au status propriu, inaintea pragurilor de trend.
+                WHEN LIFECYCLE = 'NOU' THEN 'NOU'
+                WHEN LIFECYCLE = 'OD' THEN 'OK'
                 WHEN TREND_PCT IS NULL THEN 'DECLINE'
                 WHEN TREND_PCT > 0.10 THEN 'ACTIVE'
                 WHEN TREND_PCT >= -0.10 THEN 'STABLE'

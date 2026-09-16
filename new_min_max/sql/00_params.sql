@@ -124,6 +124,7 @@ CREATE TABLE CCCMINMAXPARAMOVERRIDE (
         ('PROCENT_PODEA_BUC',      '0.30',            'NUM',  'GLOBAL', '', 'Procentul din ENG_MIN_HQ care devine podea pe filiala ESTE_PODEA'),
         ('CZ_CYCLE_ZERO',          '1',               'BOOL', 'GLOBAL', '', 'Clasa CZ are cycle = 0 strict, fara termenul ad x FRECVENTA (E7)'),
         ('VZ26_CAP_SENTINEL',      '9999',             'NUM',  'GLOBAL', '', 'Plafon aplicat cand VZ_26S = 0 (D4)'),
+        ('TREND_BAZA',             '13_52',           'STR',  'GLOBAL', '', 'Baza TREND_PCT: 13_52 = (VZ_13S/3)/(VZ_52S/12)-1 (S 7) sau 13_26 = 2 x VZ_13S/VZ_26S-1 (P11)'),
 
         -- Perimetru de date
         ('EXCLUDERI_CLIENTI',      'C.000003,MECDIS', 'LIST', 'GLOBAL', '', 'Coduri TRDR.CODE excluse (NU id-uri TRDR - codurile nu sunt unice). MECDI2 si INTE79 raman incluse'),

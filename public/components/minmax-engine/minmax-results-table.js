@@ -18,7 +18,7 @@ import { CLASA_OPTIONS, formatBranchName, renderBool } from './minmax-engine-con
 // Sort whitelist mirrored from DET_COLUMNS in minmax-engine.class.js — shapes
 // the UI only; the backend re-validates independently and is the real guard.
 const FLAG_TXT_OPTIONS = ['OK', 'UP', 'DOWN', 'MAJOR_UP', 'SUPRASTOC', 'FARA_REFERINTA'];
-const STATUS_TREND_OPTIONS = ['ACTIVE', 'STABLE', 'TREND_DOWN', 'DECLINE'];
+const STATUS_TREND_OPTIONS = ['ACTIVE', 'STABLE', 'TREND_DOWN', 'DECLINE', 'NOU', 'OK'];
 const LIFECYCLE_OPTIONS = ['STANDARD', 'NOU', 'OD'];
 // Anexa §A2: ABC/XYZ separate filters removed — CLASA (11 values) is already
 // their cartesian product and keeping both allowed contradictory selections.
@@ -71,7 +71,7 @@ const COLUMN_TOOLTIPS = {
   LIFECYCLE: 'Stadiul de viata al articolului: STANDARD (matur), NOU (lansat recent), OD (out-of-date / discontinuat).',
   CLASA: 'Clasificarea ABCxXYZ (11 clase, ex. AX, CZ) — combinatie intre volumul de vanzari (ABC) si regularitatea cererii (XYZ).',
   FLAG_TXT: 'Flag-ul de comparatie fata de referinta (pozitia ERP existenta): OK, UP/DOWN (cresteri/scaderi), MAJOR_UP, SUPRASTOC, FARA_REFERINTA.',
-  STATUS_TREND: 'Tendinta vanzarilor: ACTIVE, STABLE, TREND_DOWN, DECLINE — pe baza comparatiei 26S vs 52S.',
+  STATUS_TREND: 'Tendinta vanzarilor: ACTIVE, STABLE, TREND_DOWN, DECLINE — pe baza de comparatie din parametrul TREND_BAZA. Articolele NOU si OD au status propriu (NOU, respectiv OK).',
   STOC_FIZIC_QTY: 'Stocul fizic disponibil in filiala (cantitate).',
   TRANSFER_IN_QTY: 'Cantitate aflata in transfer catre filiala (in drum, neprimita inca).',
   STOC_QTY: 'Stocul efectiv = stoc fizic + transfer in drum.',

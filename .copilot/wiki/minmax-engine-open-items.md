@@ -1,5 +1,11 @@
 # MIN/MAX Engine v5 — Întrebări deschise (business)
 
+> **16.09.2026 — lista a fost împărțită în două documente, acestea sunt sursa:**
+> [new_min_max/RESTANTE_INTERNE.md](../../new_min_max/RESTANTE_INTERNE.md) (le implementăm noi, cerința e deja declarată) și
+> [new_min_max/INTREBARI_BENEFICIAR.md](../../new_min_max/INTREBARI_BENEFICIAR.md) (cer decizia clientului).
+> Pagina de față rămâne pentru firele care nu au intrat în niciunul dintre ele; nu adăuga aici puncte noi
+> de calcul, ca să nu reapară a treia listă paralelă.
+
 > Decizii de business neconfirmate încă de client. Fiecare rămâne aici până se închide; când se
 > închide, mută rezumatul în `minmax-engine-model.md` sau `minmax-engine-formulas.md` și șterge de
 > aici.

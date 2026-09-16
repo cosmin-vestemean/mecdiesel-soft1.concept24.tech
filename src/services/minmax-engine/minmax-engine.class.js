@@ -116,7 +116,7 @@ const XYZ_VALUES = new Set(['X', 'Y', 'Z'])
 const CLASA_VALUES = new Set(['AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ', 'NOU', 'OD'])
 const FLAG_TXT_VALUES = new Set(['OK', 'UP', 'DOWN', 'MAJOR_UP', 'SUPRASTOC', 'FARA_REFERINTA'])
 const FLEXIBLE_OVERRIDE_KEYS = new Set(['LT_ZILE', 'FRECVENTA_ZILE'])
-const STATUS_TREND_VALUES = new Set(['ACTIVE', 'STABLE', 'TREND_DOWN', 'DECLINE'])
+const STATUS_TREND_VALUES = new Set(['ACTIVE', 'STABLE', 'TREND_DOWN', 'DECLINE', 'NOU', 'OK'])
 const BRANCH_ASSIGNMENT_MODES = new Set(['DOC', 'AGENT', 'CLIENT'])
 
 // Classify has no dedicated finish column: GROUP_STARTEDAT is its persisted

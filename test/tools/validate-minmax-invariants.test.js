@@ -9,7 +9,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const {
   buildInvariants,
   calibrationMode,
-  effectivePositiveParam
+  effectivePositiveParam,
+  trendBase
 } = require('../../new_min_max/tools/validate-minmax-invariants.cjs')
 
 function sqlSource (fileName) {
@@ -229,5 +230,65 @@ describe('MIN/MAX demand recency contract', () => {
 
     const validator = fs.readFileSync(path.join(root, 'new_min_max', 'tools', 'validate-minmax-invariants.cjs'), 'utf8')
     assert.match(validator, /id: 'recenta'/)
+  })
+})
+
+describe('MIN/MAX trend base contract', () => {
+  it('compares the last 13 weeks against the 52-week average by default', () => {
+    const trend = (base, vz13, vz26, vz52) => base === '13_26'
+      ? (vz26 === 0 ? null : 2 * vz13 / vz26 - 1)
+      : (vz52 === 0 ? null : 4 * vz13 / vz52 - 1)
+
+    // T5 din matricea executabila: aceeasi serie, verdicte opuse pe cele doua baze.
+    assert.strictEqual(trend('13_26', 30, 60, 240), 0)
+    assert.strictEqual(trend('13_52', 30, 60, 240), -0.5)
+    assert.strictEqual(trend('13_52', 0, 60, 240), -1)
+    assert.strictEqual(trend('13_52', 0, 0, 0), null)
+
+    assert.strictEqual(trendBase({}), '13_52')
+    assert.strictEqual(trendBase({ TREND_BAZA: ' 13_26 ' }), '13_26')
+    assert.strictEqual(trendBase({ TREND_BAZA: 'ALTCEVA' }), '13_52')
+
+    const params = sqlSource('00_params.sql')
+    const compute = sqlSource('03_compute.sql')
+
+    assert.match(params, /\('TREND_BAZA',\s*'13_52',\s*'STR',\s*'GLOBAL'/)
+    assert.match(compute, /PARAMKEY = 'TREND_BAZA'/)
+    assert.match(compute, /IF @TrendBaza NOT IN \('13_26', '13_52'\) SET @TrendBaza = '13_52';/)
+
+    const trendUpdate = compute.match(/TREND_PCT = CONVERT\(DECIMAL\(28, 8\),[\s\S]*?END\),/)
+    assert.ok(trendUpdate, 'TREND_PCT must branch on the snapshot base')
+    assert.match(trendUpdate[0], /WHEN @TrendBaza = '13_26' THEN 2\.0 \* VZ_13S \/ NULLIF\(VZ_26S, 0\) - 1/)
+    assert.match(trendUpdate[0], /ELSE 4\.0 \* VZ_13S \/ NULLIF\(VZ_52S, 0\) - 1/)
+  })
+
+  it('gives NOU and OD their own status ahead of the trend thresholds', () => {
+    const statusTrend = (lifecycle, trendPct) => {
+      if (lifecycle === 'NOU') return 'NOU'
+      if (lifecycle === 'OD') return 'OK'
+      if (trendPct === null) return 'DECLINE'
+      if (trendPct > 0.1) return 'ACTIVE'
+      if (trendPct >= -0.1) return 'STABLE'
+      if (trendPct >= -0.3) return 'TREND_DOWN'
+      return 'DECLINE'
+    }
+
+    assert.strictEqual(statusTrend('NOU', -1), 'NOU')
+    assert.strictEqual(statusTrend('OD', -1), 'OK')
+    assert.strictEqual(statusTrend('STANDARD', -1), 'DECLINE')
+    assert.strictEqual(statusTrend('STANDARD', null), 'DECLINE')
+
+    const compute = sqlSource('03_compute.sql')
+    const statusUpdate = compute.match(/STATUS_TREND =\s+CASE[\s\S]*?END;/)
+
+    assert.ok(statusUpdate, 'STATUS_TREND must still be assigned in a single CASE')
+    assert.match(statusUpdate[0], /WHEN LIFECYCLE = 'NOU' THEN 'NOU'\s+WHEN LIFECYCLE = 'OD' THEN 'OK'\s+WHEN TREND_PCT IS NULL THEN 'DECLINE'/)
+
+    const validator = fs.readFileSync(path.join(root, 'new_min_max', 'tools', 'validate-minmax-invariants.cjs'), 'utf8')
+    assert.match(validator, /id: 'trend'/)
+
+    // Statusurile de lifecycle trebuie sa fie si filtrabile, altfel randurile dispar din UI.
+    const service = fs.readFileSync(path.join(root, 'src', 'services', 'minmax-engine', 'minmax-engine.class.js'), 'utf8')
+    assert.match(service, /STATUS_TREND_VALUES = new Set\(\['ACTIVE', 'STABLE', 'TREND_DOWN', 'DECLINE', 'NOU', 'OK'\]\)/)
   })
 })

@@ -1,14 +1,22 @@
 # Current Focus
 
 ## Last Updated
-- 16.09.2026 (RUNID 12 rulat și validat; P1/P2 confirmate live pe el)
+- 16.09.2026 (RUNID 16: P11 inchis, deployat si validat live; 13/13 invariante PASS)
 
 ## Current Goal
 - P1 branch-scope este implementat, deployat și validat: VZ-urile se netează independent pe toată fereastra per `BRANCH × TRDR × MTRL`, iar seria săptămânală rămâne separată.
 - P2 este decis, implementat, deployat și **validat live pe RUNID 12**: HQ este scope propriu al cererii și compensează același `TRDR × MTRL` între filiale înainte de clip-ul la zero. Extensia P6 longest-prefix rămâne blocată până la lista N5.
 
 ## Active Area
-- P5 (garda OD pe BUY) si recenta S 4.6 implementate local 16.09.2026, **nedeployate**: `BUY_RAW` are `WHEN LIFECYCLE = 'OD' THEN 0` inaintea clamp-ului de stoc, iar `SAPT_FARA` devine `round(zile de la ULT_VANZ / 7)`, simetric in `Classify` si `ClassifyGroup` (inainte era indexul primului bucket saptamanal). Podeaua ramane prag de prezentare: MIN/MAX raman ridicate, BUY devine zero — exact ca in Excelul livrat de beneficiar. Autoritate: E1 (confirmat 14.08) + S 4.7 pentru OD, S 4.6 pentru recenta; niciuna nu are contradictie august/septembrie. Invariante noi `od_buy` si `recenta` in validator; 13 teste in `test/tools/` trec, toate blocurile SQL/AJS `IN SYNC`.
+- **RUNID 16 (16.09.2026, `AZI=2026-09-16`, `FULL`, `DONE`, curent)**: 708.554 randuri, 50.611 itemi, 14 filiale. Toate invariantele PASS (13/13, inclusiv noua `trend`). Calibrare: A 90,8%, B 48,9%, C 43,4%.
+- **P11 este inchis pe RUNID 16**: `TREND_BAZA` (`13_26`/`13_52`, default `13_52`) e in seed-ul idempotent, ajunge automat in snapshot prin StartRun si e vizibil in PARAMETRI (verificat: RUNID 16 are `13_52`, 14/15 nu au cheia deloc). `Compute` ramifica `TREND_PCT`: `13_52` -> `4*VZ_13S/VZ_52S-1` (echivalentul algebric al lui `(VZ_13S/3)/(VZ_52S/12)-1` din S 7). `STATUS_TREND` da `NOU -> 'NOU'` si `OD -> 'OK'` inaintea pragurilor. Unitatea ramane **fractie**, deliberat neschimbata.
+- **Efectul masurat 15 -> 16, pe `AZI` identic, deci nu e drift de fereastra**: pe cele 25.367 randuri `STANDARD` in ambele rulari, 7.875 (31,0%) schimba `STATUS_TREND`. Migrarea e bidirectionala: 2.336 `STABLE -> ACTIVE`, dar si 504 `STABLE -> DECLINE`, 589 `STABLE -> TREND_DOWN`, 802 `ACTIVE -> STABLE`. Diagonala (nemodificate) e 17.492.
+- **Observatie de interpretare, nu bug**: populatia RUNID 16 e 682.472 `OD` / 25.377 `STANDARD` / 705 `NOU`. Cu prioritatea lifecycle, `STATUS_TREND='OK'` acopera 96% din randuri, deci coloana Trend a devenit in practica un indicator de lifecycle. Asa declara S 7; filtrarea utila se face pe `LIFECYCLE='STANDARD'` impreuna cu Trend.
+- **Consecinta in UI, obligatorie**: `STATUS_TREND` are doua valori noi, deci `STATUS_TREND_VALUES` din serviciu si `STATUS_TREND_OPTIONS` din tabel includ `NOU` si `OK`. Fara asta 96% din randuri ar fi devenit nefiltrabile.
+- **RUNID 15 (16.09.2026, `AZI=2026-09-16`, `FULL`, `DONE`)**: 708.484 randuri, 148s Classify + 52s Compute. Referinta pentru P5 si recenta S 4.6; DET inca prezent, deci comparatiile 15 -> 16 sunt posibile.
+- **Efectul garzii OD, masurat 14 -> 15**: randurile OD cu `BUY_QTY > 0` trec de la 2.945 (3.610 buc) la 0. Toate cele 2.945 erau in BUCURESTI cu `PODEA_APLICATA=1` — exact mecanismul podelei, nimic altceva. Total randuri cu BUY 14.218 -> 11.351 (-20%), cantitate 64.331 -> 61.757 buc (-4%). MIN/MAX raman ridicate pe acele randuri, ca prag de prezentare.
+- **Efectul recentei S 4.6 pe RUNID 15 este ZERO, dintr-un motiv de calendar, nu pentru ca schimbarea ar fi inutila**: `DATEDIFF(WEEK, ULT_VANZ, AZI)` si `round(zile/7)` coincid exact cand AZI cade miercurea (verificat: 0/365 lag-uri difera miercurea, 52/365 marti-joi, 104/365 luni-vineri, 156/365 sambata-duminica). `AZI=2026-09-16` este miercuri, deci rularea nu poate proba diferenta; invarianta `recenta` trece si pe RUNID 13/14, produse cu codul vechi.
+- P5 (garda OD pe BUY) si recenta S 4.6 sunt implementate, deployate si validate live pe RUNID 15: `BUY_RAW` are `WHEN LIFECYCLE = 'OD' THEN 0` inaintea clamp-ului de stoc, iar `SAPT_FARA` este `round(zile de la ULT_VANZ / 7)`, simetric in `Classify` si `ClassifyGroup`. Autoritate: E1 (confirmat 14.08) + S 4.7 pentru OD, S 4.6 pentru recenta; niciuna nu are contradictie august/septembrie.
 - Perimetru refuzat deliberat: „un retur ulterior anuleaza saptamana de cerere" ramane neimplementat — este exact definitia trimisa spre confirmare beneficiarului. La fel, `MIN_DOC` per filiala (depinde de P4) si valorile DEFAULT de prefix (N01/N02).
 - Afisarea filialelor in MIN/MAX foloseste acum denumirea ERP: `params()` alatura `BRANCH.NAME` ca `BRANCH_NAME`, iar filtrele, tabelele de rezultate/grupe/configurare, explicatia si exporturile Excel afiseaza denumirea cu fallback la cod pentru date fara corespondenta.
 - Export Excel pentru MIN/MAX este implementat local pentru tabelul de rezultate si clasificarea pe grupe. Exportul foloseste filtrele active, pastreaza RUNID-ul afisat si citeste paginat in loturi de cate 500, pentru a evita raspunsurile Socket.IO supradimensionate. Workbook-urile au foi separate si nume cu RUNID/data; 123 teste focalizate trec.
@@ -28,6 +36,8 @@
 - Override-urile de test au fost șterse după rulare: configurația activă are 0 rânduri, iar snapshot-ul RUNID 9 păstrează cele 6 rânduri branch. Toate invariantele sunt PASS.
 
 ## Relevant Files
+- [Restante interne](../../new_min_max/RESTANTE_INTERNE.md): ce implementam fara beneficiar (Z0/Z1), cu stare, autoritate si dependente. Prima sursa la reluarea lucrului.
+- [Intrebari beneficiar](../../new_min_max/INTREBARI_BENEFICIAR.md): cele 9 puncte + foaia PARAMETRI care nu se pot decide intern. Document destinat clientului.
 - [Model și operare](../wiki/minmax-engine-model.md): sesiuni, snapshot, Agent, retenție, observabilitate, transport și reperul RUNID 9.
 - [Formule](../wiki/minmax-engine-formulas.md): formulele și ordinea de calcul.
 - [Întrebări business](../wiki/minmax-engine-open-items.md): deciziile încă neconfirmate.
@@ -47,13 +57,14 @@
 - P2: HQ este scope propriu al cererii; pentru fiecare `TRDR × MTRL × fereastră`, neturile brute ale filialelor se compensează înainte de clip-ul la zero. Seria weekly, `VAL_52S`, sigma și CV nu se schimbă direct. `LIFECYCLE`, `ABC`, `XYZ`/`IS_FORCED_Z`, `CLASA` și MIN/MAX pot deriva legitim în HQ prin noile `VZ_26S`/`VZ_52S`; filialele trebuie să rămână identice. Pipeline-ul de grupă rămâne intenționat în afara P1/P2.
 - HQ nu este București: București este filiala fizică de vânzări și depozitul central, iar HQ este suma filialelor active. Pentru stoc și comenzi se includ numai depozite active mapate la filialele active ale rulării; liniile fără filială nu intră nici în HQ. Marfa din transfer 3153 este deja scăzută din sursă și se adaugă stocului destinației până la recepție.
 - `MOD_ATRIBUIRE_FILIALA` rămâne `CLIENT`; `applyToErp` rămâne amânat.
+- P11: baza TREND este parametrizată (`TREND_BAZA`), nu hardcodată; default `13_52` conform S 7. Unitatea rămâne fracție — S 7 scrie formula înmulțită cu 100, dar unitatea nu este marcată nicăieri ca decizie, deci nu se schimbă tacit odată cu baza. `VZ_13S = 0 ⇒ DECLINE` rezultă din formulă (−1), nu dintr-o ramură separată.
 
 ## Open Questions
 - P4/N9-N10, P5 și P10-P13 rămân blocate de decizii business; vezi [întrebările deschise](../wiki/minmax-engine-open-items.md).
 - P6 branch-only este închis; extensia longest-prefix așteaptă lista N5. Plancherul `σ_WK=1,3` rămâne fără confirmare documentară.
 
 ## Next Step
-- Deploy AJS manual (MCP-ul `s1-api` e read-only) + `setup()` pentru recompilarea `Classify`/`ClassifyGroup`/`Compute`, apoi RUNID nou si `node new_min_max/tools/validate-minmax-invariants.cjs`. Invarianta `recenta` va esua pe RUNID <= 12 prin constructie: acele rulari preceda formula S 4.6.
-- Rularea noua muta LIFECYCLE la frontiera pragurilor 39/26, deci si ABC/CLASA/MIN/MAX; calibrarea de pe RUNID 12 nu mai e reper direct.
-- Restul ramane blocat pe decizii business: P4/N9-N10, P10-P13 si lista N5 pentru longest-prefix. Nu implementa longest-prefix inainte de lista N5 si nu modifica atribuirea `CLIENT` implicita.
+- Urmatorul punct din lista deschisa este acum **N04**: ferestre VZ in zile calendaristice (28/91/182/365) si sigma pe exact 52 bucket-uri. Limita reala e durata si volumul rularii, nu un plafon de executie.
+- Invarianta `trend` **esueaza intentionat pe RUNID <= 15**: acele snapshot-uri nu au `TREND_BAZA`, validatorul cade pe acelasi default `13_52` ca si Compute, iar datele sunt produse cu `13_26`. Nu e regresie; nu o „repara" retroactiv.
+- Restul ramane blocat pe decizii business: P4/N9-N10, P10, P13 si lista N5 pentru longest-prefix. Nu implementa longest-prefix inainte de lista N5 si nu modifica atribuirea `CLIENT` implicita.
 
