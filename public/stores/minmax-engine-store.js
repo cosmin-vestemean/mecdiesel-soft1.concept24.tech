@@ -26,6 +26,7 @@ export const MinmaxEngineStoreContext = createContext('minmax-engine-store');
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 500;
+const EXPORT_CONCURRENCY = 4;
 const DEFAULT_HISTORY_LIMIT = 20;
 const MAX_RUN_POLL_ATTEMPTS = 600;
 const MAX_RUN_POLL_ERRORS = 3;
@@ -559,6 +560,57 @@ export class MinmaxEngineStore {
     }
   }
 
+  _exportRunId (cache, key, selectedRunId) {
+    if (selectedRunId !== null) return selectedRunId;
+    return cache.key === key ? cache.resolvedRunId : undefined;
+  }
+
+  async _exportAll (method, payload) {
+    const service = await this._authenticatedService();
+    const token = this._token();
+    const firstResponse = await service[method]({
+      ...payload,
+      page: 1,
+      pageSize: MAX_PAGE_SIZE,
+      token,
+      withTotal: true
+    });
+    const rows = Array.isArray(firstResponse.rows) ? [...firstResponse.rows] : [];
+    const total = Number(firstResponse.total ?? rows.length);
+    const totalPages = Math.ceil(total / MAX_PAGE_SIZE);
+
+    for (let firstPage = 2; firstPage <= totalPages; firstPage += EXPORT_CONCURRENCY) {
+      const pages = Array.from(
+        { length: Math.min(EXPORT_CONCURRENCY, totalPages - firstPage + 1) },
+        (_, index) => firstPage + index
+      );
+      const responses = await Promise.all(pages.map((page) => service[method]({
+        ...payload,
+        page,
+        pageSize: MAX_PAGE_SIZE,
+        runId: firstResponse.runId,
+        token,
+        withTotal: false
+      })));
+      responses.forEach((response) => {
+        if (Array.isArray(response.rows)) rows.push(...response.rows);
+      });
+    }
+
+    return { rows, runId: firstResponse.runId, total };
+  }
+
+  async exportResults () {
+    const state = this._state;
+    const filters = buildResultsFilterPayload(state.filters);
+    const key = populationKey(state.runId, filters);
+    return this._exportAll('results', {
+      filters,
+      runId: this._exportRunId(this._resultsCache, key, state.runId),
+      sort: state.sort.field ? state.sort : undefined
+    });
+  }
+
   // --- Async Orchestration: history() ---
   async loadHistory (limit = DEFAULT_HISTORY_LIMIT) {
     const seq = this._beginRequest('history');
@@ -745,6 +797,15 @@ export class MinmaxEngineStore {
     } finally {
       if (this._isCurrent('groupAbc', seq)) this.dispatch({ type: 'SET_GROUP_ABC_LOADING', payload: false });
     }
+  }
+
+  async exportGroupAbc (filters = {}) {
+    const state = this._state;
+    const key = populationKey(state.runId, filters);
+    return this._exportAll('groupAbc', {
+      filters,
+      runId: this._exportRunId(this._groupAbcCache, key, state.runId)
+    });
   }
 
   // --- Async Orchestration: params() — contract §7 precondition ---

@@ -64,4 +64,27 @@ describe('minmax-group-abc — group display contract', () => {
       ['loadGroupAbc', element._filters, { withTotal: false }]
     ]);
   });
+
+  it('builds and downloads an Excel workbook for the filtered groups', async () => {
+    const element = document.createElement('minmax-group-abc');
+    document.body.appendChild(element);
+    const calls = [];
+    window.XLSX = {
+      utils: {
+        json_to_sheet: (rows) => ({ rows }),
+        book_new: () => ({}),
+        book_append_sheet: (workbook, sheet, name) => calls.push(['sheet', workbook, sheet, name])
+      },
+      writeFile: (workbook, filename) => calls.push(['file', workbook, filename])
+    };
+    element._store = { exportGroupAbc: async () => ({ rows: [{ MTRGROUP_NAME: 'Piese', ESTE_HQ: false }], runId: 12 }) };
+
+    await element._exportToExcel();
+
+    assert.strictEqual(calls[0][2].rows[0].Grupa, 'Piese');
+    assert.strictEqual(calls[0][2].rows[0].HQ, 'Nu');
+    assert.strictEqual(calls[0][3], 'Clasificare grupe');
+    assert.match(calls[1][2], /^MINMAX_ClasificareGrupe_RUN12_\d{4}-\d{2}-\d{2}\.xlsx$/);
+    delete window.XLSX;
+  });
 });

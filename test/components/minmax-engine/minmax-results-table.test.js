@@ -114,6 +114,30 @@ describe('minmax-results-table — page-size select (§12.4)', () => {
       .map((row) => row.firstElementChild.textContent.trim());
     assert.deepStrictEqual(numbers, ['101', '102']);
   });
+
+  it('builds and downloads an Excel workbook for the filtered results', async () => {
+    const el = mount();
+    const calls = [];
+    window.XLSX = {
+      utils: {
+        json_to_sheet: (rows) => ({ rows }),
+        book_new: () => ({}),
+        book_append_sheet: (workbook, sheet, name) => calls.push(['sheet', workbook, sheet, name])
+      },
+      writeFile: (workbook, filename) => calls.push(['file', workbook, filename])
+    };
+    el.rows = [{ BRANCH: 1000, CODE: 'A1', HQ_CAP_APLICAT: true }];
+    el._store = { exportResults: async () => ({ rows: el.rows, runId: 12 }) };
+
+    await el._exportToExcel();
+
+    assert.strictEqual(calls[0][0], 'sheet');
+    assert.strictEqual(calls[0][2].rows[0].Cod, 'A1');
+    assert.strictEqual(calls[0][2].rows[0]['HQ Cap'], 'Da');
+    assert.strictEqual(calls[0][3], 'Rezultate MINMAX');
+    assert.match(calls[1][2], /^MINMAX_Rezultate_RUN12_\d{4}-\d{2}-\d{2}\.xlsx$/);
+    delete window.XLSX;
+  });
 });
 
 // Anexa (ergonomie UI, 08.09.2026) — hierarchy, redundancy removal, counter.

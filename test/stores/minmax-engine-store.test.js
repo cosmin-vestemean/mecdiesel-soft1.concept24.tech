@@ -121,6 +121,18 @@ describe('minmax-engine-store — population cache (§12.6+§12.10+§12.11)', ()
       assert.strictEqual(store.getState().resolvedRunId, 9);
       assert.strictEqual(store.getState().total, 5);
     });
+
+    it('exports the active filtered population in paged requests', async () => {
+      const { calls, store } = makeStore();
+      store.setFilters({ codeLike: 'ABC', flagTxt: ['OK'] });
+      const result = await store.exportResults();
+
+      const call = calls[0];
+      assert.strictEqual(call.payload.pageSize, 500);
+      assert.strictEqual(call.payload.withTotal, true);
+      assert.deepStrictEqual(call.payload.filters, { codeLike: 'ABC', flagTxt: ['OK'], vz26s: { min: 0.00000001 } });
+      assert.deepStrictEqual(result.rows, []);
+    });
   });
 
   describe('loadGroupAbc()', () => {
@@ -171,6 +183,18 @@ describe('minmax-engine-store — population cache (§12.6+§12.10+§12.11)', ()
 
       assert.strictEqual(store.getState().groupAbc.total, 42);
       assert.strictEqual(store.getState().groupAbc.rows.length, 1);
+    });
+
+    it('exports the active group filters in a paged request', async () => {
+      const { calls, store } = makeStore();
+      const filters = { branches: [1000], clasa: ['AX'] };
+      const result = await store.exportGroupAbc(filters);
+
+      const call = calls[0];
+      assert.strictEqual(call.payload.pageSize, 500);
+      assert.strictEqual(call.payload.withTotal, true);
+      assert.deepStrictEqual(call.payload.filters, filters);
+      assert.deepStrictEqual(result.rows, []);
     });
   });
 });

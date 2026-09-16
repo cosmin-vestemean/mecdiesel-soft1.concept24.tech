@@ -129,6 +129,8 @@ export class MinmaxResultsTable extends LitElement {
       rows: { type: Array },
       sort: { type: Object },
       total: { type: Number },
+      exporting: { type: Boolean },
+      exportError: { type: String },
       _branches: { state: true, type: Array },
       _draftFilters: { state: true, type: Object }
     };
@@ -144,6 +146,8 @@ export class MinmaxResultsTable extends LitElement {
     this.rows = [];
     this.sort = { dir: 'ASC', field: null };
     this.total = null;
+    this.exporting = false;
+    this.exportError = '';
     this._branches = [];
     this._draftFilters = null; // seeded from store's filters on first sync
 
@@ -232,6 +236,30 @@ export class MinmaxResultsTable extends LitElement {
   _openExplain (row) {
     if (!this._store) return;
     this._store.openExplain(row.BRANCH, row.MTRL);
+  }
+
+  async _exportToExcel () {
+    if (!this._store || this.exporting) return;
+    this.exporting = true;
+    this.exportError = '';
+    try {
+      const xlsx = window.XLSX;
+      if (!xlsx) throw new Error('Biblioteca Excel nu este incarcata.');
+      const result = await this._store.exportResults();
+      const exportData = result.rows.map((row, index) => Object.fromEntries([
+        ['Nr.', index + 1],
+        ...RESULT_COLUMNS.map((col) => [col.label, col.type === 'boolean' ? (row[col.key] ? 'Da' : 'Nu') : (row[col.key] ?? '')])
+      ]));
+      const worksheet = xlsx.utils.json_to_sheet(exportData);
+      const workbook = xlsx.utils.book_new();
+      xlsx.utils.book_append_sheet(workbook, worksheet, 'Rezultate MINMAX');
+      const today = new Date().toISOString().slice(0, 10);
+      xlsx.writeFile(workbook, `MINMAX_Rezultate_RUN${result.runId}_${today}.xlsx`);
+    } catch (err) {
+      this.exportError = err.message || 'Exportul Excel a esuat.';
+    } finally {
+      this.exporting = false;
+    }
   }
 
   // --- Draft filter helpers (local edits, not yet sent to the store) ---
@@ -390,10 +418,18 @@ export class MinmaxResultsTable extends LitElement {
       <div class="minmax-results-table card mb-2">
         <div class="card-header py-1 px-2 d-flex align-items-center justify-content-between">
           <span><i class="fas fa-table me-2"></i>Rezultate MIN/MAX</span>
-          <span class="text-muted small">${this.total !== null ? `${this.total} randuri` : ''}</span>
+          <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small">${this.total !== null ? `${this.total} randuri` : ''}</span>
+            <button class="btn btn-sm btn-outline-success" title="Exporta rezultatele filtrate in Excel"
+                    aria-label="Exporta rezultatele in Excel" ?disabled="${this.loading || this.exporting}"
+                    @click="${this._exportToExcel}">
+              <i class="fas fa-file-excel me-1"></i>${this.exporting ? 'Se exporta...' : 'Excel'}
+            </button>
+          </div>
         </div>
         <div class="card-body p-2">
           ${this.error ? html`<div class="alert alert-danger py-2">${this.error}</div>` : ''}
+          ${this.exportError ? html`<div class="alert alert-danger py-2">${this.exportError}</div>` : ''}
 
           <div class="filters-panel p-2 mb-2">
             <style>

@@ -60,6 +60,8 @@ export class MinmaxGroupAbc extends LitElement {
       pageSize: { type: Number },
       rows: { type: Array },
       total: { type: Number },
+      exporting: { type: Boolean },
+      exportError: { type: String },
       _branches: { state: true, type: Array },
       _filters: { state: true, type: Object }
     };
@@ -74,6 +76,8 @@ export class MinmaxGroupAbc extends LitElement {
     this.pageSize = 100;
     this.rows = [];
     this.total = null;
+    this.exporting = false;
+    this.exportError = '';
     this._branches = [];
     this._filters = getDefaultFilters();
 
@@ -144,6 +148,30 @@ export class MinmaxGroupAbc extends LitElement {
     if (!this._store) return;
     this._store.setGroupAbcPageSize(Number(size));
     this._store.loadGroupAbc(this._filters, { withTotal: false });
+  }
+
+  async _exportToExcel () {
+    if (!this._store || this.exporting) return;
+    this.exporting = true;
+    this.exportError = '';
+    try {
+      const xlsx = window.XLSX;
+      if (!xlsx) throw new Error('Biblioteca Excel nu este incarcata.');
+      const result = await this._store.exportGroupAbc(this._filters);
+      const exportData = result.rows.map((row, index) => Object.fromEntries([
+        ['Nr.', index + 1],
+        ...GROUP_COLUMNS.map((col) => [col.label, col.type === 'boolean' ? (row[col.key] ? 'Da' : 'Nu') : (row[col.key] ?? '')])
+      ]));
+      const worksheet = xlsx.utils.json_to_sheet(exportData);
+      const workbook = xlsx.utils.book_new();
+      xlsx.utils.book_append_sheet(workbook, worksheet, 'Clasificare grupe');
+      const today = new Date().toISOString().slice(0, 10);
+      xlsx.writeFile(workbook, `MINMAX_ClasificareGrupe_RUN${result.runId}_${today}.xlsx`);
+    } catch (err) {
+      this.exportError = err.message || 'Exportul Excel a esuat.';
+    } finally {
+      this.exporting = false;
+    }
   }
 
   // --- Local filter helpers (transient — no store dispatch) ---
@@ -253,10 +281,18 @@ export class MinmaxGroupAbc extends LitElement {
       <div class="minmax-group-abc card mb-3">
         <div class="card-header d-flex align-items-center justify-content-between">
           <span><i class="fas fa-layer-group me-2"></i>Clasificare ABC-XYZ pe grupe</span>
-          <span class="text-muted small">${this.total !== null ? `${this.total} randuri` : ''}</span>
+          <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small">${this.total !== null ? `${this.total} randuri` : ''}</span>
+            <button class="btn btn-sm btn-outline-success" title="Exporta clasificarea filtrata in Excel"
+                    aria-label="Exporta clasificarea in Excel" ?disabled="${this.loading || this.exporting}"
+                    @click="${this._exportToExcel}">
+              <i class="fas fa-file-excel me-1"></i>${this.exporting ? 'Se exporta...' : 'Excel'}
+            </button>
+          </div>
         </div>
         <div class="card-body">
           ${this.error ? html`<div class="alert alert-danger py-2">${this.error}</div>` : ''}
+          ${this.exportError ? html`<div class="alert alert-danger py-2">${this.exportError}</div>` : ''}
 
           <div class="filters-panel p-2 mb-3">
             <style>

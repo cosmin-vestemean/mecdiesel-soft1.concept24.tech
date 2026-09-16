@@ -276,6 +276,7 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
       assert.strictEqual(result.total, 137)
       assert.ok(countSql.includes('SELECT COUNT(*) AS TOTAL FROM CCCMINMAXDET d WHERE'))
     })
+
   })
 
   describe('sorting tie-break dedup (§12.3)', () => {
@@ -433,6 +434,7 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
       assert.strictEqual(result.total, 42)
       assert.ok(countSql.includes('SELECT COUNT(*) AS TOTAL FROM CCCMINMAXGRP g WHERE'))
     })
+
   })
 
   describe('params()', () => {
