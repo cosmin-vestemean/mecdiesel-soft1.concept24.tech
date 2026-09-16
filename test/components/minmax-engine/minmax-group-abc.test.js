@@ -32,6 +32,19 @@ describe('minmax-group-abc — group display contract', () => {
     assert.strictEqual(element.rows[0].MTRGROUP_CODE, 'G123');
   });
 
+  it('numbers rows across pages', async () => {
+    const element = document.createElement('minmax-group-abc');
+    element.page = 2;
+    element.pageSize = 100;
+    element.rows = [{ BRANCH: 1000 }, { BRANCH: 2200 }];
+    document.body.appendChild(element);
+    await element.updateComplete;
+
+    const numbers = [...element.querySelectorAll('table tbody tr')]
+      .map((row) => row.firstElementChild.textContent.trim());
+    assert.deepStrictEqual(numbers, ['101', '102']);
+  });
+
   it('scrolls to the top when changing page', () => {
     const element = document.createElement('minmax-group-abc');
     document.body.appendChild(element);

@@ -576,6 +576,7 @@ export class MinmaxResultsTable extends LitElement {
             <table class="table table-sm table-hover align-middle mb-0 minmax-dense">
               <thead class="sticky-top bg-white" style="z-index: 1;">
                 <tr>
+                  <th class="text-end">Nr.</th>
                   ${RESULT_COLUMNS.map((col) => html`
                     <th class="${col.type === 'number' ? 'text-end' : ''}"
                         style="${col.sortField ? 'cursor:pointer;' : ''}"
@@ -587,16 +588,17 @@ export class MinmaxResultsTable extends LitElement {
               </thead>
               <tbody>
                 ${this.loading
-                  ? html`<tr><td colspan="${RESULT_COLUMNS.length}" class="text-center text-muted py-3">
+                  ? html`<tr><td colspan="${RESULT_COLUMNS.length + 1}" class="text-center text-muted py-3">
                       <i class="fas fa-spinner fa-spin"></i> Se incarca rezultatele...
                     </td></tr>`
                   : ''}
                 ${(!this.loading && this.rows.length === 0)
-                  ? html`<tr><td colspan="${RESULT_COLUMNS.length}" class="text-center text-muted py-3">Niciun rezultat pentru filtrele curente.</td></tr>`
+                  ? html`<tr><td colspan="${RESULT_COLUMNS.length + 1}" class="text-center text-muted py-3">Niciun rezultat pentru filtrele curente.</td></tr>`
                   : ''}
-                ${this.rows.map((row) => html`
+                ${this.rows.map((row, index) => html`
                   <tr style="cursor:pointer;" title="Vezi explicatia calculului"
                       @click="${() => this._openExplain(row)}">
+                    <td class="text-end">${(this.page - 1) * this.pageSize + index + 1}</td>
                     ${RESULT_COLUMNS.map((col) => col.key === 'MTRL_NAME'
                       ? html`<td title="${row.MTRL_NAME ?? ''}">${this._formatCell(row, col)}</td>`
                       : html`<td>${this._formatCell(row, col)}</td>`)}

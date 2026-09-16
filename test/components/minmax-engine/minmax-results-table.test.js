@@ -102,6 +102,18 @@ describe('minmax-results-table — page-size select (§12.4)', () => {
     assert.strictEqual(el.rows[0].MTRGROUP, 123);
     assert.strictEqual(el.rows[0].MTRGROUP_CODE, 'G123');
   });
+
+  it('numbers rows across pages', async () => {
+    const el = mount();
+    el.page = 2;
+    el.pageSize = 100;
+    el.rows = [{ BRANCH: 1000 }, { BRANCH: 2200 }];
+    await el.updateComplete;
+
+    const numbers = [...el.querySelectorAll('table tbody tr')]
+      .map((row) => row.firstElementChild.textContent.trim());
+    assert.deepStrictEqual(numbers, ['101', '102']);
+  });
 });
 
 // Anexa (ergonomie UI, 08.09.2026) — hierarchy, redundancy removal, counter.
