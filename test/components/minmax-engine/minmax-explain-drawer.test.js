@@ -84,6 +84,15 @@ describe('minmax-explain-drawer — formula with substituted values (Anexa §B11
     assert.ok(formulaBlock(el).querySelectorAll('.katex').length > 0, 'KaTeX actually rendered (not a plain-text fallback)');
   });
 
+  it('renders the ERP branch name in the explanation title', async () => {
+    const el = mount({ ...baseDet, BRANCH: 1200 });
+    el._branches = [{ BRANCH: 1200, BRANCH_NAME: 'Cluj' }];
+    await el.updateComplete;
+
+    const title = el.querySelector('.card-header').textContent.replace(/\s+/g, ' ').trim();
+    assert.ok(title.includes('filiala Cluj'));
+  });
+
   it('substitutes the actual ENG_MAX = min(MAX_INF, CAP6, VZ26_CAP) values', async () => {
     const el = mount({ ...baseDet, ENG_MAX: 16 });
     await el.updateComplete;

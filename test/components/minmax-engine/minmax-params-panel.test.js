@@ -20,7 +20,7 @@ describe('minmax-params-panel — branch MARIME select (§12.4)', () => {
   function mount () {
     const el = document.createElement('minmax-params-panel');
     document.body.appendChild(el);
-    el.branches = [{ BRANCH: 2200, ESTE_HQ: 0, ESTE_PODEA: 0, INCLUS: 1, MARIME: 'MEDIU' }];
+    el.branches = [{ BRANCH: 2200, BRANCH_NAME: 'Bucuresti', ESTE_HQ: 0, ESTE_PODEA: 0, INCLUS: 1, MARIME: 'MEDIU' }];
     el.overrides = [{ BRANCH: 2200, PARAMKEY: 'LT_ZILE', PARAMVALUE: '21', PREFIX: '' }];
     el.params = [
       { PARAMKEY: 'LT_ZILE', PARAMVALUE: '30', SCOPE: 'GLOBAL', SCOPEKEY: '' },
@@ -42,6 +42,15 @@ describe('minmax-params-panel — branch MARIME select (§12.4)', () => {
     assert.ok(select, 'expected a branch MARIME <select>');
     const selected = [...select.options].filter((o) => o.selected).map((o) => o.value);
     assert.deepStrictEqual(selected, ['MEDIU']);
+  });
+
+  it('renders the ERP branch name in the branch configuration table', async () => {
+    const el = mount();
+    el._activeTab = 'branches';
+    await el.updateComplete;
+
+    const branchCell = el.querySelector('#minmax-branches-tab tbody tr td');
+    assert.strictEqual(branchCell.textContent.trim(), 'Bucuresti');
   });
 
   it('re-renders the selection after a real change event (MARE/MEDIU/MIC)', async () => {

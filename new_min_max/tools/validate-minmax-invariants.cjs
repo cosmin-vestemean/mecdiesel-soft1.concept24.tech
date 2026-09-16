@@ -142,6 +142,7 @@ function calibrationMode (runParams) {
 function buildInvariants (runId, runParams) {
   const hqCapFactor = effectivePositiveParam(runParams, 'HQ_CAP_FACTOR', 1.5)
   const procentPodeaBuc = effectivePositiveParam(runParams, 'PROCENT_PODEA_BUC', 0.30)
+  const nrSaptamani = Math.trunc(effectivePositiveParam(runParams, 'NRSAPT', 52))
   const selectedCalibrationMode = calibrationMode(runParams)
 
   return [
@@ -298,6 +299,45 @@ function buildInvariants (runId, runParams) {
         if (a !== 0) problems.push(`${a} STANDARD cu CLASA != ABC||XYZ`)
         if (b !== 0) problems.push(`${b} NOU/OD fara CLASA corespunzatoare`)
         if (c !== 0) problems.push(`${c} CLASA NOU/OD fara LIFECYCLE corespunzator`)
+        return { pass: problems.length === 0, detail: problems.join('; ') || `0 abateri din ${row.TOTAL_ROWS} randuri` }
+      }
+    },
+    {
+      id: 'od_buy',
+      label: 'E1 + S 4.7: LIFECYCLE=OD => BUY_RAW = BUY_QTY = 0, inclusiv pe randurile ridicate de podea',
+      async run () {
+        const [row] = await execSql(
+          `SELECT SUM(CASE WHEN LIFECYCLE = 'OD' THEN 1 ELSE 0 END) AS TOTAL_OD_ROWS,
+                  SUM(CASE WHEN LIFECYCLE = 'OD' AND COALESCE(BUY_QTY, 0) <> 0 THEN 1 ELSE 0 END) AS ABATERI_BUY_QTY,
+                  SUM(CASE WHEN LIFECYCLE = 'OD' AND COALESCE(BUY_RAW, 0) <> 0 THEN 1 ELSE 0 END) AS ABATERI_BUY_RAW,
+                  SUM(CASE WHEN LIFECYCLE = 'OD' AND PODEA_APLICATA = 1 AND COALESCE(BUY_QTY, 0) <> 0 THEN 1 ELSE 0 END) AS ABATERI_PODEA
+           FROM CCCMINMAXDET WHERE RUNID = ${runId}`
+        )
+        const buyQty = n(row.ABATERI_BUY_QTY) || 0
+        const buyRaw = n(row.ABATERI_BUY_RAW) || 0
+        const podea = n(row.ABATERI_PODEA) || 0
+        const problems = []
+        if (buyQty !== 0) problems.push(`${buyQty} randuri OD cu BUY_QTY <> 0 (din care ${podea} pe podea)`)
+        if (buyRaw !== 0) problems.push(`${buyRaw} randuri OD cu BUY_RAW <> 0`)
+        return { pass: problems.length === 0, detail: problems.join('; ') || `0 abateri din ${row.TOTAL_OD_ROWS || 0} randuri OD` }
+      }
+    },
+    {
+      id: 'recenta',
+      label: `S 4.6: SAPT_FARA = round(zile de la ULT_VANZ / 7); fara vanzare => ${nrSaptamani}`,
+      async run () {
+        const [row] = await execSql(
+          `SELECT COUNT(*) AS TOTAL_ROWS,
+                  SUM(CASE WHEN ULT_VANZ IS NOT NULL
+                    AND SAPT_FARA <> CONVERT(INT, ROUND(DATEDIFF(DAY, ULT_VANZ, AZI) / 7.0, 0)) THEN 1 ELSE 0 END) AS ABATERI_CU_VANZARE,
+                  SUM(CASE WHEN ULT_VANZ IS NULL AND SAPT_FARA <> ${nrSaptamani} THEN 1 ELSE 0 END) AS ABATERI_FARA_VANZARE
+           FROM CCCMINMAXDET WHERE RUNID = ${runId}`
+        )
+        const cuVanzare = n(row.ABATERI_CU_VANZARE) || 0
+        const faraVanzare = n(row.ABATERI_FARA_VANZARE) || 0
+        const problems = []
+        if (cuVanzare !== 0) problems.push(`${cuVanzare} randuri cu SAPT_FARA diferit de round(zile/7)`)
+        if (faraVanzare !== 0) problems.push(`${faraVanzare} randuri fara ULT_VANZ si SAPT_FARA <> ${nrSaptamani}`)
         return { pass: problems.length === 0, detail: problems.join('; ') || `0 abateri din ${row.TOTAL_ROWS} randuri` }
       }
     },

@@ -103,6 +103,22 @@ describe('minmax-results-table — page-size select (§12.4)', () => {
     assert.strictEqual(el.rows[0].MTRGROUP_CODE, 'G123');
   });
 
+  it('renders the ERP branch name in both the table and branch filter', async () => {
+    const el = mount();
+    el._branches = [{ BRANCH: 1200, BRANCH_NAME: 'Cluj' }];
+    el.rows = [{ BRANCH: 1200 }];
+    await el.updateComplete;
+
+    const headers = [...el.querySelectorAll('table thead th')].map((header) => header.textContent.trim());
+    const branchHeader = headers.findIndex((header) => header === 'Filiala');
+    const branchCell = el.querySelectorAll('table tbody tr')[0].children[branchHeader];
+    const branchFilter = [...el.querySelectorAll('.filters-panel button')]
+      .find((button) => button.textContent.trim() === 'Cluj');
+
+    assert.strictEqual(branchCell.textContent.trim(), 'Cluj');
+    assert.ok(branchFilter, 'expected a branch filter named Cluj');
+  });
+
   it('numbers rows across pages', async () => {
     const el = mount();
     el.page = 2;
@@ -127,12 +143,14 @@ describe('minmax-results-table — page-size select (§12.4)', () => {
       writeFile: (workbook, filename) => calls.push(['file', workbook, filename])
     };
     el.rows = [{ BRANCH: 1000, CODE: 'A1', HQ_CAP_APLICAT: true }];
+    el._branches = [{ BRANCH: 1000, BRANCH_NAME: 'HQ' }];
     el._store = { exportResults: async () => ({ rows: el.rows, runId: 12 }) };
 
     await el._exportToExcel();
 
     assert.strictEqual(calls[0][0], 'sheet');
     assert.strictEqual(calls[0][2].rows[0].Cod, 'A1');
+    assert.strictEqual(calls[0][2].rows[0].Filiala, 'HQ');
     assert.strictEqual(calls[0][2].rows[0]['HQ Cap'], 'Da');
     assert.strictEqual(calls[0][3], 'Rezultate MINMAX');
     assert.match(calls[1][2], /^MINMAX_Rezultate_RUN12_\d{4}-\d{2}-\d{2}\.xlsx$/);

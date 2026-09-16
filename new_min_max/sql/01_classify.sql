@@ -459,7 +459,6 @@ BEGIN
         CONVERT(DECIMAL(28, 8), SUM(SALES_VALUE)) AS VAL_52S,
         SUM(CASE WHEN QTY > 0 THEN 1 ELSE 0 END) AS SAPT_VZ,
         SUM(CASE WHEN WEEK_INDEX < 8 AND QTY > 0 THEN 1 ELSE 0 END) AS SAPT_8S,
-        MIN(CASE WHEN QTY > 0 THEN WEEK_INDEX END) AS SAPT_FARA,
         MAX(CASE WHEN QTY > 0 THEN LAST_POSITIVE_SALE END) AS ULT_VANZ,
         MIN(QTY) AS MIN_WEEK_QTY,
         MAX(QTY) AS MAX_WEEK_QTY,
@@ -487,7 +486,11 @@ BEGIN
         CONVERT(DECIMAL(28, 8), COALESCE(weeklyStats.VAL_52S, 0)) AS VAL_52S,
         COALESCE(weeklyStats.SAPT_VZ, 0) AS SAPT_VZ,
         COALESCE(weeklyStats.SAPT_8S, 0) AS SAPT_8S,
-        COALESCE(weeklyStats.SAPT_FARA, @NrSaptamani) AS SAPT_FARA,
+        -- S 4.6: recenta = round(zile de la ultima vanzare / 7), nu indexul bucket-ului saptamanal.
+        COALESCE(
+            CONVERT(INT, ROUND(DATEDIFF(DAY, weeklyStats.ULT_VANZ, @Azi) / 7.0, 0)),
+            @NrSaptamani
+        ) AS SAPT_FARA,
         weeklyStats.ULT_VANZ,
         i.MIN_DOC,
         CONVERT(DECIMAL(28, 8),

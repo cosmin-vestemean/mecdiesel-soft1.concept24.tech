@@ -14,6 +14,12 @@ import { html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js'
 // drift apart.
 export const CLASA_OPTIONS = ['AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ', 'NOU', 'OD'];
 
+export function formatBranchName (branch, branches = []) {
+  const match = branches.find((item) => Number(item.BRANCH) === Number(branch));
+  const name = match?.BRANCH_NAME?.trim();
+  return name || String(branch ?? '-');
+}
+
 // Anexa §B7 / feedback 08.09.2026: boolean "Da" renders as a compact green
 // dot instead of a green text/badge — keeps the positive signal without
 // flooding the table with green. Single definition so all MIN/MAX tables

@@ -439,13 +439,17 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
 
   describe('params()', () => {
     it('aggregates params, cov and branch config in one response', async () => {
+      let branchSql
       nock(FAKE_BASE_URL)
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXPARAMS'))
         .reply(200, reply([{ PARAMKEY: 'X' }]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXCOV'))
         .reply(200, reply([{ CLASA: 'AX' }]))
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXBRANCH'))
-        .reply(200, reply([{ BRANCH: 1000 }]))
+        .reply(200, (uri, body) => {
+          branchSql = body.sqlQuery
+          return reply([{ BRANCH: 1200, BRANCH_NAME: 'Cluj' }])
+        })
         .post(EXEC_SQL_PATH, (body) => body.sqlQuery.includes('FROM CCCMINMAXPARAMOVERRIDE'))
         .reply(200, reply([{ BRANCH: 1000, PARAMKEY: 'LT_ZILE', PARAMVALUE: '21', PREFIX: null }]))
 
@@ -453,12 +457,14 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
       const result = await service.params({ token: 'tok' })
 
       assert.deepStrictEqual(result, {
-        branches: [{ BRANCH: 1000 }],
+        branches: [{ BRANCH: 1200, BRANCH_NAME: 'Cluj' }],
         cov: [{ CLASA: 'AX' }],
         overrides: [{ BRANCH: 1000, PARAMKEY: 'LT_ZILE', PARAMVALUE: '21', PREFIX: null }],
         params: [{ PARAMKEY: 'X' }],
         writesEnabled: false
       })
+      assert.ok(branchSql.includes('LEFT JOIN BRANCH b ON b.BRANCH = cb.BRANCH'))
+      assert.ok(branchSql.includes('b.COMPANY = 1000'))
     })
 
     it('returns writesEnabled: true when flag is enabled', async () => {

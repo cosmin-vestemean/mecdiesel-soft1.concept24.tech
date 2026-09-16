@@ -32,6 +32,23 @@ describe('minmax-group-abc — group display contract', () => {
     assert.strictEqual(element.rows[0].MTRGROUP_CODE, 'G123');
   });
 
+  it('renders the ERP branch name in both the table and branch filter', async () => {
+    const element = document.createElement('minmax-group-abc');
+    element._branches = [{ BRANCH: 1200, BRANCH_NAME: 'Cluj' }];
+    element.rows = [{ BRANCH: 1200 }];
+    document.body.appendChild(element);
+    await element.updateComplete;
+
+    const headers = [...element.querySelectorAll('table thead th')].map((header) => header.textContent.trim());
+    const branchHeader = headers.findIndex((header) => header === 'Filiala');
+    const branchCell = element.querySelectorAll('table tbody tr')[0].children[branchHeader];
+    const branchFilter = [...element.querySelectorAll('.filters-panel button')]
+      .find((button) => button.textContent.trim() === 'Cluj');
+
+    assert.strictEqual(branchCell.textContent.trim(), 'Cluj');
+    assert.ok(branchFilter, 'expected a branch filter named Cluj');
+  });
+
   it('numbers rows across pages', async () => {
     const element = document.createElement('minmax-group-abc');
     element.page = 2;
@@ -77,11 +94,13 @@ describe('minmax-group-abc — group display contract', () => {
       },
       writeFile: (workbook, filename) => calls.push(['file', workbook, filename])
     };
-    element._store = { exportGroupAbc: async () => ({ rows: [{ MTRGROUP_NAME: 'Piese', ESTE_HQ: false }], runId: 12 }) };
+    element._branches = [{ BRANCH: 1200, BRANCH_NAME: 'Cluj' }];
+    element._store = { exportGroupAbc: async () => ({ rows: [{ BRANCH: 1200, MTRGROUP_NAME: 'Piese', ESTE_HQ: false }], runId: 12 }) };
 
     await element._exportToExcel();
 
     assert.strictEqual(calls[0][2].rows[0].Grupa, 'Piese');
+  assert.strictEqual(calls[0][2].rows[0].Filiala, 'Cluj');
     assert.strictEqual(calls[0][2].rows[0].HQ, 'Nu');
     assert.strictEqual(calls[0][3], 'Clasificare grupe');
     assert.match(calls[1][2], /^MINMAX_ClasificareGrupe_RUN12_\d{4}-\d{2}-\d{2}\.xlsx$/);

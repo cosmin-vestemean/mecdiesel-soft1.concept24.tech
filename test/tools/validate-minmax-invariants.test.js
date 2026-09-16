@@ -185,3 +185,49 @@ describe('MIN/MAX P1/P2 window netting contract', () => {
     assert.doesNotMatch(classify, /FROM #BranchWindowTotals totals[\s\S]*?sourceBranch\.ESTE_HQ = 0/)
   })
 })
+
+describe('MIN/MAX ON DEMAND purchasing guard', () => {
+  it('keeps BUY at zero for ON DEMAND even when the floor lifted MIN/MAX', () => {
+    const row = { lifecycle: 'OD', engMax: 2, stoc: 0, ordFurn: 0 }
+    const buyRaw = row.lifecycle === 'OD'
+      ? 0
+      : Math.max(0, row.engMax - Math.max(0, row.stoc) - row.ordFurn)
+
+    assert.strictEqual(buyRaw, 0)
+
+    const compute = sqlSource('03_compute.sql')
+    const buyUpdate = compute.match(/UPDATE #Calc\s+SET BUY_RAW = CONVERT\(DECIMAL\(28, 8\),[\s\S]*?END\);/)
+
+    assert.ok(buyUpdate, 'BUY_RAW must still be assigned in a single update')
+    assert.match(buyUpdate[0], /WHEN LIFECYCLE = 'OD' THEN 0/)
+    // Podeaua ramane prag de prezentare: MIN/MAX raman ridicate, numai BUY este anulat.
+    assert.match(compute, /UPDATE #Calc\s+SET ENG_MAX = ENG_MIN\s+WHERE ESTE_PODEA = 1 AND ENG_MIN > ENG_MAX;/)
+
+    const validator = fs.readFileSync(path.join(root, 'new_min_max', 'tools', 'validate-minmax-invariants.cjs'), 'utf8')
+    assert.match(validator, /id: 'od_buy'/)
+  })
+})
+
+describe('MIN/MAX demand recency contract', () => {
+  it('measures SAPT_FARA in rounded weeks since the last sale, not in bucket indexes', () => {
+    const saptFara = (zile) => Math.round(zile / 7)
+
+    assert.strictEqual(saptFara(0), 0)
+    assert.strictEqual(saptFara(3), 0)
+    assert.strictEqual(saptFara(10), 1)
+    assert.strictEqual(saptFara(273), 39)
+
+    const classify = sqlSource('01_classify.sql')
+    const classifyGroup = sqlSource('02_classify_group.sql')
+
+    assert.match(classify, /ROUND\(DATEDIFF\(DAY, weeklyStats\.ULT_VANZ, @Azi\) \/ 7\.0, 0\)[\s\S]*?\) AS SAPT_FARA/)
+    assert.match(classifyGroup, /ROUND\(DATEDIFF\(DAY, MAX\(CASE WHEN QTY > 0 THEN LAST_POSITIVE_SALE END\), @Azi\) \/ 7\.0, 0\)[\s\S]*?\) AS SAPT_FARA/)
+    for (const sql of [classify, classifyGroup]) {
+      assert.doesNotMatch(sql, /MIN\(CASE WHEN QTY > 0 THEN WEEK_INDEX END\)/)
+      assert.match(sql, /@NrSaptamani\s*\) AS SAPT_FARA/)
+    }
+
+    const validator = fs.readFileSync(path.join(root, 'new_min_max', 'tools', 'validate-minmax-invariants.cjs'), 'utf8')
+    assert.match(validator, /id: 'recenta'/)
+  })
+})

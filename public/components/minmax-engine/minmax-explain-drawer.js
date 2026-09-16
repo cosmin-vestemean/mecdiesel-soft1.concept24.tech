@@ -18,7 +18,7 @@ import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit
 import { unsafeHTML } from 'https://cdn.jsdelivr.net/npm/lit-html@3/directives/unsafe-html.js';
 import { ContextConsumer } from 'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0/index.js';
 import { MinmaxEngineStoreContext } from '../../stores/minmax-engine-store.js';
-import { renderBool } from './minmax-engine-constants.js';
+import { formatBranchName, renderBool } from './minmax-engine-constants.js';
 import katex from 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.mjs';
 
 // Ordinea exacta din contract §6: intrarile lantului de calcul.
@@ -76,7 +76,8 @@ export class MinmaxExplainDrawer extends LitElement {
       error: { type: String },
       loading: { type: Boolean },
       mtrl: { type: Number },
-      open: { type: Boolean }
+      open: { type: Boolean },
+      _branches: { state: true, type: Array }
     };
   }
 
@@ -89,6 +90,7 @@ export class MinmaxExplainDrawer extends LitElement {
     this.loading = false;
     this.mtrl = null;
     this.open = false;
+    this._branches = [];
     this._pageOverflow = null;
     this._handleKeydown = (event) => {
       if (event.key === 'Escape' && this.open) {
@@ -144,6 +146,7 @@ export class MinmaxExplainDrawer extends LitElement {
     this.data = state.explain.data;
     this.branch = state.explain.branch;
     this.mtrl = state.explain.mtrl;
+    this._branches = state.params.branches;
   }
 
   updated (changedProperties) {
@@ -383,7 +386,7 @@ export class MinmaxExplainDrawer extends LitElement {
             <tbody>
               ${rows.map((row) => html`
                 <tr>
-                  <th>${row.PARAMKEY}${Number(row.BRANCH) > 0 ? ` (filiala ${row.BRANCH})` : ''}</th>
+                  <th>${row.PARAMKEY}${Number(row.BRANCH) > 0 ? ` (filiala ${formatBranchName(row.BRANCH, this._branches)})` : ''}</th>
                   <td>${row.PARAMVALUE}</td>
                 </tr>
               `)}
@@ -438,7 +441,7 @@ export class MinmaxExplainDrawer extends LitElement {
         <div class="card-header d-flex align-items-center justify-content-between">
           <span>
             <i class="fas fa-magnifying-glass-chart me-2"></i>Explicatie
-            ${det ? html`&mdash; ${det.CODE || det.MTRL} @ filiala ${det.BRANCH}` : ''}
+            ${det ? html`&mdash; ${det.CODE || det.MTRL} @ filiala ${formatBranchName(det.BRANCH, this._branches)}` : ''}
           </span>
           <button type="button" class="btn-close" aria-label="Close" @click="${this._close}"></button>
         </div>

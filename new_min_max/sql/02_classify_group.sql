@@ -385,7 +385,11 @@ BEGIN
         CONVERT(DECIMAL(28, 8), SUM(SALES_VALUE)) AS VAL_52S,
         SUM(CASE WHEN QTY > 0 THEN 1 ELSE 0 END) AS SAPT_VZ,
         SUM(CASE WHEN WEEK_INDEX < 8 AND QTY > 0 THEN 1 ELSE 0 END) AS SAPT_8S,
-        COALESCE(MIN(CASE WHEN QTY > 0 THEN WEEK_INDEX END), @NrSaptamani) AS SAPT_FARA,
+        -- S 4.6: aceeasi recenta in zile ca in Classify, pastrata simetrica intre SKU si grupa.
+        COALESCE(
+            CONVERT(INT, ROUND(DATEDIFF(DAY, MAX(CASE WHEN QTY > 0 THEN LAST_POSITIVE_SALE END), @Azi) / 7.0, 0)),
+            @NrSaptamani
+        ) AS SAPT_FARA,
         MAX(CASE WHEN QTY > 0 THEN LAST_POSITIVE_SALE END) AS ULT_VANZ,
         CONVERT(DECIMAL(28, 8),
             CASE

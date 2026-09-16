@@ -17,7 +17,7 @@
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
 import { ContextConsumer } from 'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0/index.js';
 import { MinmaxEngineStoreContext } from '../../stores/minmax-engine-store.js';
-import { CLASA_OPTIONS, renderBool } from './minmax-engine-constants.js';
+import { CLASA_OPTIONS, formatBranchName, renderBool } from './minmax-engine-constants.js';
 
 // Enum options mirrored from GRP_COLUMNS/LIFECYCLE_VALUES etc. in minmax-engine.class.js.
 const LIFECYCLE_OPTIONS = ['STANDARD', 'NOU', 'OD'];
@@ -177,7 +177,11 @@ export class MinmaxGroupAbc extends LitElement {
       const result = await this._store.exportGroupAbc(this._filters);
       const exportData = result.rows.map((row, index) => Object.fromEntries([
         ['Nr.', index + 1],
-        ...GROUP_COLUMNS.map((col) => [col.label, col.type === 'boolean' ? (row[col.key] ? 'Da' : 'Nu') : (row[col.key] ?? '')])
+        ...GROUP_COLUMNS.map((col) => [
+          col.label,
+          col.key === 'BRANCH' ? formatBranchName(row.BRANCH, this._branches)
+            : col.type === 'boolean' ? (row[col.key] ? 'Da' : 'Nu') : (row[col.key] ?? '')
+        ])
       ]));
       const worksheet = xlsx.utils.json_to_sheet(exportData);
       const workbook = xlsx.utils.book_new();
@@ -271,31 +275,25 @@ export class MinmaxGroupAbc extends LitElement {
           ${(this._branches || []).map((b) => html`
             <button type="button"
                     class="btn btn-outline-secondary btn-sm ${selected.includes(b.BRANCH) ? 'active' : ''}"
-                    title="${b.MARIME || ''}"
-                    @click="${() => this._toggleBranch(b.BRANCH)}">${b.BRANCH}${b.NAME ? ` ${b.NAME}` : ''}</button>
+                    title="${b.BRANCH}${b.MARIME ? ` - ${b.MARIME}` : ''}"
+                    @click="${() => this._toggleBranch(b.BRANCH)}">${formatBranchName(b.BRANCH, this._branches)}</button>
           `)}
         </div>
       </div>
     `;
   }
 
-  // Branch display: "1200 Cluj" when the name is known, bare code otherwise.
-  _branchLabel (branch) {
-    const row = (this._branches || []).find((b) => Number(b.BRANCH) === Number(branch));
-    return row && row.NAME ? `${branch} ${row.NAME}` : String(branch);
-  }
-
   _formatCell (row, col) {
     const value = row[col.key];
+    if (col.key === 'BRANCH') {
+      return formatBranchName(value, this._branches);
+    }
     if (col.type === 'boolean') {
       // Green dot instead of text/badge (see renderBool in constants).
       return renderBool(value);
     }
     if (col.type === 'number') {
       return (value === null || value === undefined) ? '-' : Number(value).toLocaleString('ro-RO', { maximumFractionDigits: 2 });
-    }
-    if (col.key === 'BRANCH') {
-      return this._branchLabel(value);
     }
     return value ?? '-';
   }

@@ -502,6 +502,8 @@ BEGIN
     UPDATE #Calc
     SET BUY_RAW = CONVERT(DECIMAL(28, 8),
         CASE
+            -- E1 + S 4.7: OD nu se aprovizioneaza nici cand podeaua i-a ridicat MIN/MAX ca prag de prezentare.
+            WHEN LIFECYCLE = 'OD' THEN 0
             WHEN ENG_MAX - (CASE WHEN STOC_QTY > 0 THEN STOC_QTY ELSE 0 END) - ORD_FURN < 0 THEN 0
             ELSE ENG_MAX - (CASE WHEN STOC_QTY > 0 THEN STOC_QTY ELSE 0 END) - ORD_FURN
         END);

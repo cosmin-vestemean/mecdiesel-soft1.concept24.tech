@@ -17,6 +17,7 @@
 import { LitElement, html } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/all/lit-all.min.js';
 import { ContextConsumer } from 'https://cdn.jsdelivr.net/npm/@lit/context@1.1.0/index.js';
 import { MinmaxEngineStoreContext } from '../../stores/minmax-engine-store.js';
+import { formatBranchName } from './minmax-engine-constants.js';
 
 // Ordinea fixa a matricei COV (00_params.sql §6): 11 clase x 3 marimi = 33 randuri.
 const CLASA_ORDER = ['AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ', 'NOU', 'OD'];
@@ -335,7 +336,7 @@ export class MinmaxParamsPanel extends LitElement {
               const dirty = Boolean(this._branchEdits[String(row.BRANCH)]);
               return html`
                 <tr class="${dirty ? 'table-warning' : ''}">
-                  <td>${row.BRANCH}${row.NAME ? ` ${row.NAME}` : ''}</td>
+                  <td>${formatBranchName(row.BRANCH, this.branches)}</td>
                   <td>
                     <select class="form-select form-select-sm" style="width: 96px;" aria-label="Marime filiala"
                             @change="${(e) => this._setBranchField(row, 'marime', e.target.value)}">
