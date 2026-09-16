@@ -374,7 +374,7 @@ function buildInvariants (runId, runParams) {
         if (missingKeys.length) problems.push(`chei lipsa din snapshot: ${missingKeys.join(', ')}`)
 
         const ferestreVz = String(runParams.FERESTRE_VZ || '').trim().toUpperCase()
-        const ferestreCapat = runParams.FERESTRE_CAPAT
+        const ferestreCapat = runParams.  FERESTRE_CAPAT
         const nrZile = Number(runParams.NRZILE)
         const ferestreZile = parseFerestreZile(runParams.FERESTRE_VZ_ZILE)
 
