@@ -335,7 +335,7 @@ export class MinmaxParamsPanel extends LitElement {
               const dirty = Boolean(this._branchEdits[String(row.BRANCH)]);
               return html`
                 <tr class="${dirty ? 'table-warning' : ''}">
-                  <td>${row.BRANCH}</td>
+                  <td>${row.BRANCH}${row.NAME ? ` ${row.NAME}` : ''}</td>
                   <td>
                     <select class="form-select form-select-sm" style="width: 96px;" aria-label="Marime filiala"
                             @change="${(e) => this._setBranchField(row, 'marime', e.target.value)}">

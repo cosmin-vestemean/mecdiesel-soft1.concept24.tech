@@ -272,11 +272,17 @@ export class MinmaxGroupAbc extends LitElement {
             <button type="button"
                     class="btn btn-outline-secondary btn-sm ${selected.includes(b.BRANCH) ? 'active' : ''}"
                     title="${b.MARIME || ''}"
-                    @click="${() => this._toggleBranch(b.BRANCH)}">${b.BRANCH}</button>
+                    @click="${() => this._toggleBranch(b.BRANCH)}">${b.BRANCH}${b.NAME ? ` ${b.NAME}` : ''}</button>
           `)}
         </div>
       </div>
     `;
+  }
+
+  // Branch display: "1200 Cluj" when the name is known, bare code otherwise.
+  _branchLabel (branch) {
+    const row = (this._branches || []).find((b) => Number(b.BRANCH) === Number(branch));
+    return row && row.NAME ? `${branch} ${row.NAME}` : String(branch);
   }
 
   _formatCell (row, col) {
@@ -287,6 +293,9 @@ export class MinmaxGroupAbc extends LitElement {
     }
     if (col.type === 'number') {
       return (value === null || value === undefined) ? '-' : Number(value).toLocaleString('ro-RO', { maximumFractionDigits: 2 });
+    }
+    if (col.key === 'BRANCH') {
+      return this._branchLabel(value);
     }
     return value ?? '-';
   }
