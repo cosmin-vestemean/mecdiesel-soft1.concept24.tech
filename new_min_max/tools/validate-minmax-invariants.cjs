@@ -722,6 +722,50 @@ function buildInvariants (runId, runParams) {
       }
     },
     {
+      id: 'vz_grp_det',
+      label: 'Reconciliere grupa <-> SKU: SUM(DET.VZ_*/VAL_52S) = GRP.VZ_*/VAL_52S',
+      async run () {
+        // Esueaza intentionat pe RUNID <= 25, rulari dinainte de 1c: 313/602 grupe nereconciliate.
+        const [row] = await execSql(
+          `WITH grp_rows AS (
+             SELECT BRANCH, MTRGROUP, VZ_4S, VZ_13S, VZ_26S, VZ_52S, VAL_52S
+             FROM CCCMINMAXGRP WHERE RUNID = ${runId}
+           ),
+           det_agg AS (
+             SELECT BRANCH, MTRGROUP,
+                    SUM(COALESCE(VZ_4S, 0)) AS VZ_4S,
+                    SUM(COALESCE(VZ_13S, 0)) AS VZ_13S,
+                    SUM(COALESCE(VZ_26S, 0)) AS VZ_26S,
+                    SUM(COALESCE(VZ_52S, 0)) AS VZ_52S,
+                    SUM(COALESCE(VAL_52S, 0)) AS VAL_52S
+             FROM CCCMINMAXDET WHERE RUNID = ${runId} AND MTRGROUP IS NOT NULL
+             GROUP BY BRANCH, MTRGROUP
+           )
+           SELECT COUNT(*) AS TOTAL_GRUPE,
+                  SUM(CASE WHEN ABS(COALESCE(g.VZ_4S, 0) - COALESCE(d.VZ_4S, 0)) > 0.00001 THEN 1 ELSE 0 END) AS ABATERI_VZ_4S,
+                  SUM(CASE WHEN ABS(COALESCE(g.VZ_13S, 0) - COALESCE(d.VZ_13S, 0)) > 0.00001 THEN 1 ELSE 0 END) AS ABATERI_VZ_13S,
+                  SUM(CASE WHEN ABS(COALESCE(g.VZ_26S, 0) - COALESCE(d.VZ_26S, 0)) > 0.00001 THEN 1 ELSE 0 END) AS ABATERI_VZ_26S,
+                  SUM(CASE WHEN ABS(COALESCE(g.VZ_52S, 0) - COALESCE(d.VZ_52S, 0)) > 0.00001 THEN 1 ELSE 0 END) AS ABATERI_VZ_52S,
+                  SUM(CASE WHEN ABS(COALESCE(g.VAL_52S, 0) - COALESCE(d.VAL_52S, 0)) > 0.00001 THEN 1 ELSE 0 END) AS ABATERI_VAL_52S
+           FROM grp_rows g
+           LEFT JOIN det_agg d ON d.BRANCH = g.BRANCH AND d.MTRGROUP = g.MTRGROUP`
+        )
+        const vz4s = n(row.ABATERI_VZ_4S) || 0
+        const vz13s = n(row.ABATERI_VZ_13S) || 0
+        const vz26s = n(row.ABATERI_VZ_26S) || 0
+        const vz52s = n(row.ABATERI_VZ_52S) || 0
+        const val52s = n(row.ABATERI_VAL_52S) || 0
+        const total = n(row.TOTAL_GRUPE) || 0
+        const problems = []
+        if (vz4s !== 0) problems.push(`${vz4s} grupe cu VZ_4S nereconciliat`)
+        if (vz13s !== 0) problems.push(`${vz13s} grupe cu VZ_13S nereconciliat`)
+        if (vz26s !== 0) problems.push(`${vz26s} grupe cu VZ_26S nereconciliat`)
+        if (vz52s !== 0) problems.push(`${vz52s} grupe cu VZ_52S nereconciliat`)
+        if (val52s !== 0) problems.push(`${val52s} grupe cu VAL_52S nereconciliat`)
+        return { pass: problems.length === 0, detail: problems.join('; ') || `0 grupe nereconciliate din ${total}` }
+      }
+    },
+    {
       id: 'filiale_excluse',
       label: 'Filialele cu INCLUS=0 nu produc BUY_QTY > 0 (de confirmat ca invariant)',
       async run () {
