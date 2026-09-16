@@ -143,7 +143,7 @@ describe('MIN/MAX P1/P2 window netting contract', () => {
     ])
 
     const classify = sqlSource('01_classify.sql')
-    assert.match(classify, /INTO #ClientWeekly[\s\S]*?GROUP BY BRANCH, TRDR, MTRL, WEEK_INDEX;/)
+    assert.match(classify, /INTO #ClientWeekly[\s\S]*?GROUP BY BRANCH, TRDR, MTRL, WEEK_BUCKET;/)
     assert.match(classify, /CASE WHEN SUM\(WINSORIZED_QTY\) < 0 THEN 0 ELSE SUM\(WINSORIZED_QTY\) END\s*\) AS NET_QTY[\s\S]*?INTO #ClientWeekly/)
     assert.doesNotMatch(classify, /RAW_NET_QTY/)
     assert.match(classify, /WHEN SUM\(CASE WHEN IN_W1 = 1 THEN WINSORIZED_QTY ELSE 0 END\) < 0 THEN 0[\s\S]*?INTO #ClientWindowTotals[\s\S]*?FROM #WinsorizedLines[\s\S]*?GROUP BY BRANCH, TRDR, MTRL;/)
@@ -173,7 +173,7 @@ describe('MIN/MAX P1/P2 window netting contract', () => {
 
     const classify = sqlSource('01_classify.sql')
     const hqWindowBlock = classify.match(/IF @HqDinAgregatCompanie = 1\s+BEGIN\s+INSERT INTO #ClientWindowTotals \([\s\S]*?GROUP BY hq\.BRANCH, cw\.TRDR, cw\.MTRL;\s+END;/)
-    const hqWeeklyBlock = classify.match(/IF @HqDinAgregatCompanie = 1\s+BEGIN\s+INSERT INTO #BranchWeekly \([\s\S]*?GROUP BY hq\.BRANCH, bw\.MTRL, bw\.WEEK_INDEX;\s+END;/)
+    const hqWeeklyBlock = classify.match(/IF @HqDinAgregatCompanie = 1\s+BEGIN\s+INSERT INTO #BranchWeekly \([\s\S]*?GROUP BY hq\.BRANCH, bw\.MTRL, bw\.WEEK_BUCKET;\s+END;/)
 
     assert.ok(hqWindowBlock, 'HQ window totals must be built at client level')
     assert.match(hqWindowBlock[0], /FROM #WinsorizedLines cw/)
@@ -314,9 +314,9 @@ describe('MIN/MAX N04 calendar day window contract', () => {
     // REGRESIA CARE CONTEAZA CEL MAI MULT: N04a a adaugat o axa in zile (IN_W1..IN_W4)
     // fara sa atinga seria saptamanala; daca cele doua axe s-ar fuziona, SIGMA_WK/SAPT_VZ/XYZ
     // ar deveni gresite in tacere. Testul pazeste separarea, nu doar prezenta textului.
-    assert.match(classify, /INTO #ClientWeekly[\s\S]*?GROUP BY BRANCH, TRDR, MTRL, WEEK_INDEX;/)
-    assert.match(classify, /INTO #WeeklyStats\s*FROM #BranchWeekly\s*WHERE WEEK_INDEX >= 0 AND WEEK_INDEX < @NrSaptamani/)
-    assert.match(classify, /INTO #MonthlyBuckets\s*FROM #BranchWeekly\s*WHERE WEEK_INDEX >= 0 AND WEEK_INDEX < @NrSaptamani/)
+    assert.match(classify, /INTO #ClientWeekly[\s\S]*?GROUP BY BRANCH, TRDR, MTRL, WEEK_BUCKET;/)
+    assert.match(classify, /INTO #RollingWeeklyStats\s*FROM #BranchWeekly\s*WHERE WEEK_BUCKET >= 0 AND WEEK_BUCKET < @NrSaptamani/)
+    assert.match(classify, /INTO #MonthlyBuckets\s*FROM #BranchWeekly\s*WHERE WEEK_BUCKET >= 0 AND WEEK_BUCKET < @NrSaptamani/)
   })
 
   it('uses @NrSaptamani, not a hardcoded 52, for the fourth window in SAPT mode', () => {
@@ -377,5 +377,77 @@ describe('MIN/MAX N04 calendar day window contract', () => {
 
     assert.doesNotMatch(classify, /RAW_NET_QTY/)
     assert.match(classify, /CASE WHEN SUM\(WINSORIZED_QTY\) < 0 THEN 0 ELSE SUM\(WINSORIZED_QTY\) END\s*\) AS NET_QTY[\s\S]*?INTO #ClientWeekly/)
+  })
+})
+
+describe('MIN/MAX N04b weekly grid split contract', () => {
+  it('seeds the two new N04b parameters with the documented defaults', () => {
+    const params = sqlSource('00_params.sql')
+
+    assert.match(params, /\('GRILA_SAPT',\s*'ROLLING',\s*'STR',\s*'GLOBAL'/)
+    assert.match(params, /\('BAZA_SAPT_VZ',\s*'ISO',\s*'STR',\s*'GLOBAL'/)
+  })
+
+  it('guards GRILA_SAPT and BAZA_SAPT_VZ with dedicated THROWs instead of a silent fallback', () => {
+    const classify = sqlSource('01_classify.sql')
+
+    assert.match(classify, /IF @GrilaSapt IS NULL SET @GrilaSapt = 'ROLLING';/)
+    assert.match(classify, /IF @BazaSaptVz IS NULL SET @BazaSaptVz = 'ISO';/)
+    assert.match(classify, /THROW 50082, 'sp_MinMaxEngine_Classify: GRILA_SAPT must be ROLLING or CALENDAR\.'/)
+    assert.match(classify, /THROW 50083, 'sp_MinMaxEngine_Classify: BAZA_SAPT_VZ must be ISO or GRILA\.'/)
+  })
+
+  it('splits the single weekly grid into a rolling WEEK_BUCKET and a DATEFIRST-independent ISO_WEEK', () => {
+    const classify = sqlSource('01_classify.sql')
+
+    assert.match(classify, /CASE WHEN @GrilaSapt = 'ROLLING' THEN lag\.DAY_LAG \/ 7\s+ELSE DATEDIFF\(WEEK, sl\.TRNDATE, sl\.AZI\) END AS WEEK_BUCKET,/)
+    assert.match(classify, /CASE WHEN @BazaSaptVz = 'ISO' THEN iso\.ISO_WEEK_INDEX[\s\S]*?AS ISO_WEEK,/)
+    assert.match(classify, /DATEADD\(DAY, -\(DATEDIFF\(DAY, '19000101', sl\.TRNDATE\) % 7\), sl\.TRNDATE\)/)
+    assert.doesNotMatch(classify, /DATEPART\(WEEKDAY/)
+  })
+
+  it('keeps #ClientIsoWeekly/#BranchIsoWeekly lean and separate from the rolling grid', () => {
+    const classify = sqlSource('01_classify.sql')
+
+    assert.match(classify, /INTO #ClientIsoWeekly\s*FROM #WinsorizedLines\s*GROUP BY BRANCH, TRDR, MTRL, ISO_WEEK;/)
+    assert.match(classify, /INTO #BranchIsoWeekly\s*FROM #ClientIsoWeekly\s*GROUP BY BRANCH, MTRL, ISO_WEEK;/)
+    assert.match(classify, /IF @HqDinAgregatCompanie = 1\s+BEGIN\s+INSERT INTO #BranchIsoWeekly \([\s\S]*?GROUP BY hq\.BRANCH, bw\.MTRL, bw\.ISO_WEEK;\s+END;/)
+  })
+
+  it('derives BUCKETS_VZ from the rolling grid and uses it (not SAPT_VZ) in the sigma constant-demand guard', () => {
+    const classify = sqlSource('01_classify.sql')
+
+    assert.match(classify, /SUM\(CASE WHEN QTY > 0 THEN 1 ELSE 0 END\) AS BUCKETS_VZ\s*INTO #RollingWeeklyStats/)
+    assert.match(classify, /WHEN COALESCE\(weeklyStats\.BUCKETS_VZ, 0\) = 0\s+OR \(weeklyStats\.BUCKETS_VZ = @NrSaptamani AND weeklyStats\.MIN_WEEK_QTY = weeklyStats\.MAX_WEEK_QTY\)/)
+    assert.doesNotMatch(classify, /WHEN COALESCE\(weeklyStats\.SAPT_VZ, 0\) = 0/)
+  })
+
+  it('combines the rolling and ISO grids into #WeeklyStats with a join that cannot drop rows', () => {
+    const classify = sqlSource('01_classify.sql')
+
+    assert.match(classify, /INTO #WeeklyStats\s*FROM #RollingWeeklyStats rolling\s*FULL JOIN #IsoWeeklyStats iso/)
+  })
+
+  it('persists the rolling WEEK_BUCKET into the unchanged CCCMINMAXWEEK.WEEK_INDEX column', () => {
+    const classify = sqlSource('01_classify.sql')
+
+    assert.match(classify, /RUNID, COMPANY, BRANCH, MTRL, WEEK_INDEX,/)
+    assert.match(classify, /CONVERT\(SMALLINT, BRANCH\), MTRL, CONVERT\(SMALLINT, WEEK_BUCKET\),/)
+    assert.match(classify, /FROM #BranchWeekly\s*WHERE WEEK_BUCKET >= 0 AND WEEK_BUCKET < @NrSaptamani\s*AND \(QTY <> 0 OR SALES_VALUE <> 0\);/)
+
+    const persist = sqlSource('00b_persist.sql')
+    assert.match(persist, /WEEK_INDEX SMALLINT NOT NULL,/)
+  })
+
+  it('does not touch ClassifyGroup, which stays on the old weekly grid (item 1c)', () => {
+    const classifyGroup = sqlSource('02_classify_group.sql')
+
+    assert.match(classifyGroup, /DATEDIFF\(WEEK, sl\.TRNDATE, sl\.AZI\) AS WEEK_INDEX,/)
+    assert.doesNotMatch(classifyGroup, /GRILA_SAPT|BAZA_SAPT_VZ|WEEK_BUCKET|ISO_WEEK/)
+  })
+
+  it('exposes the grila_sapt invariant in the validator', () => {
+    const validator = fs.readFileSync(path.join(root, 'new_min_max', 'tools', 'validate-minmax-invariants.cjs'), 'utf8')
+    assert.match(validator, /id: 'grila_sapt'/)
   })
 })

@@ -489,6 +489,146 @@ function buildInvariants (runId, runParams) {
       }
     },
     {
+      id: 'grila_sapt',
+      label: 'N04b: snapshot GRILA_SAPT/BAZA_SAPT_VZ; S 5.1 WEEK_INDEX persistat pe grila rolling de 7 zile, S 4.6 SAPT_VZ pe baza ISO',
+      async run () {
+        const problems = []
+        // La fel ca ferestre_zile: lipsa cheilor aici e ABATERE (rularile dinainte de N04b
+        // trebuie sa pice aceasta invarianta), nu un fallback tacit spre valorile implicite.
+        const missingKeys = ['GRILA_SAPT', 'BAZA_SAPT_VZ']
+          .filter((key) => runParams[key] === undefined || runParams[key] === null)
+        if (missingKeys.length) problems.push(`chei lipsa din snapshot: ${missingKeys.join(', ')}`)
+
+        const grilaSapt = String(runParams.GRILA_SAPT || '').trim().toUpperCase()
+        const bazaSaptVz = String(runParams.BAZA_SAPT_VZ || '').trim().toUpperCase()
+
+        if (!missingKeys.includes('GRILA_SAPT') && !['ROLLING', 'CALENDAR'].includes(grilaSapt)) {
+          problems.push(`GRILA_SAPT = ${runParams.GRILA_SAPT} (asteptat ROLLING sau CALENDAR)`)
+        }
+        if (!missingKeys.includes('BAZA_SAPT_VZ') && !['ISO', 'GRILA'].includes(bazaSaptVz)) {
+          problems.push(`BAZA_SAPT_VZ = ${runParams.BAZA_SAPT_VZ} (asteptat ISO sau GRILA)`)
+        }
+
+        if (problems.length) return { pass: false, detail: problems.join('; ') }
+
+        const [boundsRow] = await execSql(
+          `SELECT COUNT(*) AS TOTAL_ROWS,
+                  SUM(CASE WHEN WEEK_INDEX < 0 OR WEEK_INDEX >= ${nrSaptamani} THEN 1 ELSE 0 END) AS ABATERI_INTERVAL
+           FROM CCCMINMAXWEEK WHERE RUNID = ${runId}`
+        )
+        const abateriInterval = n(boundsRow.ABATERI_INTERVAL) || 0
+        if (abateriInterval !== 0) {
+          problems.push(`${abateriInterval} randuri CCCMINMAXWEEK.WEEK_INDEX in afara [0, ${nrSaptamani})`)
+        }
+
+        if (bazaSaptVz === 'ISO') {
+          const [saptRow] = await execSql(
+            `SELECT COUNT(*) AS TOTAL_ROWS,
+                    SUM(CASE WHEN SAPT_VZ > ${nrSaptamani} THEN 1 ELSE 0 END) AS ABATERI
+             FROM CCCMINMAXDET WHERE RUNID = ${runId}`
+          )
+          const abateriSapt = n(saptRow.ABATERI) || 0
+          if (abateriSapt !== 0) problems.push(`${abateriSapt} randuri DET.SAPT_VZ > ${nrSaptamani}`)
+        }
+
+        if (problems.length) return { pass: false, detail: problems.join('; ') }
+
+        if (grilaSapt !== 'ROLLING') {
+          return {
+            pass: true,
+            detail: `snapshot si praguri OK; re-derivarea bucket-urilor nu se aplica in modul ${grilaSapt} (numai GRILA_SAPT=ROLLING re-deriva din sursa)`
+          }
+        }
+
+        const modAtribuireRaw = String(runParams.MOD_ATRIBUIRE_FILIALA || '').trim().toUpperCase()
+        const modAtribuire = ['DOC', 'AGENT', 'CLIENT'].includes(modAtribuireRaw) ? modAtribuireRaw : 'CLIENT'
+        const nrZileRun = Number(runParams.NRZILE) > 0 ? Number(runParams.NRZILE) : 365
+
+        // Acelasi precondition ca la ferestre_zile: AZI e derivat din MAX(TRNDATE) pe date vii,
+        // deci vanzarile inregistrate dupa rularea inghetata muta ancora inainte.
+        const [anchorRow] = await execSql(
+          `SELECT
+             CONVERT(VARCHAR(10), (SELECT MAX(AZI) FROM dbo.ufn_MinMaxSalesLines(${COMPANY}, '${modAtribuire}', ${nrZileRun}, NULL)), 120) AS AZI_LIVE,
+             CONVERT(VARCHAR(10), (SELECT AZI FROM CCCMINMAXRUN WHERE RUNID = ${runId}), 120) AS AZI_INGHETAT`
+        )
+        const aziLive = anchorRow && anchorRow.AZI_LIVE
+        const aziInghetat = anchorRow && anchorRow.AZI_INGHETAT
+
+        if (aziLive && aziInghetat && aziLive > aziInghetat) {
+          return {
+            pass: true,
+            detail: `sursa vie a avansat de la rulare (AZI viu = ${aziLive}, AZI inghetat = ${aziInghetat}); comparatia exacta a bucket-urilor nu mai e posibila`
+          }
+        }
+
+        const [row] = await execSql(
+          `WITH ActiveBranches AS (
+             SELECT b.BRANCH
+             FROM CCCMINMAXBRANCH b
+             WHERE b.INCLUS = 1 AND b.ESTE_HQ = 0
+               AND EXISTS (
+                 SELECT 1 FROM WHOUSE w
+                 WHERE w.CCCBRANCH = b.BRANCH AND w.COMPANY = ${COMPANY} AND w.ISACTIVE = 1
+               )
+           ),
+           SourceLines AS (
+             SELECT sl.BRANCH, sl.TRDR, sl.MTRL, sl.QTY,
+               DATEDIFF(DAY, sl.TRNDATE, sl.AZI) / 7 AS WEEK_BUCKET
+             FROM dbo.ufn_MinMaxSalesLines(${COMPANY}, '${modAtribuire}', ${nrZileRun},
+                 (SELECT AZI FROM CCCMINMAXRUN WHERE RUNID = ${runId})) sl
+             INNER JOIN ActiveBranches ab ON ab.BRANCH = sl.BRANCH
+             WHERE DATEDIFF(DAY, sl.TRNDATE, sl.AZI) >= 0 AND DATEDIFF(DAY, sl.TRNDATE, sl.AZI) < ${nrSaptamani} * 7
+           ),
+           WinsorizedLines AS (
+             SELECT sl.BRANCH, sl.TRDR, sl.MTRL, sl.WEEK_BUCKET,
+               CASE
+                 WHEN sl.QTY <= 0 THEN sl.QTY
+                 WHEN w.PRAG_APLICAT = 'P95' AND sl.QTY > w.P95_QTY THEN w.P95_QTY
+                 WHEN w.PRAG_APLICAT = 'MEDIANA' AND sl.QTY > w.MEDIAN_QTY THEN w.MEDIAN_QTY
+                 ELSE sl.QTY
+               END AS WINSORIZED_QTY
+             FROM SourceLines sl
+             LEFT JOIN CCCMINMAXWINSOR w ON w.RUNID = ${runId} AND w.MTRL = sl.MTRL
+           ),
+           ClientNet AS (
+             SELECT BRANCH, TRDR, MTRL, WEEK_BUCKET,
+               CASE WHEN SUM(WINSORIZED_QTY) < 0 THEN 0 ELSE SUM(WINSORIZED_QTY) END AS NET_QTY
+             FROM WinsorizedLines
+             GROUP BY BRANCH, TRDR, MTRL, WEEK_BUCKET
+           ),
+           LiveTotals AS (
+             SELECT BRANCH, MTRL, WEEK_BUCKET, CONVERT(DECIMAL(28, 8), SUM(NET_QTY)) AS QTY_LIVE
+             FROM ClientNet
+             GROUP BY BRANCH, MTRL, WEEK_BUCKET
+           ),
+           DetTotals AS (
+             SELECT w.BRANCH, w.MTRL, w.WEEK_INDEX AS WEEK_BUCKET, w.QTY
+             FROM CCCMINMAXWEEK w
+             INNER JOIN ActiveBranches ab ON ab.BRANCH = w.BRANCH
+             WHERE w.RUNID = ${runId}
+           )
+           SELECT
+             COUNT(*) AS TOTAL_COMPARAT,
+             SUM(CASE WHEN ABS(COALESCE(live.QTY_LIVE, 0) - COALESCE(det.QTY, 0)) > 0.00000001 THEN 1 ELSE 0 END) AS ABATERI,
+             SUM(CASE WHEN live.BRANCH IS NULL THEN 1 ELSE 0 END) AS LIPSA_IN_LIVE,
+             SUM(CASE WHEN det.BRANCH IS NULL THEN 1 ELSE 0 END) AS LIPSA_IN_DET
+           FROM LiveTotals live
+           FULL OUTER JOIN DetTotals det
+             ON det.BRANCH = live.BRANCH AND det.MTRL = live.MTRL AND det.WEEK_BUCKET = live.WEEK_BUCKET`
+        )
+
+        const abateri = n(row.ABATERI) || 0
+        const total = n(row.TOTAL_COMPARAT) || 0
+        const lipsaLive = n(row.LIPSA_IN_LIVE) || 0
+        const lipsaDet = n(row.LIPSA_IN_DET) || 0
+        return {
+          pass: abateri === 0,
+          detail: `${abateri} abateri din ${total} perechi (BRANCH, MTRL, WEEK_INDEX) comparate ` +
+            `(${lipsaLive} absente din re-derivare, ${lipsaDet} absente din CCCMINMAXWEEK)`
+        }
+      }
+    },
+    {
       id: 'trend',
       label: `P11 + S 7: TREND_PCT pe baza ${selectedTrendBase}, ca fractie; STATUS_TREND din praguri, cu NOU/OD prioritare`,
       async run () {
