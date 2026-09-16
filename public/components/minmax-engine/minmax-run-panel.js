@@ -250,14 +250,14 @@ export class MinmaxRunPanel extends LitElement {
                 id="minmax-branch-assignment-mode"
                 class="form-select form-select-sm"
                 style="width:auto;"
-                title="Filiala folosita pentru atribuirea vanzarilor"
+                title="Filiala folosita pentru atribuirea vanzarilor. CLIENT: filiala din TRDBRANCH a clientului (fallback filiala documentului); DOC: filiala documentului de vanzare; AGENT: filiala agentului de vanzare. Alegerea muta liniile intre filiale si schimba VZ, ABC, sigma si MIN/MAX."
                 .value="${this.branchAssignmentMode}"
                 ?disabled="${Boolean(openRun) || this.runLaunch.starting || this.runLaunch.polling}"
                 @change="${this._setBranchAssignmentMode}"
               >
-                <option value="CLIENT">Client (TRDBRANCH)</option>
-                <option value="DOC">Document (FINDOC)</option>
-                <option value="AGENT">Agent (PRSN)</option>
+                <option value="CLIENT" title="Atribuie vanzarea filialei din TRDBRANCH a clientului; daca lipseste, foloseste filiala documentului. Implicit.">Client (TRDBRANCH)</option>
+                <option value="DOC" title="Atribuie vanzarea filialei documentului de vanzare (FINDOC.BRANCH).">Document (FINDOC)</option>
+                <option value="AGENT" title="Atribuie vanzarea filialei agentului de vanzare (PRSN.BRANCH), ca in jobul legacy.">Agent (PRSN)</option>
               </select>
             </label>
             <label class="d-flex align-items-center gap-2 mb-0 small" for="minmax-calibrare-mod">
@@ -266,14 +266,14 @@ export class MinmaxRunPanel extends LitElement {
                 id="minmax-calibrare-mod"
                 class="form-select form-select-sm"
                 style="width:auto;"
-                title="Metrica de calibrare evidentiata pentru sesiune"
+                title="Metrica de calibrare evidentiata pentru sesiune. Alegerea schimba doar metrica raportata ca principala; nu schimba formulele, populatia sau rezultatele MIN/MAX."
                 .value="${this.calibrareMod}"
                 ?disabled="${Boolean(openRun) || this.runLaunch.starting || this.runLaunch.polling}"
                 @change="${this._setCalibrareMod}"
               >
-                <option value="A">A</option>
-                <option value="B">B</option>
-                <option value="C">C</option>
+                <option value="A" title="Banda FLAG_RATIO 0.50-2.00 pe populatia curata a validatorului; numara DOWN+OK+UP. Test intern, nu criteriul clientului.">A</option>
+                <option value="B" title="FLAG_TXT='OK' (raport 0.77-1.30) pe populatia curata a validatorului; izoleaza efectul benzii de acceptanta.">B</option>
+                <option value="C" title="FLAG_TXT='OK' (raport 0.77-1.30) pe toate randurile cu ERP_MAX>0 (MAX manual), fara alte filtre. Criteriul literal S 8 al beneficiarului. Implicit.">C</option>
               </select>
             </label>
             <button

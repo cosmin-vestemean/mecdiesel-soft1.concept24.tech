@@ -98,7 +98,7 @@ describe('MIN/MAX SQL snapshot contract', () => {
   })
 })
 
-describe('MIN/MAX P1 window netting contract', () => {
+describe('MIN/MAX P1/P2 window netting contract', () => {
   it('nets a client across the whole window while preserving weekly demand buckets', () => {
     const lines = [
       { weekIndex: 0, quantity: 7 },
@@ -155,7 +155,18 @@ describe('MIN/MAX P1 window netting contract', () => {
     assert.strictEqual(hqDemand, 4)
 
     const classify = sqlSource('01_classify.sql')
-    assert.match(classify, /FROM #ClientWeekly cw[\s\S]*?sourceBranch\.ESTE_HQ = 0[\s\S]*?GROUP BY hq\.BRANCH, cw\.TRDR, cw\.MTRL/)
+    const hqWindowBlock = classify.match(/IF @HqDinAgregatCompanie = 1\s+BEGIN\s+INSERT INTO #ClientWindowTotals \([\s\S]*?GROUP BY hq\.BRANCH, cw\.TRDR, cw\.MTRL;\s+END;/)
+    const hqWeeklyBlock = classify.match(/IF @HqDinAgregatCompanie = 1\s+BEGIN\s+INSERT INTO #BranchWeekly \([\s\S]*?GROUP BY hq\.BRANCH, bw\.MTRL, bw\.WEEK_INDEX;\s+END;/)
+
+    assert.ok(hqWindowBlock, 'HQ window totals must be built at client level')
+    assert.match(hqWindowBlock[0], /FROM #ClientWeekly cw/)
+    assert.match(hqWindowBlock[0], /sourceBranch\.ESTE_HQ = 0/)
+    assert.match(hqWindowBlock[0], /WHEN SUM\(CASE WHEN cw\.WEEK_INDEX < 4 THEN cw\.RAW_NET_QTY ELSE 0 END\) < 0 THEN 0/)
+    assert.match(hqWindowBlock[0], /WHEN SUM\(cw\.RAW_NET_QTY\) < 0 THEN 0/)
+    assert.match(hqWindowBlock[0], /cw\.WEEK_INDEX < @NrSaptamani/)
+    assert.ok(hqWeeklyBlock, 'HQ weekly totals must remain a separate series')
+    assert.match(hqWeeklyBlock[0], /SUM\(bw\.QTY\)/)
+    assert.doesNotMatch(hqWeeklyBlock[0], /RAW_NET_QTY/)
     assert.doesNotMatch(classify, /FROM #BranchWindowTotals totals[\s\S]*?sourceBranch\.ESTE_HQ = 0/)
   })
 })
