@@ -24,6 +24,23 @@ const LIFECYCLE_OPTIONS = ['STANDARD', 'NOU', 'OD'];
 // Anexa §A2: ABC/XYZ separate filters removed — CLASA (11 values) is already
 // their cartesian product and keeping both allowed contradictory selections.
 
+// Tooltips (title) explaining each column's meaning — shown on header hover.
+const COLUMN_TOOLTIPS = {
+  BRANCH: 'Filiala (punctul de vanzare / depozitul) pentru care s-a facut clasificarea.',
+  MTRGROUP_NAME: 'Grupa de articole (MTRGROUP) clasificata — clasificarea ABC/XYZ se face la nivel de grupa, nu de articol individual.',
+  LIFECYCLE: 'Stadiul de viata al grupului: STANDARD (matur), NOU (lansat recent), OD (out-of-date / discontinuat).',
+  ABC: 'Clasificarea ABC pe baza valorii vanzarilor: A = cel mai important volum, B = mediu, C = mic.',
+  XYZ: 'Clasificarea XYZ pe baza regularitatii cererii: X = cerere stabila, Y = variabila, Z = neregulata.',
+  CLASA: 'Combinatia ABCxXYZ (11 clase, ex. AX, CZ) — volumul vanzarilor (ABC) intersectat cu predictibilitatea cererii (XYZ).',
+  NR_SKU_GRP: 'Numarul total de articole (SKU-uri) din grupa, in filiala.',
+  NR_SKU_VZ: 'Numarul de articole din grupa care au inregistrat vanzari in perioada analizata.',
+  VZ_26S: 'Vanzarile medii pe saptamana ale grupului, calculate pe ultimele 26 saptamani.',
+  VZ_52S: 'Vanzarile medii pe saptamana ale grupului, calculate pe ultimele 52 saptamani.',
+  VAL_52S: 'Valoarea vanzarilor grupului pe ultimele 52 saptamani.',
+  CV: 'Coeficientul de variatie al vanzarilor grupului (sigma/medie) — mare = cerere neregulata, influenteaza clasa XYZ.',
+  ESTE_HQ: 'Da daca filiala este HQ (sediu/depozit central) — regula de cap HQ se aplica aici.'
+};
+
 // Columns rendered from CCCMINMAXGRP (subset, per 00b_persist.sql).
 const GROUP_COLUMNS = [
   { key: 'BRANCH', label: 'Filiala' },
@@ -388,8 +405,8 @@ export class MinmaxGroupAbc extends LitElement {
             <table class="table table-sm table-hover align-middle mb-0">
               <thead class="sticky-top bg-white" style="z-index: 1;">
                 <tr>
-                  <th class="text-end">Nr.</th>
-                  ${GROUP_COLUMNS.map((col) => html`<th>${col.label}</th>`)}
+                  <th class="text-end" title="Numarul curent al randului in pagina.">Nr.</th>
+                  ${GROUP_COLUMNS.map((col) => html`<th title="${COLUMN_TOOLTIPS[col.key] ?? ''}">${col.label}</th>`)}
                 </tr>
               </thead>
               <tbody>

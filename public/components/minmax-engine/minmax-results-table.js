@@ -62,6 +62,32 @@ const INTERVAL_FIELDS = [
   { key: 'val52s', label: 'Val 52S' }
 ];
 
+// Tooltips (title) explaining each column's meaning — shown on header hover.
+const COLUMN_TOOLTIPS = {
+  BRANCH: 'Filiala (punctul de vanzare / depozitul) pentru care s-a calculat MIN/MAX-ul.',
+  CODE: 'Codul articolului (MTRL) din ERP.',
+  MTRL_NAME: 'Denumirea comerciala a articolului.',
+  MTRGROUP_NAME: 'Grupa de articole din care face parte articolul (MTRGROUP).',
+  LIFECYCLE: 'Stadiul de viata al articolului: STANDARD (matur), NOU (lansat recent), OD (out-of-date / discontinuat).',
+  CLASA: 'Clasificarea ABCxXYZ (11 clase, ex. AX, CZ) — combinatie intre volumul de vanzari (ABC) si regularitatea cererii (XYZ).',
+  FLAG_TXT: 'Flag-ul de comparatie fata de referinta (pozitia ERP existenta): OK, UP/DOWN (cresteri/scaderi), MAJOR_UP, SUPRASTOC, FARA_REFERINTA.',
+  STATUS_TREND: 'Tendinta vanzarilor: ACTIVE, STABLE, TREND_DOWN, DECLINE — pe baza comparatiei 26S vs 52S.',
+  STOC_FIZIC_QTY: 'Stocul fizic disponibil in filiala (cantitate).',
+  TRANSFER_IN_QTY: 'Cantitate aflata in transfer catre filiala (in drum, neprimita inca).',
+  STOC_QTY: 'Stocul efectiv = stoc fizic + transfer in drum.',
+  ORD_FURN: 'Cantitate deja comandata la furnizor, nereceptionata inca.',
+  ENG_MIN: 'MIN-ul calculat de motor (punct de reaprovizionare) — cantitatea minima necesara in stoc.',
+  ENG_MAX: 'MAX-ul calculat de motor — nivelul tinta pana la care se face reaprovizionarea.',
+  BUY_QTY: 'Cantitatea de cumparat = MAX - stoc efectiv - ordine furnizor (plus ajustari HQ/podea).',
+  ACOP_CUR: 'Acoperirea curenta: cate saptamani de vanzari acopera stocul efectiv.',
+  VZ_26S: 'Vanzarile medii pe saptamana, calculate pe ultimele 26 saptamani.',
+  VZ_52S: 'Vanzarile medii pe saptamana, calculate pe ultimele 52 saptamani.',
+  CV: 'Coeficientul de variatie al vanzarilor (sigma/medie) — masura instabilitatii cererii; mare = cerere neregulata.',
+  VAL_52S: 'Valoarea vanzarilor pe ultimele 52 saptamani.',
+  HQ_CAP_APLICAT: 'Da daca MAX-ul a fost limitat (cap) de regula HQ — filialele HQ nu pot depasi stocul HQ.',
+  PODEA_APLICATA: 'Da daca pentru filiala "podea" (floor) s-a aplicat pragul minim de stoc in locul calculului standard.'
+};
+
 // Result columns rendered in the table body (subset of CCCMINMAXDET, per
 // 00b_persist.sql); `sortField` maps to the API field name (DET_COLUMNS key).
 const RESULT_COLUMNS = [
@@ -612,10 +638,11 @@ export class MinmaxResultsTable extends LitElement {
             <table class="table table-sm table-hover align-middle mb-0 minmax-dense">
               <thead class="sticky-top bg-white" style="z-index: 1;">
                 <tr>
-                  <th class="text-end">Nr.</th>
+                  <th class="text-end" title="Numarul curent al randului in pagina.">Nr.</th>
                   ${RESULT_COLUMNS.map((col) => html`
                     <th class="${col.type === 'number' ? 'text-end' : ''}"
                         style="${col.sortField ? 'cursor:pointer;' : ''}"
+                        title="${COLUMN_TOOLTIPS[col.key] ?? ''}"
                         @click="${col.sortField ? () => this._sortBy(col.sortField) : null}">
                       ${col.label}${col.sortField ? this._renderSortIcon(col.sortField) : ''}
                     </th>
