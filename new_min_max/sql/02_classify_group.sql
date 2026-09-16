@@ -46,6 +46,15 @@ BEGIN
     -- ---------------------------------------------------------------
     DECLARE @NrSaptamani INT;
     DECLARE @NrZile INT;
+    DECLARE @FerestreVz VARCHAR(10);
+    DECLARE @FerestreCapat VARCHAR(10);
+    DECLARE @GrilaSapt VARCHAR(10);
+    DECLARE @BazaSaptVz VARCHAR(10);
+    DECLARE @FerestreZileRaw VARCHAR(255);
+    DECLARE @Zile1 INT;
+    DECLARE @Zile2 INT;
+    DECLARE @Zile3 INT;
+    DECLARE @Zile4 INT;
     DECLARE @WinsorPct FLOAT;
     DECLARE @WinsorMinLinii INT;
     DECLARE @WinsorSubPrag VARCHAR(10);
@@ -92,6 +101,11 @@ BEGIN
 
     SELECT @NrSaptamani = TRY_CONVERT(INT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'NRSAPT';
     SELECT @NrZile = TRY_CONVERT(INT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'NRZILE';
+    SELECT @FerestreVz = UPPER(LTRIM(RTRIM(PARAMVALUE))) FROM #ResolvedParams WHERE PARAMKEY = 'FERESTRE_VZ';
+    SELECT @FerestreCapat = LTRIM(RTRIM(PARAMVALUE)) FROM #ResolvedParams WHERE PARAMKEY = 'FERESTRE_CAPAT';
+    SELECT @GrilaSapt = UPPER(LTRIM(RTRIM(PARAMVALUE))) FROM #ResolvedParams WHERE PARAMKEY = 'GRILA_SAPT';
+    SELECT @BazaSaptVz = UPPER(LTRIM(RTRIM(PARAMVALUE))) FROM #ResolvedParams WHERE PARAMKEY = 'BAZA_SAPT_VZ';
+    SELECT @FerestreZileRaw = PARAMVALUE FROM #ResolvedParams WHERE PARAMKEY = 'FERESTRE_VZ_ZILE';
     SELECT @WinsorPct = TRY_CONVERT(FLOAT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'WINSOR_PCT';
     SELECT @WinsorMinLinii = TRY_CONVERT(INT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'WINSOR_MIN_LINII';
     SELECT @WinsorSubPrag = UPPER(LTRIM(RTRIM(PARAMVALUE))) FROM #ResolvedParams WHERE PARAMKEY = 'WINSOR_SUB_PRAG';
@@ -131,6 +145,38 @@ BEGIN
 
     IF COALESCE(@NrSaptamani, 0) <= 0 SET @NrSaptamani = 52;
     IF COALESCE(@NrZile, 0) <= 0 SET @NrZile = 365;
+    IF @FerestreVz NOT IN ('ZILE', 'SAPT') OR @FerestreVz IS NULL SET @FerestreVz = 'ZILE';
+    IF @FerestreCapat IS NULL SET @FerestreCapat = '[0,N)';
+    IF @GrilaSapt IS NULL SET @GrilaSapt = 'ROLLING';
+    IF @BazaSaptVz IS NULL SET @BazaSaptVz = 'ISO';
+    IF @FerestreZileRaw IS NULL OR LTRIM(RTRIM(@FerestreZileRaw)) = '' SET @FerestreZileRaw = '28,91,182,365';
+
+    IF @FerestreCapat <> '[0,N)'
+        THROW 50084, 'sp_MinMaxEngine_ClassifyGroup: FERESTRE_CAPAT supports only [0,N); any other value is undeclared in the specification.', 1;
+
+    IF @GrilaSapt NOT IN ('ROLLING', 'CALENDAR')
+        THROW 50085, 'sp_MinMaxEngine_ClassifyGroup: GRILA_SAPT must be ROLLING or CALENDAR.', 1;
+    IF @BazaSaptVz NOT IN ('ISO', 'GRILA')
+        THROW 50086, 'sp_MinMaxEngine_ClassifyGroup: BAZA_SAPT_VZ must be ISO or GRILA.', 1;
+
+    -- ALL-OR-NOTHING inaintea despicarii: fara exact 3 virgule, PARSENAME ar numara de la
+    -- dreapta si ar deplasa tacit valorile pe pozitii gresite (ex: '28' -> @Zile4 = 28).
+    IF LEN(@FerestreZileRaw) - LEN(REPLACE(@FerestreZileRaw, ',', '')) <> 3
+        THROW 50087, 'sp_MinMaxEngine_ClassifyGroup: FERESTRE_VZ_ZILE must contain exactly four positive, strictly increasing integers.', 1;
+
+    SET @Zile1 = TRY_CONVERT(INT, PARSENAME(REPLACE(@FerestreZileRaw, ',', '.'), 4));
+    SET @Zile2 = TRY_CONVERT(INT, PARSENAME(REPLACE(@FerestreZileRaw, ',', '.'), 3));
+    SET @Zile3 = TRY_CONVERT(INT, PARSENAME(REPLACE(@FerestreZileRaw, ',', '.'), 2));
+    SET @Zile4 = TRY_CONVERT(INT, PARSENAME(REPLACE(@FerestreZileRaw, ',', '.'), 1));
+
+    IF @Zile1 IS NULL OR @Zile2 IS NULL OR @Zile3 IS NULL OR @Zile4 IS NULL
+        OR @Zile1 <= 0 OR @Zile2 <= 0 OR @Zile3 <= 0 OR @Zile4 <= 0
+        OR NOT (@Zile1 < @Zile2 AND @Zile2 < @Zile3 AND @Zile3 < @Zile4)
+        THROW 50087, 'sp_MinMaxEngine_ClassifyGroup: FERESTRE_VZ_ZILE must contain exactly four positive, strictly increasing integers.', 1;
+
+    IF @FerestreVz = 'ZILE' AND (@Zile1 > @NrZile OR @Zile2 > @NrZile OR @Zile3 > @NrZile OR @Zile4 > @NrZile)
+        THROW 50088, 'sp_MinMaxEngine_ClassifyGroup: FERESTRE_VZ_ZILE exceeds NRZILE; the window would be computed on a truncated population.', 1;
+
     IF @WinsorPct IS NULL OR @WinsorPct <= 0 OR @WinsorPct > 1 SET @WinsorPct = 0.95;
     IF COALESCE(@WinsorMinLinii, 0) <= 0 SET @WinsorMinLinii = 8;
     IF @WinsorSubPrag NOT IN ('NONE', 'MEDIANA') OR @WinsorSubPrag IS NULL SET @WinsorSubPrag = 'MEDIANA';
@@ -273,8 +319,33 @@ BEGIN
     EXEC sys.sp_executesql @PercentileSql;
 
     SELECT
-        sl.BRANCH, sl.TRDR, sl.MTRL, sl.MTRGROUP, sl.TRNDATE,
-        DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) AS WEEK_INDEX,
+        sl.BRANCH, sl.TRDR, sl.MTRL, sl.MTRGROUP, sl.TRNDATE, sl.AZI,
+        CASE WHEN @GrilaSapt = 'ROLLING' THEN lag.DAY_LAG / 7
+             ELSE DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) END AS WEEK_BUCKET,
+        CASE WHEN @BazaSaptVz = 'ISO' THEN iso.ISO_WEEK_INDEX
+             WHEN @GrilaSapt = 'ROLLING' THEN lag.DAY_LAG / 7
+             ELSE DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) END AS ISO_WEEK,
+        lag.DAY_LAG AS DAY_LAG,
+        CASE
+            WHEN (@FerestreVz = 'ZILE' AND lag.DAY_LAG >= 0 AND lag.DAY_LAG < @Zile1)
+                OR (@FerestreVz = 'SAPT' AND DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) >= 0 AND DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) < 4)
+            THEN 1 ELSE 0
+        END AS IN_W1,
+        CASE
+            WHEN (@FerestreVz = 'ZILE' AND lag.DAY_LAG >= 0 AND lag.DAY_LAG < @Zile2)
+                OR (@FerestreVz = 'SAPT' AND DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) >= 0 AND DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) < 13)
+            THEN 1 ELSE 0
+        END AS IN_W2,
+        CASE
+            WHEN (@FerestreVz = 'ZILE' AND lag.DAY_LAG >= 0 AND lag.DAY_LAG < @Zile3)
+                OR (@FerestreVz = 'SAPT' AND DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) >= 0 AND DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) < 26)
+            THEN 1 ELSE 0
+        END AS IN_W3,
+        CASE
+            WHEN (@FerestreVz = 'ZILE' AND lag.DAY_LAG >= 0 AND lag.DAY_LAG < @Zile4)
+                OR (@FerestreVz = 'SAPT' AND DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) >= 0 AND DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) < @NrSaptamani)
+            THEN 1 ELSE 0
+        END AS IN_W4,
         CONVERT(DECIMAL(28, 8),
             CASE
                 WHEN sl.QTY <= 0 THEN sl.QTY
@@ -287,13 +358,22 @@ BEGIN
         sl.LTRNVAL
     INTO #WinsorizedLines
     FROM #IncludedLines sl
-    LEFT JOIN #WinsorStats ws ON ws.MTRL = sl.MTRL;
+    LEFT JOIN #WinsorStats ws ON ws.MTRL = sl.MTRL
+    CROSS APPLY (
+        SELECT DATEDIFF(DAY, sl.TRNDATE, sl.AZI) AS DAY_LAG
+    ) lag
+    CROSS APPLY (
+        -- Ancorare pe luni fara SET DATEFIRST: 1900-01-01 a fost luni, deci modulo 7 da 0 lunea.
+        SELECT DATEDIFF(DAY,
+            DATEADD(DAY, -(DATEDIFF(DAY, '19000101', sl.TRNDATE) % 7), sl.TRNDATE),
+            DATEADD(DAY, -(DATEDIFF(DAY, '19000101', sl.AZI) % 7), sl.AZI)) / 7 AS ISO_WEEK_INDEX
+    ) iso;
 
     -- ---------------------------------------------------------------
-    -- 6. Netting per (Branch, TRDR, Mtrl, Week) — tot la nivel de SKU
+    -- 6. Netting per (Branch, TRDR, Mtrl, bucket rolling) — tot la nivel de SKU
     -- ---------------------------------------------------------------
     SELECT
-        BRANCH, TRDR, MTRL, MAX(MTRGROUP) AS MTRGROUP, WEEK_INDEX,
+        BRANCH, TRDR, MTRL, MAX(MTRGROUP) AS MTRGROUP, WEEK_BUCKET,
         CONVERT(DECIMAL(28, 8),
             CASE WHEN SUM(WINSORIZED_QTY) < 0 THEN 0 ELSE SUM(WINSORIZED_QTY) END
         ) AS NET_QTY,
@@ -304,25 +384,25 @@ BEGIN
         END AS LAST_POSITIVE_SALE
     INTO #NettedLines
     FROM #WinsorizedLines
-    GROUP BY BRANCH, TRDR, MTRL, WEEK_INDEX;
+    GROUP BY BRANCH, TRDR, MTRL, WEEK_BUCKET;
 
     -- ---------------------------------------------------------------
-    -- 7. Rulare pe SKU x filială x săptămână + agregator HQ
+    -- 7. Rulare pe SKU x filială x bucket rolling + agregator HQ
     -- ---------------------------------------------------------------
     SELECT
-        BRANCH, MTRL, MAX(MTRGROUP) AS MTRGROUP, WEEK_INDEX,
+        BRANCH, MTRL, MAX(MTRGROUP) AS MTRGROUP, WEEK_BUCKET,
         CONVERT(DECIMAL(28, 8), SUM(NET_QTY)) AS QTY,
         CONVERT(DECIMAL(28, 8), SUM(NET_VALUE)) AS SALES_VALUE,
         MAX(LAST_POSITIVE_SALE) AS LAST_POSITIVE_SALE
     INTO #BranchWeekly
     FROM #NettedLines
-    GROUP BY BRANCH, MTRL, WEEK_INDEX;
+    GROUP BY BRANCH, MTRL, WEEK_BUCKET;
 
     IF @HqDinAgregatCompanie = 1
     BEGIN
-        INSERT INTO #BranchWeekly (BRANCH, MTRL, MTRGROUP, WEEK_INDEX, QTY, SALES_VALUE, LAST_POSITIVE_SALE)
+        INSERT INTO #BranchWeekly (BRANCH, MTRL, MTRGROUP, WEEK_BUCKET, QTY, SALES_VALUE, LAST_POSITIVE_SALE)
         SELECT
-            hq.BRANCH, bw.MTRL, MAX(bw.MTRGROUP), bw.WEEK_INDEX,
+            hq.BRANCH, bw.MTRL, MAX(bw.MTRGROUP), bw.WEEK_BUCKET,
             CONVERT(DECIMAL(28, 8), SUM(bw.QTY)),
             CONVERT(DECIMAL(28, 8), SUM(bw.SALES_VALUE)),
             MAX(bw.LAST_POSITIVE_SALE)
@@ -331,46 +411,193 @@ BEGIN
             ON sourceBranch.BRANCH = bw.BRANCH AND sourceBranch.ESTE_HQ = 0
         CROSS JOIN #ActiveBranches hq
         WHERE hq.ESTE_HQ = 1
-        GROUP BY hq.BRANCH, bw.MTRL, bw.WEEK_INDEX;
+        GROUP BY hq.BRANCH, bw.MTRL, bw.WEEK_BUCKET;
     END;
 
     -- ---------------------------------------------------------------
-    -- 8. Rulare pe grupă x filială x săptămână
+    -- 8. Rulare pe grupă x filială x bucket rolling
     -- ---------------------------------------------------------------
     SELECT
-        BRANCH, MTRGROUP, WEEK_INDEX,
+        BRANCH, MTRGROUP, WEEK_BUCKET,
         CONVERT(DECIMAL(28, 8), SUM(QTY)) AS QTY,
         CONVERT(DECIMAL(28, 8), SUM(SALES_VALUE)) AS SALES_VALUE,
         MAX(LAST_POSITIVE_SALE) AS LAST_POSITIVE_SALE
     INTO #GroupWeekly
     FROM #BranchWeekly
-    GROUP BY BRANCH, MTRGROUP, WEEK_INDEX;
+    GROUP BY BRANCH, MTRGROUP, WEEK_BUCKET;
 
     CREATE CLUSTERED INDEX IX_GroupWeekly_BranchGroupWeek
-        ON #GroupWeekly (BRANCH, MTRGROUP, WEEK_INDEX);
+        ON #GroupWeekly (BRANCH, MTRGROUP, WEEK_BUCKET);
 
+    -- ---------------------------------------------------------------
+    -- 8b. Seria pe saptamani ISO (luni-duminica), doar pentru SAPT_VZ/SAPT_8S/ULT_VANZ (S 4.6).
+    --     Grila separata de WEEK_BUCKET: cele doua nu trebuie amestecate (vezi #BaseAggregates).
+    -- ---------------------------------------------------------------
+    SELECT
+        BRANCH, TRDR, MTRL, MAX(MTRGROUP) AS MTRGROUP, ISO_WEEK,
+        CONVERT(DECIMAL(28, 8),
+            CASE WHEN SUM(WINSORIZED_QTY) < 0 THEN 0 ELSE SUM(WINSORIZED_QTY) END
+        ) AS NET_QTY,
+        CASE WHEN SUM(WINSORIZED_QTY) > 0
+            THEN MAX(CASE WHEN WINSORIZED_QTY > 0 THEN TRNDATE END)
+            ELSE NULL
+        END AS LAST_POSITIVE_SALE
+    INTO #NettedIsoLines
+    FROM #WinsorizedLines
+    GROUP BY BRANCH, TRDR, MTRL, ISO_WEEK;
+
+    SELECT
+        BRANCH, MTRL, MAX(MTRGROUP) AS MTRGROUP, ISO_WEEK,
+        CONVERT(DECIMAL(28, 8), SUM(NET_QTY)) AS QTY,
+        MAX(LAST_POSITIVE_SALE) AS LAST_POSITIVE_SALE
+    INTO #BranchIsoWeekly
+    FROM #NettedIsoLines
+    GROUP BY BRANCH, MTRL, ISO_WEEK;
+
+    IF @HqDinAgregatCompanie = 1
+    BEGIN
+        INSERT INTO #BranchIsoWeekly (BRANCH, MTRL, MTRGROUP, ISO_WEEK, QTY, LAST_POSITIVE_SALE)
+        SELECT
+            hq.BRANCH, bw.MTRL, MAX(bw.MTRGROUP), bw.ISO_WEEK,
+            CONVERT(DECIMAL(28, 8), SUM(bw.QTY)),
+            MAX(bw.LAST_POSITIVE_SALE)
+        FROM #BranchIsoWeekly bw
+        INNER JOIN #ActiveBranches sourceBranch
+            ON sourceBranch.BRANCH = bw.BRANCH AND sourceBranch.ESTE_HQ = 0
+        CROSS JOIN #ActiveBranches hq
+        WHERE hq.ESTE_HQ = 1
+        GROUP BY hq.BRANCH, bw.MTRL, bw.ISO_WEEK;
+    END;
+
+    -- Filtrul < @NrSaptamani pastreaza saptamana ISO curenta (index 0, partiala) si elimina
+    -- saptamana ISO cea mai veche (partiala si ea), conform conventiei [0,N) din FERESTRE_CAPAT.
+    SELECT
+        BRANCH, MTRGROUP,
+        SUM(CASE WHEN QTY > 0 THEN 1 ELSE 0 END) AS SAPT_VZ,
+        SUM(CASE WHEN ISO_WEEK < 8 AND QTY > 0 THEN 1 ELSE 0 END) AS SAPT_8S,
+        MAX(CASE WHEN QTY > 0 THEN LAST_POSITIVE_SALE END) AS ULT_VANZ
+    INTO #GroupIsoWeeklyStats
+    FROM (
+        SELECT BRANCH, MTRGROUP, ISO_WEEK,
+            CONVERT(DECIMAL(28, 8), SUM(QTY)) AS QTY,
+            MAX(LAST_POSITIVE_SALE) AS LAST_POSITIVE_SALE
+        FROM #BranchIsoWeekly
+        WHERE ISO_WEEK >= 0 AND ISO_WEEK < @NrSaptamani
+        GROUP BY BRANCH, MTRGROUP, ISO_WEEK
+    ) gi
+    GROUP BY BRANCH, MTRGROUP;
+
+    CREATE CLUSTERED INDEX IX_GroupIsoWeeklyStats_BranchGroup
+        ON #GroupIsoWeeklyStats (BRANCH, MTRGROUP);
+
+    -- ---------------------------------------------------------------
+    -- 8c. Ferestre VZ pe zile calendaristice (N04a), simetrice cu Classify:
+    --     netting independent per fereastra, la nivel de client, apoi SKU, apoi grupa.
+    -- ---------------------------------------------------------------
+    SELECT
+        BRANCH, TRDR, MTRL, MAX(MTRGROUP) AS MTRGROUP,
+        CONVERT(DECIMAL(28, 8), CASE
+            WHEN SUM(CASE WHEN IN_W1 = 1 THEN WINSORIZED_QTY ELSE 0 END) < 0 THEN 0
+            ELSE SUM(CASE WHEN IN_W1 = 1 THEN WINSORIZED_QTY ELSE 0 END)
+        END) AS VZ_4S,
+        CONVERT(DECIMAL(28, 8), CASE
+            WHEN SUM(CASE WHEN IN_W2 = 1 THEN WINSORIZED_QTY ELSE 0 END) < 0 THEN 0
+            ELSE SUM(CASE WHEN IN_W2 = 1 THEN WINSORIZED_QTY ELSE 0 END)
+        END) AS VZ_13S,
+        CONVERT(DECIMAL(28, 8), CASE
+            WHEN SUM(CASE WHEN IN_W3 = 1 THEN WINSORIZED_QTY ELSE 0 END) < 0 THEN 0
+            ELSE SUM(CASE WHEN IN_W3 = 1 THEN WINSORIZED_QTY ELSE 0 END)
+        END) AS VZ_26S,
+        CONVERT(DECIMAL(28, 8), CASE
+            WHEN SUM(CASE WHEN IN_W4 = 1 THEN WINSORIZED_QTY ELSE 0 END) < 0 THEN 0
+            ELSE SUM(CASE WHEN IN_W4 = 1 THEN WINSORIZED_QTY ELSE 0 END)
+        END) AS VZ_52S,
+        CONVERT(DECIMAL(28, 8), SUM(CASE WHEN IN_W4 = 1 THEN LTRNVAL ELSE 0 END)) AS VAL_52S
+    INTO #ClientWindowTotals
+    FROM #WinsorizedLines
+    GROUP BY BRANCH, TRDR, MTRL;
+
+    IF @HqDinAgregatCompanie = 1
+    BEGIN
+        INSERT INTO #ClientWindowTotals (
+            BRANCH, TRDR, MTRL, MTRGROUP, VZ_4S, VZ_13S, VZ_26S, VZ_52S, VAL_52S
+        )
+        SELECT
+            hq.BRANCH, cw.TRDR, cw.MTRL, MAX(cw.MTRGROUP),
+            CONVERT(DECIMAL(28, 8), CASE
+                WHEN SUM(CASE WHEN cw.IN_W1 = 1 THEN cw.WINSORIZED_QTY ELSE 0 END) < 0 THEN 0
+                ELSE SUM(CASE WHEN cw.IN_W1 = 1 THEN cw.WINSORIZED_QTY ELSE 0 END)
+            END),
+            CONVERT(DECIMAL(28, 8), CASE
+                WHEN SUM(CASE WHEN cw.IN_W2 = 1 THEN cw.WINSORIZED_QTY ELSE 0 END) < 0 THEN 0
+                ELSE SUM(CASE WHEN cw.IN_W2 = 1 THEN cw.WINSORIZED_QTY ELSE 0 END)
+            END),
+            CONVERT(DECIMAL(28, 8), CASE
+                WHEN SUM(CASE WHEN cw.IN_W3 = 1 THEN cw.WINSORIZED_QTY ELSE 0 END) < 0 THEN 0
+                ELSE SUM(CASE WHEN cw.IN_W3 = 1 THEN cw.WINSORIZED_QTY ELSE 0 END)
+            END),
+            CONVERT(DECIMAL(28, 8), CASE
+                WHEN SUM(CASE WHEN cw.IN_W4 = 1 THEN cw.WINSORIZED_QTY ELSE 0 END) < 0 THEN 0
+                ELSE SUM(CASE WHEN cw.IN_W4 = 1 THEN cw.WINSORIZED_QTY ELSE 0 END)
+            END),
+            CONVERT(DECIMAL(28, 8), SUM(CASE WHEN cw.IN_W4 = 1 THEN cw.LTRNVAL ELSE 0 END))
+        FROM #WinsorizedLines cw
+        INNER JOIN #ActiveBranches sourceBranch
+            ON sourceBranch.BRANCH = cw.BRANCH AND sourceBranch.ESTE_HQ = 0
+        CROSS JOIN #ActiveBranches hq
+        WHERE hq.ESTE_HQ = 1
+        GROUP BY hq.BRANCH, cw.TRDR, cw.MTRL;
+    END;
+
+    SELECT
+        BRANCH, MTRL, MAX(MTRGROUP) AS MTRGROUP,
+        CONVERT(DECIMAL(28, 8), SUM(VZ_4S)) AS VZ_4S,
+        CONVERT(DECIMAL(28, 8), SUM(VZ_13S)) AS VZ_13S,
+        CONVERT(DECIMAL(28, 8), SUM(VZ_26S)) AS VZ_26S,
+        CONVERT(DECIMAL(28, 8), SUM(VZ_52S)) AS VZ_52S,
+        CONVERT(DECIMAL(28, 8), SUM(VAL_52S)) AS VAL_52S
+    INTO #BranchWindowTotals
+    FROM #ClientWindowTotals
+    GROUP BY BRANCH, MTRL;
+
+    SELECT
+        BRANCH, MTRGROUP,
+        CONVERT(DECIMAL(28, 8), SUM(VZ_4S)) AS VZ_4S,
+        CONVERT(DECIMAL(28, 8), SUM(VZ_13S)) AS VZ_13S,
+        CONVERT(DECIMAL(28, 8), SUM(VZ_26S)) AS VZ_26S,
+        CONVERT(DECIMAL(28, 8), SUM(VZ_52S)) AS VZ_52S,
+        CONVERT(DECIMAL(28, 8), SUM(VAL_52S)) AS VAL_52S
+    INTO #GroupWindowTotals
+    FROM #BranchWindowTotals
+    GROUP BY BRANCH, MTRGROUP;
+
+    CREATE CLUSTERED INDEX IX_GroupWindowTotals_BranchGroup
+        ON #GroupWindowTotals (BRANCH, MTRGROUP);
+
+    -- NR_SKU_VZ se numara pe aceeasi fereastra ca VZ_52S, nu pe seria saptamanala:
+    -- altfel contorul ar include bucket-ul de capat pe care ferestrele il exclud.
     SELECT
         BRANCH, MTRGROUP,
         COUNT(DISTINCT MTRL) AS NR_SKU_VZ
     INTO #GroupSkuCounts
-    FROM #BranchWeekly
-    WHERE QTY > 0
+    FROM #BranchWindowTotals
+    WHERE VZ_52S > 0
     GROUP BY BRANCH, MTRGROUP;
 
     -- ---------------------------------------------------------------
-    -- 9. Seria săptămânală completă cu zerouri (I12)
+    -- 9. Seria săptămânală completă cu zerouri (I12), pe grila rolling
     -- ---------------------------------------------------------------
-    CREATE TABLE #Weeks (WEEK_INDEX INT NOT NULL PRIMARY KEY);
+    CREATE TABLE #Weeks (WEEK_BUCKET INT NOT NULL PRIMARY KEY);
     DECLARE @WeekIndex INT = 0;
     WHILE @WeekIndex < @NrSaptamani
     BEGIN
-        INSERT INTO #Weeks (WEEK_INDEX) VALUES (@WeekIndex);
+        INSERT INTO #Weeks (WEEK_BUCKET) VALUES (@WeekIndex);
         SET @WeekIndex = @WeekIndex + 1;
     END;
 
     SELECT
         b.BRANCH, b.MARIME, b.ESTE_HQ, b.ESTE_PODEA,
-        g.MTRGROUP, g.MTRGROUP_CODE, g.MTRGROUP_NAME, g.NR_SKU_GRP, w.WEEK_INDEX,
+        g.MTRGROUP, g.MTRGROUP_CODE, g.MTRGROUP_NAME, g.NR_SKU_GRP, w.WEEK_BUCKET,
         CONVERT(DECIMAL(28, 8), COALESCE(gw.QTY, 0)) AS QTY,
         CONVERT(DECIMAL(28, 8), COALESCE(gw.SALES_VALUE, 0)) AS SALES_VALUE,
         gw.LAST_POSITIVE_SALE
@@ -379,41 +606,54 @@ BEGIN
     CROSS JOIN #ActiveBranches b
     CROSS JOIN #Weeks w
     LEFT JOIN #GroupWeekly gw
-        ON gw.BRANCH = b.BRANCH AND gw.MTRGROUP = g.MTRGROUP AND gw.WEEK_INDEX = w.WEEK_INDEX;
+        ON gw.BRANCH = b.BRANCH AND gw.MTRGROUP = g.MTRGROUP AND gw.WEEK_BUCKET = w.WEEK_BUCKET;
 
     CREATE CLUSTERED INDEX IX_WeeklySeries_BranchGroupWeek
-        ON #WeeklySeries (BRANCH, MTRGROUP, WEEK_INDEX);
+        ON #WeeklySeries (BRANCH, MTRGROUP, WEEK_BUCKET);
 
     -- ---------------------------------------------------------------
-    -- 10. Agregate de bază (ferestre VZ, frecvență, recență, SIGMA_WK)
+    -- 10. Agregate de bază: SIGMA_WK pe grila rolling, ferestrele VZ pe zile,
+    --     frecvența și recența pe grila ISO. Grilele nu se amestecă.
     -- ---------------------------------------------------------------
     SELECT
-        @Company AS COMPANY, @Azi AS AZI,
-        BRANCH, MARIME, ESTE_HQ, ESTE_PODEA,
-        MTRGROUP, MAX(MTRGROUP_CODE) AS MTRGROUP_CODE, MAX(MTRGROUP_NAME) AS MTRGROUP_NAME,
+        BRANCH, MARIME, ESTE_HQ, ESTE_PODEA, MTRGROUP,
+        MAX(MTRGROUP_CODE) AS MTRGROUP_CODE,
+        MAX(MTRGROUP_NAME) AS MTRGROUP_NAME,
         MAX(NR_SKU_GRP) AS NR_SKU_GRP,
-        CONVERT(DECIMAL(28, 8), SUM(CASE WHEN WEEK_INDEX < 4 THEN QTY ELSE 0 END)) AS VZ_4S,
-        CONVERT(DECIMAL(28, 8), SUM(CASE WHEN WEEK_INDEX < 13 THEN QTY ELSE 0 END)) AS VZ_13S,
-        CONVERT(DECIMAL(28, 8), SUM(CASE WHEN WEEK_INDEX < 26 THEN QTY ELSE 0 END)) AS VZ_26S,
-        CONVERT(DECIMAL(28, 8), SUM(QTY)) AS VZ_52S,
-        CONVERT(DECIMAL(28, 8), SUM(SALES_VALUE)) AS VAL_52S,
-        SUM(CASE WHEN QTY > 0 THEN 1 ELSE 0 END) AS SAPT_VZ,
-        SUM(CASE WHEN WEEK_INDEX < 8 AND QTY > 0 THEN 1 ELSE 0 END) AS SAPT_8S,
-        -- S 4.6: aceeasi recenta in zile ca in Classify, pastrata simetrica intre SKU si grupa.
-        COALESCE(
-            CONVERT(INT, ROUND(DATEDIFF(DAY, MAX(CASE WHEN QTY > 0 THEN LAST_POSITIVE_SALE END), @Azi) / 7.0, 0)),
-            @NrSaptamani
-        ) AS SAPT_FARA,
-        MAX(CASE WHEN QTY > 0 THEN LAST_POSITIVE_SALE END) AS ULT_VANZ,
         CONVERT(DECIMAL(28, 8),
             CASE
                 WHEN COALESCE(STDEV(CONVERT(FLOAT, QTY)), 0) = 0 THEN @SigmaMin
                 ELSE STDEV(CONVERT(FLOAT, QTY))
             END
         ) AS SIGMA_WK
-    INTO #BaseAggregates
+    INTO #GroupRollingStats
     FROM #WeeklySeries
     GROUP BY BRANCH, MARIME, ESTE_HQ, ESTE_PODEA, MTRGROUP;
+
+    SELECT
+        @Company AS COMPANY, @Azi AS AZI,
+        rs.BRANCH, rs.MARIME, rs.ESTE_HQ, rs.ESTE_PODEA,
+        rs.MTRGROUP, rs.MTRGROUP_CODE, rs.MTRGROUP_NAME, rs.NR_SKU_GRP,
+        CONVERT(DECIMAL(28, 8), COALESCE(wt.VZ_4S, 0)) AS VZ_4S,
+        CONVERT(DECIMAL(28, 8), COALESCE(wt.VZ_13S, 0)) AS VZ_13S,
+        CONVERT(DECIMAL(28, 8), COALESCE(wt.VZ_26S, 0)) AS VZ_26S,
+        CONVERT(DECIMAL(28, 8), COALESCE(wt.VZ_52S, 0)) AS VZ_52S,
+        CONVERT(DECIMAL(28, 8), COALESCE(wt.VAL_52S, 0)) AS VAL_52S,
+        COALESCE(iso.SAPT_VZ, 0) AS SAPT_VZ,
+        COALESCE(iso.SAPT_8S, 0) AS SAPT_8S,
+        -- S 4.6: aceeasi recenta in zile ca in Classify, pastrata simetrica intre SKU si grupa.
+        COALESCE(
+            CONVERT(INT, ROUND(DATEDIFF(DAY, iso.ULT_VANZ, @Azi) / 7.0, 0)),
+            @NrSaptamani
+        ) AS SAPT_FARA,
+        iso.ULT_VANZ,
+        rs.SIGMA_WK
+    INTO #BaseAggregates
+    FROM #GroupRollingStats rs
+    LEFT JOIN #GroupWindowTotals wt
+        ON wt.BRANCH = rs.BRANCH AND wt.MTRGROUP = rs.MTRGROUP
+    LEFT JOIN #GroupIsoWeeklyStats iso
+        ON iso.BRANCH = rs.BRANCH AND iso.MTRGROUP = rs.MTRGROUP;
 
     CREATE CLUSTERED INDEX IX_BaseAggregates_BranchGroup
         ON #BaseAggregates (BRANCH, MTRGROUP);
@@ -424,17 +664,17 @@ BEGIN
     SELECT
         BRANCH, MTRGROUP,
         CASE
-            WHEN WEEK_INDEX < 4 THEN 0
-            WHEN WEEK_INDEX < 8 THEN 1
-            WHEN WEEK_INDEX < 13 THEN 2
-            WHEN WEEK_INDEX < 17 THEN 3
-            WHEN WEEK_INDEX < 21 THEN 4
-            WHEN WEEK_INDEX < 26 THEN 5
-            WHEN WEEK_INDEX < 30 THEN 6
-            WHEN WEEK_INDEX < 34 THEN 7
-            WHEN WEEK_INDEX < 39 THEN 8
-            WHEN WEEK_INDEX < 43 THEN 9
-            WHEN WEEK_INDEX < 47 THEN 10
+            WHEN WEEK_BUCKET < 4 THEN 0
+            WHEN WEEK_BUCKET < 8 THEN 1
+            WHEN WEEK_BUCKET < 13 THEN 2
+            WHEN WEEK_BUCKET < 17 THEN 3
+            WHEN WEEK_BUCKET < 21 THEN 4
+            WHEN WEEK_BUCKET < 26 THEN 5
+            WHEN WEEK_BUCKET < 30 THEN 6
+            WHEN WEEK_BUCKET < 34 THEN 7
+            WHEN WEEK_BUCKET < 39 THEN 8
+            WHEN WEEK_BUCKET < 43 THEN 9
+            WHEN WEEK_BUCKET < 47 THEN 10
             ELSE 11
         END AS MONTH_INDEX,
         SUM(QTY) AS MONTH_QTY
@@ -443,17 +683,17 @@ BEGIN
     GROUP BY
         BRANCH, MTRGROUP,
         CASE
-            WHEN WEEK_INDEX < 4 THEN 0
-            WHEN WEEK_INDEX < 8 THEN 1
-            WHEN WEEK_INDEX < 13 THEN 2
-            WHEN WEEK_INDEX < 17 THEN 3
-            WHEN WEEK_INDEX < 21 THEN 4
-            WHEN WEEK_INDEX < 26 THEN 5
-            WHEN WEEK_INDEX < 30 THEN 6
-            WHEN WEEK_INDEX < 34 THEN 7
-            WHEN WEEK_INDEX < 39 THEN 8
-            WHEN WEEK_INDEX < 43 THEN 9
-            WHEN WEEK_INDEX < 47 THEN 10
+            WHEN WEEK_BUCKET < 4 THEN 0
+            WHEN WEEK_BUCKET < 8 THEN 1
+            WHEN WEEK_BUCKET < 13 THEN 2
+            WHEN WEEK_BUCKET < 17 THEN 3
+            WHEN WEEK_BUCKET < 21 THEN 4
+            WHEN WEEK_BUCKET < 26 THEN 5
+            WHEN WEEK_BUCKET < 30 THEN 6
+            WHEN WEEK_BUCKET < 34 THEN 7
+            WHEN WEEK_BUCKET < 39 THEN 8
+            WHEN WEEK_BUCKET < 43 THEN 9
+            WHEN WEEK_BUCKET < 47 THEN 10
             ELSE 11
         END;
 

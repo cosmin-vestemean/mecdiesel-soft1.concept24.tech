@@ -19,6 +19,8 @@ Data ultimei actualizări: 16.09.2026.
 | P7 | Praguri și ponderi citite din snapshot, nimic hardcodat | ambele runde | RUNID 11 |
 | P8 | `SIGMA_MIN = 0` valid și distinct de absent | A2, partea de implementare | RUNID 11 |
 | P11 | TREND pe `13S/52S` (S 7), parametrizat prin `TREND_BAZA`; NOU/OD au status propriu | S 7 explicit; august avea 13S/26S doar în text, fără marcaj de decizie | RUNID 16: `TREND_BAZA='13_52'` în snapshot, 0 abateri pe 708.554 rânduri |
+| N04a | Ferestre VZ în zile calendaristice (28/91/182/365) | S 4.2; august I1 ✅ / I12 ✅ | RUNID 17/18, cauze separate; efectul predicatului reconfirmat independent pe 20 → 21 și 22 → 24 |
+| N04b | σ pe exact 52 de bucket-uri egale; `SAPT_VZ` pe săptămâni ISO | S 5.1 (52 bucket-uri) + S 4.6 (ISO) | RUNID 19–25, factorială completă pe trei axe; producția este RUNID 25 |
 | D15a | `SAPT_FARA = round(zile de la ULT_VANZ / 7)`, simetric SKU/grupă | S 4.6 | RUNID 15, 0 abateri — dar vezi nota de calendar |
 | — | `ClassifyGroup`: `NR_SKU_GRP` pe populația filtrată | perimetru confirmat 08.09 | RUNID 7: 504/602 → 0/602 |
 
@@ -32,9 +34,7 @@ Data ultimei actualizări: 16.09.2026.
 
 | # | ID | Subiect | Autoritate | Ce lipsește | Dependențe / risc |
 | --- | --- | --- | --- | --- | --- |
-| 1 | N04a | Ferestre VZ în zile calendaristice (28/91/182/365) | S 4.2; august I1 ✅ / I12 ✅ | **Închis și probat live.** RUNID 17 (`FERESTRE_VZ='ZILE'`) și RUNID 18 (`FERESTRE_VZ='SAPT'`), ambele `AZI=2026-09-16`, aceeași populatie 716.240 rânduri/51.160 itemi între ele | Calibrarea RUNID 16 încetează să fie reper direct pentru RUNID ≥ 17 |
-| 1b | N04b | σ pe exact 52 de bucket-uri egale; `SAPT_VZ` pe săptămâni ISO | S 5.1 (52 bucket-uri) + S 4.6 (ISO) | **Implementat local, neprobat live.** Grila e despărțită în două în `Classify`: `WEEK_BUCKET` (7 zile rolling, pentru σ și lunile 4-4-5) și `ISO_WEEK` (pentru `SAPT_VZ`/`SAPT_8S`/`ULT_VANZ`). Rămâne deploy AJS manual + rulările-martor | **Contaminat de punctul 8 din documentul beneficiarului**: atinge `SAPT_VZ`, exact mărimea despre care e întrebat. Regula nu se schimbă, dar baza de măsurare da. De făcut secvențial, nu simultan |
-| 1c | — | Simetria ferestrelor în `ClassifyGroup` | aceeași ca N04a | Grupele rămân pe ferestre săptămânale cât timp SKU-urile trec pe zile | Asimetrie temporară asumată: pe RUNID 18, `VZ` de grupă nu se mai reconciliază cu suma SKU-urilor. RUNID 17 nu e afectat (ambele pe săptămâni) |
+| 1c | — | Simetria ferestrelor **și a grilei** în `ClassifyGroup` | aceeași ca N04a + S 5.1 | `ClassifyGroup` rămâne pe ferestre săptămânale **și** pe grila `DATEDIFF(WEEK)` pentru σ de grupă | Asimetria s-a **adâncit** după N04b: sunt acum două decalaje, nu unul. Pe RUNID 25 `VZ` de grupă nu se reconciliază cu suma SKU-urilor, iar σ de grupă rămâne pe bucket-uri inegale. Cele două se închid împreună — ating aceleași secțiuni din `02_classify_group.sql` |
 | 2 | P6b | Resolver longest-prefix pentru `LT_ZILE`/`FRECVENTA_ZILE`, cu normalizarea spațiilor | S 3.8 + tabelul de parametri din august („LT per prefix furnizor") | Mecanismul; `BRANCH > GLOBAL` e deja live | **Doar mecanismul.** Lista și valorile DEFAULT sunt N01/N02 → document beneficiar |
 | 3 | P4 | Univers per scope prin uniuni (stoc, limite ERP, manual, vânzări) în loc de „numai vânzări" | S 4.1 | `#Items` se construiește exclusiv din liniile de vânzare | Cea mai mare schimbare structurală; crește `CCCMINMAXDET` (azi ~700 MB per sesiune, 96% din spațiu) și durata rulării. Articolele doar în transfer intră automat, fiindcă `STOC_QTY` include transferul |
 | 4 | P13 | `MIN_DOC` per scope, nu global pe companie | S 4.6 („per SKU și scope") | Azi e calculat per `MTRL` și copiat tuturor filialelor | **După P4.** Numai varianta literală; corecțiile de robustețe sunt propunerea noastră → document beneficiar |
@@ -63,6 +63,46 @@ Data ultimei actualizări: 16.09.2026.
 > Nota de convenție (N04b): peste 365 de zile grila ISO dă 53 de bucket-uri, două parțiale. Se păstrează cel mai nou parțial (săptămâna ISO care conține `AZI`, indexul 0) și se elimină cel mai vechi, prin filtrul `ISO_WEEK < @NrSaptamani` — aceeași convenție `[0,N)` ca `FERESTRE_CAPAT`. Consecință utilă: `SAPT_VZ` rămâne în 0..52, deci praguri ca `STANDARD_MIN_SAPT` nu își schimbă înțelesul odată cu grila. Indexul ISO se calculează ancorat pe 1900-01-01 (o zi de luni), **nu** prin `DATEPART(WEEKDAY)`, care ar depinde de `SET DATEFIRST` — o setare de sesiune pe care procedura nu o controlează.
 
 > Nota de martor (N04b): `GRILA_SAPT` (`ROLLING`/`CALENDAR`) și `BAZA_SAPT_VZ` (`ISO`/`GRILA`) sunt **doi** martori separați, ca să se poată atribui independent efectul grilei σ și cel al bazei `SAPT_VZ`; cu un singur martor cele două efecte ar cădea în aceeași rulare. Spre deosebire de `FERESTRE_VZ`, o valoare necunoscută **aruncă** (50082/50083) în loc să cadă pe default: un fallback tăcut ar raporta grila nouă sub eticheta celei vechi, exact eroarea pe care martorul există ca s-o excludă.
+>
+> **Decizia celor doi martori s-a validat pe date** (16.09.2026): efectul lui `ROLLING` asupra lui `SAPT_VZ` (11.986 rânduri) și cel al lui `ISO` (aceleași 11.986 rânduri, în sens invers) se anulează exact. Cu un singur martor s-ar fi anulat în interiorul aceleiași rulări, iar regresia intermediară n-ar fi fost niciodată vizibilă.
+
+> **Rezultat măsurat N04b, factorială completă pe trei axe** (16.09.2026, șapte rulări, `AZI=2026-09-16` pe toate, populație 716.240 rânduri / 51.160 itemi). Configurația de producție este **RUNID 25** (`ZILE` + `ROLLING` + `ISO`), 15/15 invariante PASS.
+>
+> | RUNID | FERESTRE | GRILĂ | BAZĂ | Σ total | AVG total | STANDARD |
+> | --- | --- | --- | --- | --- | --- | --- |
+> | 19 | SAPT | CALENDAR | GRILA | 799.660,93 | 47.061,88 | 25.404 |
+> | 20 | SAPT | ROLLING | GRILA | 798.853,03 | 47.198,34 | 25.497 |
+> | 21 | ZILE | ROLLING | GRILA | 798.853,03 | 49.267,19 | 25.497 |
+> | 22/23/25 | ZILE | ROLLING | ISO | 798.853,03 | 49.136,59 | 25.404 |
+> | 24 | SAPT | ROLLING | ISO | 798.853,03 | 47.061,88 | 25.404 |
+>
+> **Ortogonalitate dovedită, nu postulată.** σ depinde exclusiv de `GRILA_SAPT`; `STANDARD` exclusiv de `BAZA_SAPT_VZ`. `FERESTRE_VZ` lasă σ/`SAPT_VZ`/`SAPT_8S`/`LIFECYCLE`/XYZ cu **0 diferențe** (măsurat de două ori, 20 → 21 și 22 → 24, cu σ identic la ultima zecimală). `BAZA_SAPT_VZ` lasă VZ/σ/XYZ cu 0 diferențe și produce exact aceleași contoare sub ambele ferestre (21 → 22 și 20 → 24: 11.986 `SAPT_VZ`, 1.234 `LIFECYCLE`).
+>
+> **Martorul de control** (RUNID 19, `CALENDAR` + `GRILA`) reproduce RUNID 18 cu 6 rânduri diferite din 716.240, toate atribuite nominal: două articole cu linii inserate în ERP la 17:49 și 18:04, unul cu document editat la 17:35 care a devenit neeligibil (TPRMS 7152, `FLG04=0`). Nu e regresie, este drift în fereastra dintre rulări.
+>
+> **Efect net zero pe `SAPT_VZ`** (RUNID 19 vs 24, ambele pe `SAPT`): `SAPT_VZ`, `SAPT_8S`, `LIFECYCLE`, `ABC` și `AVG` au **0 diferențe**. Înainte de N04b `SAPT_VZ` era deja pe săptămâni calendaristice — accidental, fiindcă împărțea grila `DATEDIFF(WEEK)` cu σ. `BAZA_SAPT_VZ='ISO'` nu îl schimbă, îl **protejează** de mutarea lui σ pe grila rolling. Acesta este rezultatul corect, nu o coincidență fericită.
+>
+> **Determinism confirmat de două ori**: RUNID 22 ↔ 23 (la 4 minute) și 22 ↔ 25 (la 24 de minute, cu o rulare pe altă configurație între ele) — 0 diferențe pe toate coloanele, 0 rânduri orfane. Probează și că ancora `AZI` înghețată izolează efectiv sesiunea de datele vii.
+>
+> **Reconcilierea serie ↔ ferestre se îmbunătățește**: seria weekly minus `VZ_52S` trece de la −5.713,85 (RUNID 17, patru zile lipsă) la −1.921,25 (RUNID 25, o zi). Nereconcilierea documentată — ziua cu lag 364 intră în `VZ_52S` dar nu în σ — **abia acum devine adevărată**; înainte de N04b lipseau patru zile, nu una. Verificat pe sursă: 2025-09-17 are 2.197 buc brut pe 1.062 linii, iar 1.921,25 este valoarea winsorizată.
+>
+> Efect cumulat N04a + N04b față de RUNID 16, pe 708.554 perechi comune: `AVG` +4,92%, `ENG_MIN` +2,65%, `ENG_MAX` +3,20%, `BUY_QTY` +6,08%. Aproape tot vine din N04a; N04b adaugă sub 0,5% și corectează grila.
+
+> **Nota de predicție infirmată (N04b)** — de citit înaintea oricărei afirmații despre direcția lui σ. Raționamentul „bucket-ul 0 era subumplut ⇒ varianța era supraestimată ⇒ σ scade pe cerere regulată" **nu se confirmă pe date**. Mecanismul s-a aplicat (bucket-ul 0 trece de la 5.123,55 la 8.257,00, +61%, aliniat cu restul grilei), agregatul scade cu 0,101%, dar descompunerea pe densitate arată opusul exact acolo unde predicția era cea mai puternică:
+>
+> | Bandă `SAPT_VZ` | Rânduri | Scade | Crește | Δσ |
+> | --- | --- | --- | --- | --- |
+> | 45–52 | 189 | 65 | 124 | **+3,31%** |
+> | 30–44 | 537 | 236 | 301 | +1,05% |
+> | 13–29 | 2.545 | 1.147 | 1.398 | +0,77% |
+> | 4–12 | 5.383 | 2.329 | 3.054 | +1,32% |
+> | 0–3 | 4.557 | 2.531 | 2.026 | **−31,97%** |
+>
+> σ **crește** pe toate benzile cu cerere regulată; scăderea agregată vine exclusiv din banda foarte rară, unde regruparea unei serii sparse mută vânzări izolate între bucket-uri. Migrarea XYZ este zgomot: Z→Y 337 vs Y→Z 311, net 26 rânduri din 712.236. O explicație candidată — grila `ROLLING` acoperă 364 de zile față de 361 la `CALENDAR`, deci include 3 zile în plus (+3.792,60 în serie) — **rămâne netestată**, fiindcă nu există configurație în care cele două grile să acopere aceleași zile; σ nu depinde de `FERESTRE_VZ` (dovedit: `D_SIGMA = 0` pe 20 → 21), deci schimbarea ferestrelor nu poate discrimina ipoteza.
+>
+> Asta **nu** invalidează N04b: corectitudinea stă pe S 5.1 (52 de bucket-uri egale) și pe invarianta `grila_sapt`, care re-derivă grila din sursă cu 0 abateri din 189.694 perechi. Dar direcția lui σ nu este un argument disponibil, iar cine reia subiectul trebuie să pornească de la tabelul de mai sus, nu de la raționamentul intuitiv.
+
+> **Nota de echivalență data-dependentă (N04b)**: grila `DATEDIFF(WEEK)` (săptămâni de duminică) și grila ISO (de luni) dau `SAPT_VZ` identic pe toate cele 716.240 de rânduri — dar **nu din motive structurale**. Pe fereastra de 365 de zile există **0 linii duminica și 5 sâmbăta** din 240.270 (Luni 48.710 / Marți 50.579 / Miercuri 48.345 / Joi 48.805 / Vineri 43.826), deci granița duminică-vs-luni cade într-o zonă moartă. Dacă MEC începe să vândă în weekend, cele două grile diverg și `BAZA_SAPT_VZ='ISO'` încetează să fie echivalent cu comportamentul pre-N04b. Aceeași clasă de capcană ca nota de calendar de la D15a: o coincidență de date luată drept echivalență de formulă.
 
 ## Constrângeri care se aplică tuturor
 

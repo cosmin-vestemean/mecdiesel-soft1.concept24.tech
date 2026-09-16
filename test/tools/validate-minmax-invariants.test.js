@@ -222,7 +222,7 @@ describe('MIN/MAX demand recency contract', () => {
     const classifyGroup = sqlSource('02_classify_group.sql')
 
     assert.match(classify, /ROUND\(DATEDIFF\(DAY, weeklyStats\.ULT_VANZ, @Azi\) \/ 7\.0, 0\)[\s\S]*?\) AS SAPT_FARA/)
-    assert.match(classifyGroup, /ROUND\(DATEDIFF\(DAY, MAX\(CASE WHEN QTY > 0 THEN LAST_POSITIVE_SALE END\), @Azi\) \/ 7\.0, 0\)[\s\S]*?\) AS SAPT_FARA/)
+    assert.match(classifyGroup, /ROUND\(DATEDIFF\(DAY, iso\.ULT_VANZ, @Azi\) \/ 7\.0, 0\)[\s\S]*?\) AS SAPT_FARA/)
     for (const sql of [classify, classifyGroup]) {
       assert.doesNotMatch(sql, /MIN\(CASE WHEN QTY > 0 THEN WEEK_INDEX END\)/)
       assert.match(sql, /@NrSaptamani\s*\) AS SAPT_FARA/)
@@ -439,11 +439,31 @@ describe('MIN/MAX N04b weekly grid split contract', () => {
     assert.match(persist, /WEEK_INDEX SMALLINT NOT NULL,/)
   })
 
-  it('does not touch ClassifyGroup, which stays on the old weekly grid (item 1c)', () => {
+  it('mirrors the split grid in ClassifyGroup, with its own THROWs (item 1c)', () => {
     const classifyGroup = sqlSource('02_classify_group.sql')
 
-    assert.match(classifyGroup, /DATEDIFF\(WEEK, sl\.TRNDATE, sl\.AZI\) AS WEEK_INDEX,/)
-    assert.doesNotMatch(classifyGroup, /GRILA_SAPT|BAZA_SAPT_VZ|WEEK_BUCKET|ISO_WEEK/)
+    assert.match(classifyGroup, /CASE WHEN @GrilaSapt = 'ROLLING' THEN lag\.DAY_LAG \/ 7\s+ELSE DATEDIFF\(WEEK, sl\.TRNDATE, sl\.AZI\) END AS WEEK_BUCKET,/)
+    assert.match(classifyGroup, /CASE WHEN @BazaSaptVz = 'ISO' THEN iso\.ISO_WEEK_INDEX[\s\S]*?AS ISO_WEEK,/)
+    assert.match(classifyGroup, /THROW 50085, 'sp_MinMaxEngine_ClassifyGroup: GRILA_SAPT must be ROLLING or CALENDAR\.'/)
+    assert.match(classifyGroup, /THROW 50086, 'sp_MinMaxEngine_ClassifyGroup: BAZA_SAPT_VZ must be ISO or GRILA\.'/)
+    // Grila veche nu mai are niciun consumator: WEEK_INDEX era ultimul ei punct de sprijin.
+    assert.doesNotMatch(classifyGroup, /DATEDIFF\(WEEK, sl\.TRNDATE, sl\.AZI\) AS WEEK_INDEX,/)
+    // Sigma de grupa ramane pe grila rolling, iar SAPT_VZ/SAPT_8S pe cea ISO; nu se amesteca.
+    assert.match(classifyGroup, /INTO #GroupRollingStats\s*FROM #WeeklySeries/)
+    assert.match(classifyGroup, /SUM\(CASE WHEN ISO_WEEK < 8 AND QTY > 0 THEN 1 ELSE 0 END\) AS SAPT_8S,[\s\S]*?INTO #GroupIsoWeeklyStats/)
+  })
+
+  it('computes the group VZ windows on calendar days, symmetric with Classify (item 1c)', () => {
+    const classifyGroup = sqlSource('02_classify_group.sql')
+
+    assert.match(classifyGroup, /THROW 50084, 'sp_MinMaxEngine_ClassifyGroup: FERESTRE_CAPAT supports only \[0,N\);/)
+    assert.match(classifyGroup, /THROW 50087, 'sp_MinMaxEngine_ClassifyGroup: FERESTRE_VZ_ZILE must contain exactly four/)
+    assert.match(classifyGroup, /THROW 50088, 'sp_MinMaxEngine_ClassifyGroup: FERESTRE_VZ_ZILE exceeds NRZILE/)
+    assert.match(classifyGroup, /@FerestreVz = 'ZILE' AND lag\.DAY_LAG >= 0 AND lag\.DAY_LAG < @Zile1/)
+    // Ferestrele vin din netting per client, nu din insumarea seriei saptamanale.
+    assert.match(classifyGroup, /INTO #ClientWindowTotals\s*FROM #WinsorizedLines\s*GROUP BY BRANCH, TRDR, MTRL;/)
+    assert.match(classifyGroup, /INTO #GroupWindowTotals\s*FROM #BranchWindowTotals\s*GROUP BY BRANCH, MTRGROUP;/)
+    assert.doesNotMatch(classifyGroup, /SUM\(CASE WHEN WEEK_BUCKET < 4 THEN QTY ELSE 0 END\)\) AS VZ_4S/)
   })
 
   it('exposes the grila_sapt invariant in the validator', () => {
