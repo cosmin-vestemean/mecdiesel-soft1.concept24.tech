@@ -1,16 +1,18 @@
 # Current Focus
 
 ## Last Updated
-- 16.09.2026 (P2 deployat în procedura live; RUNID nou în așteptare)
+- 16.09.2026 (RUNID 12 rulat și validat; P1/P2 confirmate live pe el)
 
 ## Current Goal
 - P1 branch-scope este implementat, deployat și validat: VZ-urile se netează independent pe toată fereastra per `BRANCH × TRDR × MTRL`, iar seria săptămânală rămâne separată.
-- P2 este decis, implementat și deployat: HQ este scope propriu al cererii și compensează același `TRDR × MTRL` între filiale înainte de clip-ul la zero. Urmează rularea și validarea unui RUNID nou; extensia P6 longest-prefix rămâne blocată până la lista N5.
+- P2 este decis, implementat, deployat și **validat live pe RUNID 12**: HQ este scope propriu al cererii și compensează același `TRDR × MTRL` între filiale înainte de clip-ul la zero. Extensia P6 longest-prefix rămâne blocată până la lista N5.
 
 ## Active Area
 - P1/P2: `#ClientWeekly` păstrează netul brut și clipul săptămânal; `#ClientWindowTotals` calculează independent 4S/13S/26S/52S pentru fiecare filială și pentru HQ. HQ însumează neturile brute ale aceluiași client din toate filialele înainte de clip; `#BranchWindowTotals` agregă apoi clienții.
-- Verificare read-only după Setup: procedura live `dbo.sp_MinMaxEngine_Classify` are `modify_date=2026-09-16 11:08:40`, conține inserarea HQ în `#ClientWindowTotals` din `#ClientWeekly` și nu mai conține vechiul `FROM #BranchWindowTotals totals`. Nu există sesiuni OPEN; ultima rulare rămâne RUNID 11.
-- Datele eligibile curente (`AZI=2026-09-16`, mod `CLIENT`) au 236.088 linii și zero cantități negative / clienți cu retururi. Prin urmare, P2 este activ, dar RUNID-ul nou este așteptat să fie identic cu RUNID 11 pe VZ dacă populația și parametrii sunt altfel neschimbați.
+- Verificare read-only după Setup: procedura live `dbo.sp_MinMaxEngine_Classify` are `modify_date=2026-09-16 11:08:40`, conține inserarea HQ în `#ClientWindowTotals` din `#ClientWeekly` și nu mai conține vechiul `FROM #BranchWindowTotals totals`. Nu există sesiuni OPEN; sesiunea curentă este RUNID 12.
+- **RUNID 12 (16.09.2026, `FULL`, `CLIENT`, calibrare `C`, `DONE`, curent)**: 707.910 rânduri, 50.565 itemi, 14 filiale, durată 130s (Classify ~59s, Group 30s, Compute 41s). Toate invariantele PASS (10/10). Calibrare: A 90,9%, B 49,0%, C 43,5%.
+- **Contract P2 confirmat live pe RUNID 12**: pe toate cele 50.565 rânduri HQ, `VZ_4S/13S/26S/52S` = EXACT `SUM(VZ filiale)` per `MTRL` (0 abateri pe toate cele 4 ferestre) — comportamentul așteptat cu zero retururi eligibile (`NEG_QTY_LINES=0` în weekly). Totodată `HQ VZ <= SUM(filiale)` peste tot, deci clip-ul la zero nu e nicăieri violat.
+- **Diferențe 11 → 12 sunt drift de fereastră, nu efect de cod**: RUNID 11 are `AZI=2026-09-10`, RUNID 12 `AZI=2026-09-16` (fereastra mutată 6 zile). Pe perechile comune: filiale 15.195 VZ_DIFF / 5.073 VAL_52S / 5.834 sigma / 10.843 CV / 4.470 clasificare / 5.687 output; HQ 9.324 VZ_DIFF / 3.490 VAL_52S / 3.342 sigma / 8.228 CV / 2.851 clasificare / 4.461 output. Esantionul arată semnătura clasică (±1 pe VZ_4S, fracții pe 52S). Populația: 11.844 rânduri doar în 11, 6.650 doar în 12 — articole intrate/ieșite din univers odată cu fereastra. Weekly RUNID 12: 335.240 observații pe 50.565 itemi.
 - Sigma, frecvența, recența, bucket-urile lunare, `VAL_52S`, persistența weekly și baza `IS_FORCED_Z` rămân pe seria săptămânală pre-P1.
 - T1 executat read-only în SQL Server cu două săptămâni (`+7,+3` și `-5,-3`): `VZ_4S=2`, seria weekly `10/0`, `WEEK_QTY_SUM=10`, `SIGMA_WK_SUMSQ=100`.
 - MIN/MAX v5 este live pe RUNID 11 (`FULL`, `CLIENT`, calibrare `C`, `DONE`, curent): 713.104 rânduri, 50.936 itemi, 14 filiale, durată totală 128s (Classify 58s, Group 30s, Compute 40s).
@@ -44,6 +46,6 @@
 - P6 branch-only este închis; extensia longest-prefix așteaptă lista N5. Plancherul `σ_WK=1,3` rămâne fără confirmare documentară.
 
 ## Next Step
-- Lansează un RUNID `FULL`, `CLIENT`, calibrare `C`, apoi verifică invariantele și compară cu RUNID 11. Filialele, seria weekly, `VAL_52S`, sigma și CV trebuie să rămână identice; cu zero retururi eligibile sunt așteptate zero diferențe și pe VZ HQ.
+- RUNID 12 a încheiat validarea P1/P2. P1/P2 pot fi considerate închise. Următorul pas rămâne blocat pe decizii business: P4/N9-N10, P5, P10-P13 și lista N5 pentru longest-prefix.
 - Nu implementa longest-prefix înainte de lista N5 și nu modifica atribuirea `CLIENT` implicită.
 
