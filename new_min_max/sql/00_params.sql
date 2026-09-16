@@ -112,6 +112,10 @@ CREATE TABLE CCCMINMAXPARAMOVERRIDE (
         ('WINSOR_MIN_LINII',       '8',               'NUM',  'GLOBAL', '', 'Prag de linii peste care se aplica winsorizarea p95'),
         ('WINSOR_SUB_PRAG',        'MEDIANA',         'STR',  'GLOBAL', '', 'Tratament SKU sub prag: NONE (spec) sau MEDIANA (plafon secundar) - E2'),
         ('NRSAPT',                 '52',              'NUM',  'GLOBAL', '', 'Fereastra de analiza, in saptamani'),
+        ('NRZILE',                 '365',             'NUM',  'GLOBAL', '', 'Fereastra de analiza, in zile calendaristice (S 4.2)'),
+        ('FERESTRE_VZ_ZILE',       '28,91,182,365',   'STR',  'GLOBAL', '', 'Ferestre VZ in zile: 4S,13S,26S,52S (S 4.2)'),
+        ('FERESTRE_VZ',            'ZILE',            'STR',  'GLOBAL', '', 'ZILE = ferestre in zile calendaristice (N04); SAPT = bucket-uri de saptamana (comportament pre-N04)'),
+        ('FERESTRE_CAPAT',         '[0,N)',           'STR',  'GLOBAL', '', 'Incluziunea capatului vechi al ferestrei; S nu o declara (gol N04)'),
 
         -- Eligibilitate
         ('PRAG_REC_HQ',            '39',              'NUM',  'GLOBAL', '', 'Recenta maxima (saptamani fara vanzari) pentru STANDARD la HQ'),

@@ -87,6 +87,14 @@ BEGIN
         THROW 50077, 'sp_MinMaxEngine_Classify: branch LT/FRECVENTA overrides must be positive integers.', 1;
 
     DECLARE @NrSaptamani INT;
+    DECLARE @NrZile INT;
+    DECLARE @FerestreVz VARCHAR(10);
+    DECLARE @FerestreCapat VARCHAR(10);
+    DECLARE @FerestreZileRaw VARCHAR(255);
+    DECLARE @Zile1 INT;
+    DECLARE @Zile2 INT;
+    DECLARE @Zile3 INT;
+    DECLARE @Zile4 INT;
     DECLARE @WinsorPct FLOAT;
     DECLARE @WinsorMinLinii INT;
     DECLARE @WinsorSubPrag VARCHAR(10);
@@ -125,6 +133,10 @@ BEGIN
     DECLARE @WinsorPctSql VARCHAR(32);
 
     SELECT @NrSaptamani = TRY_CONVERT(INT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'NRSAPT';
+    SELECT @NrZile = TRY_CONVERT(INT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'NRZILE';
+    SELECT @FerestreVz = UPPER(LTRIM(RTRIM(PARAMVALUE))) FROM #ResolvedParams WHERE PARAMKEY = 'FERESTRE_VZ';
+    SELECT @FerestreCapat = LTRIM(RTRIM(PARAMVALUE)) FROM #ResolvedParams WHERE PARAMKEY = 'FERESTRE_CAPAT';
+    SELECT @FerestreZileRaw = PARAMVALUE FROM #ResolvedParams WHERE PARAMKEY = 'FERESTRE_VZ_ZILE';
     SELECT @WinsorPct = TRY_CONVERT(FLOAT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'WINSOR_PCT';
     SELECT @WinsorMinLinii = TRY_CONVERT(INT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'WINSOR_MIN_LINII';
     SELECT @WinsorSubPrag = UPPER(LTRIM(RTRIM(PARAMVALUE))) FROM #ResolvedParams WHERE PARAMKEY = 'WINSOR_SUB_PRAG';
@@ -173,6 +185,33 @@ BEGIN
     SELECT @AbcPrimArticolA = TRY_CONVERT(BIT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'ABC_PRIM_ARTICOL_A';
 
     IF COALESCE(@NrSaptamani, 0) <= 0 SET @NrSaptamani = 52;
+    IF COALESCE(@NrZile, 0) <= 0 SET @NrZile = 365;
+    IF @FerestreVz NOT IN ('ZILE', 'SAPT') OR @FerestreVz IS NULL SET @FerestreVz = 'ZILE';
+    IF @FerestreCapat IS NULL SET @FerestreCapat = '[0,N)';
+    IF @FerestreZileRaw IS NULL OR LTRIM(RTRIM(@FerestreZileRaw)) = '' SET @FerestreZileRaw = '28,91,182,365';
+
+    IF @FerestreCapat <> '[0,N)'
+        THROW 50078, 'sp_MinMaxEngine_Classify: FERESTRE_CAPAT supports only [0,N); any other value is undeclared in the specification.', 1;
+
+    -- ALL-OR-NOTHING inaintea despicarii: fara exact 3 virgule, PARSENAME ar numara de la
+    -- dreapta si ar deplasa tacit valorile pe pozitii gresite (ex: '28' -> @Zile4 = 28).
+    IF LEN(@FerestreZileRaw) - LEN(REPLACE(@FerestreZileRaw, ',', '')) <> 3
+        THROW 50081, 'sp_MinMaxEngine_Classify: FERESTRE_VZ_ZILE must contain exactly four positive, strictly increasing integers.', 1;
+
+    -- Despicare deterministica: 4 valori separate prin virgula, extrase cu PARSENAME pe varianta cu puncte.
+    SET @Zile1 = TRY_CONVERT(INT, PARSENAME(REPLACE(@FerestreZileRaw, ',', '.'), 4));
+    SET @Zile2 = TRY_CONVERT(INT, PARSENAME(REPLACE(@FerestreZileRaw, ',', '.'), 3));
+    SET @Zile3 = TRY_CONVERT(INT, PARSENAME(REPLACE(@FerestreZileRaw, ',', '.'), 2));
+    SET @Zile4 = TRY_CONVERT(INT, PARSENAME(REPLACE(@FerestreZileRaw, ',', '.'), 1));
+
+    IF @Zile1 IS NULL OR @Zile2 IS NULL OR @Zile3 IS NULL OR @Zile4 IS NULL
+        OR @Zile1 <= 0 OR @Zile2 <= 0 OR @Zile3 <= 0 OR @Zile4 <= 0
+        OR NOT (@Zile1 < @Zile2 AND @Zile2 < @Zile3 AND @Zile3 < @Zile4)
+        THROW 50081, 'sp_MinMaxEngine_Classify: FERESTRE_VZ_ZILE must contain exactly four positive, strictly increasing integers.', 1;
+
+    IF @FerestreVz = 'ZILE' AND (@Zile1 > @NrZile OR @Zile2 > @NrZile OR @Zile3 > @NrZile OR @Zile4 > @NrZile)
+        THROW 50079, 'sp_MinMaxEngine_Classify: FERESTRE_VZ_ZILE exceeds NRZILE; the window would be computed on a truncated population.', 1;
+
     IF @WinsorPct IS NULL OR @WinsorPct <= 0 OR @WinsorPct > 1 SET @WinsorPct = 0.95;
     IF COALESCE(@WinsorMinLinii, 0) <= 0 SET @WinsorMinLinii = 8;
     IF @WinsorSubPrag NOT IN ('NONE', 'MEDIANA') OR @WinsorSubPrag IS NULL SET @WinsorSubPrag = 'MEDIANA';
@@ -210,7 +249,7 @@ BEGIN
         COMPANY, FINDOC, MTRTRN, LINENUM, TRNDATE, AZI, TRDR, TRDRCODE,
         MTRL, MTRSUP, CODE, BRANCH, QTY, LTRNVAL
     INTO #SalesLines
-    FROM dbo.ufn_MinMaxSalesLines(@Company, @ModAtribuire)
+    FROM dbo.ufn_MinMaxSalesLines(@Company, @ModAtribuire, @NrZile, NULL)
     WHERE @Mtrl IS NULL OR MTRL = @Mtrl;
 
     SELECT @Azi = MAX(AZI) FROM #SalesLines;
@@ -284,6 +323,27 @@ BEGIN
     SELECT
         sl.BRANCH, sl.TRDR, sl.MTRL, sl.MTRSUP, sl.CODE, sl.TRNDATE, sl.AZI,
         DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) AS WEEK_INDEX,
+        lag.DAY_LAG AS DAY_LAG,
+        CASE
+            WHEN (@FerestreVz = 'ZILE' AND lag.DAY_LAG >= 0 AND lag.DAY_LAG < @Zile1)
+                OR (@FerestreVz = 'SAPT' AND DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) >= 0 AND DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) < 4)
+            THEN 1 ELSE 0
+        END AS IN_W1,
+        CASE
+            WHEN (@FerestreVz = 'ZILE' AND lag.DAY_LAG >= 0 AND lag.DAY_LAG < @Zile2)
+                OR (@FerestreVz = 'SAPT' AND DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) >= 0 AND DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) < 13)
+            THEN 1 ELSE 0
+        END AS IN_W2,
+        CASE
+            WHEN (@FerestreVz = 'ZILE' AND lag.DAY_LAG >= 0 AND lag.DAY_LAG < @Zile3)
+                OR (@FerestreVz = 'SAPT' AND DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) >= 0 AND DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) < 26)
+            THEN 1 ELSE 0
+        END AS IN_W3,
+        CASE
+            WHEN (@FerestreVz = 'ZILE' AND lag.DAY_LAG >= 0 AND lag.DAY_LAG < @Zile4)
+                OR (@FerestreVz = 'SAPT' AND DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) >= 0 AND DATEDIFF(WEEK, sl.TRNDATE, sl.AZI) < @NrSaptamani)
+            THEN 1 ELSE 0
+        END AS IN_W4,
         CONVERT(DECIMAL(28, 8), sl.QTY) AS RAW_QTY,
         CONVERT(DECIMAL(28, 8),
             CASE
@@ -297,7 +357,10 @@ BEGIN
         sl.LTRNVAL
     INTO #WinsorizedLines
     FROM #IncludedLines sl
-    LEFT JOIN #WinsorStats ws ON ws.MTRL = sl.MTRL;
+    LEFT JOIN #WinsorStats ws ON ws.MTRL = sl.MTRL
+    CROSS APPLY (
+        SELECT DATEDIFF(DAY, sl.TRNDATE, sl.AZI) AS DAY_LAG
+    ) lag;
 
     SELECT
         ws.MTRL, ws.POSITIVE_LINE_COUNT, ws.P95_QTY, ws.MEDIAN_QTY,
@@ -321,7 +384,6 @@ BEGIN
     -- ---------------------------------------------------------------
     SELECT
         BRANCH, TRDR, MTRL, MAX(MTRSUP) AS MTRSUP, MAX(CODE) AS CODE, WEEK_INDEX,
-        SUM(WINSORIZED_QTY) AS RAW_NET_QTY,
         CONVERT(DECIMAL(28, 8),
             CASE WHEN SUM(WINSORIZED_QTY) < 0 THEN 0 ELSE SUM(WINSORIZED_QTY) END
         ) AS NET_QTY,
@@ -374,56 +436,55 @@ BEGIN
     SELECT
         BRANCH, TRDR, MTRL, MAX(MTRSUP) AS MTRSUP, MAX(CODE) AS CODE,
         CONVERT(DECIMAL(28, 8), CASE
-            WHEN SUM(CASE WHEN WEEK_INDEX < 4 THEN RAW_NET_QTY ELSE 0 END) < 0 THEN 0
-            ELSE SUM(CASE WHEN WEEK_INDEX < 4 THEN RAW_NET_QTY ELSE 0 END)
+            WHEN SUM(CASE WHEN IN_W1 = 1 THEN WINSORIZED_QTY ELSE 0 END) < 0 THEN 0
+            ELSE SUM(CASE WHEN IN_W1 = 1 THEN WINSORIZED_QTY ELSE 0 END)
         END) AS VZ_4S,
         CONVERT(DECIMAL(28, 8), CASE
-            WHEN SUM(CASE WHEN WEEK_INDEX < 13 THEN RAW_NET_QTY ELSE 0 END) < 0 THEN 0
-            ELSE SUM(CASE WHEN WEEK_INDEX < 13 THEN RAW_NET_QTY ELSE 0 END)
+            WHEN SUM(CASE WHEN IN_W2 = 1 THEN WINSORIZED_QTY ELSE 0 END) < 0 THEN 0
+            ELSE SUM(CASE WHEN IN_W2 = 1 THEN WINSORIZED_QTY ELSE 0 END)
         END) AS VZ_13S,
         CONVERT(DECIMAL(28, 8), CASE
-            WHEN SUM(CASE WHEN WEEK_INDEX < 26 THEN RAW_NET_QTY ELSE 0 END) < 0 THEN 0
-            ELSE SUM(CASE WHEN WEEK_INDEX < 26 THEN RAW_NET_QTY ELSE 0 END)
+            WHEN SUM(CASE WHEN IN_W3 = 1 THEN WINSORIZED_QTY ELSE 0 END) < 0 THEN 0
+            ELSE SUM(CASE WHEN IN_W3 = 1 THEN WINSORIZED_QTY ELSE 0 END)
         END) AS VZ_26S,
         CONVERT(DECIMAL(28, 8), CASE
-            WHEN SUM(RAW_NET_QTY) < 0 THEN 0
-            ELSE SUM(RAW_NET_QTY)
-        END) AS VZ_52S
+            WHEN SUM(CASE WHEN IN_W4 = 1 THEN WINSORIZED_QTY ELSE 0 END) < 0 THEN 0
+            ELSE SUM(CASE WHEN IN_W4 = 1 THEN WINSORIZED_QTY ELSE 0 END)
+        END) AS VZ_52S,
+        CONVERT(DECIMAL(28, 8), SUM(CASE WHEN IN_W4 = 1 THEN LTRNVAL ELSE 0 END)) AS VAL_52S
     INTO #ClientWindowTotals
-    FROM #ClientWeekly
-    WHERE WEEK_INDEX >= 0 AND WEEK_INDEX < @NrSaptamani
+    FROM #WinsorizedLines
     GROUP BY BRANCH, TRDR, MTRL;
 
     IF @HqDinAgregatCompanie = 1
     BEGIN
         INSERT INTO #ClientWindowTotals (
-            BRANCH, TRDR, MTRL, MTRSUP, CODE, VZ_4S, VZ_13S, VZ_26S, VZ_52S
+            BRANCH, TRDR, MTRL, MTRSUP, CODE, VZ_4S, VZ_13S, VZ_26S, VZ_52S, VAL_52S
         )
         SELECT
             hq.BRANCH, cw.TRDR, cw.MTRL, MAX(cw.MTRSUP), MAX(cw.CODE),
             CONVERT(DECIMAL(28, 8), CASE
-                WHEN SUM(CASE WHEN cw.WEEK_INDEX < 4 THEN cw.RAW_NET_QTY ELSE 0 END) < 0 THEN 0
-                ELSE SUM(CASE WHEN cw.WEEK_INDEX < 4 THEN cw.RAW_NET_QTY ELSE 0 END)
+                WHEN SUM(CASE WHEN cw.IN_W1 = 1 THEN cw.WINSORIZED_QTY ELSE 0 END) < 0 THEN 0
+                ELSE SUM(CASE WHEN cw.IN_W1 = 1 THEN cw.WINSORIZED_QTY ELSE 0 END)
             END),
             CONVERT(DECIMAL(28, 8), CASE
-                WHEN SUM(CASE WHEN cw.WEEK_INDEX < 13 THEN cw.RAW_NET_QTY ELSE 0 END) < 0 THEN 0
-                ELSE SUM(CASE WHEN cw.WEEK_INDEX < 13 THEN cw.RAW_NET_QTY ELSE 0 END)
+                WHEN SUM(CASE WHEN cw.IN_W2 = 1 THEN cw.WINSORIZED_QTY ELSE 0 END) < 0 THEN 0
+                ELSE SUM(CASE WHEN cw.IN_W2 = 1 THEN cw.WINSORIZED_QTY ELSE 0 END)
             END),
             CONVERT(DECIMAL(28, 8), CASE
-                WHEN SUM(CASE WHEN cw.WEEK_INDEX < 26 THEN cw.RAW_NET_QTY ELSE 0 END) < 0 THEN 0
-                ELSE SUM(CASE WHEN cw.WEEK_INDEX < 26 THEN cw.RAW_NET_QTY ELSE 0 END)
+                WHEN SUM(CASE WHEN cw.IN_W3 = 1 THEN cw.WINSORIZED_QTY ELSE 0 END) < 0 THEN 0
+                ELSE SUM(CASE WHEN cw.IN_W3 = 1 THEN cw.WINSORIZED_QTY ELSE 0 END)
             END),
             CONVERT(DECIMAL(28, 8), CASE
-                WHEN SUM(cw.RAW_NET_QTY) < 0 THEN 0
-                ELSE SUM(cw.RAW_NET_QTY)
-            END)
-        FROM #ClientWeekly cw
+                WHEN SUM(CASE WHEN cw.IN_W4 = 1 THEN cw.WINSORIZED_QTY ELSE 0 END) < 0 THEN 0
+                ELSE SUM(CASE WHEN cw.IN_W4 = 1 THEN cw.WINSORIZED_QTY ELSE 0 END)
+            END),
+            CONVERT(DECIMAL(28, 8), SUM(CASE WHEN cw.IN_W4 = 1 THEN cw.LTRNVAL ELSE 0 END))
+        FROM #WinsorizedLines cw
         INNER JOIN #ActiveBranches sourceBranch
             ON sourceBranch.BRANCH = cw.BRANCH AND sourceBranch.ESTE_HQ = 0
         CROSS JOIN #ActiveBranches hq
         WHERE hq.ESTE_HQ = 1
-          AND cw.WEEK_INDEX >= 0
-          AND cw.WEEK_INDEX < @NrSaptamani
         GROUP BY hq.BRANCH, cw.TRDR, cw.MTRL;
     END;
 
@@ -432,7 +493,8 @@ BEGIN
         CONVERT(DECIMAL(28, 8), SUM(VZ_4S)) AS VZ_4S,
         CONVERT(DECIMAL(28, 8), SUM(VZ_13S)) AS VZ_13S,
         CONVERT(DECIMAL(28, 8), SUM(VZ_26S)) AS VZ_26S,
-        CONVERT(DECIMAL(28, 8), SUM(VZ_52S)) AS VZ_52S
+        CONVERT(DECIMAL(28, 8), SUM(VZ_52S)) AS VZ_52S,
+        CONVERT(DECIMAL(28, 8), SUM(VAL_52S)) AS VAL_52S
     INTO #BranchWindowTotals
     FROM #ClientWindowTotals
     GROUP BY BRANCH, MTRL;
@@ -456,7 +518,6 @@ BEGIN
     SELECT
         BRANCH, MTRL,
         CONVERT(DECIMAL(28, 8), SUM(QTY)) AS WEEK_QTY_SUM,
-        CONVERT(DECIMAL(28, 8), SUM(SALES_VALUE)) AS VAL_52S,
         SUM(CASE WHEN QTY > 0 THEN 1 ELSE 0 END) AS SAPT_VZ,
         SUM(CASE WHEN WEEK_INDEX < 8 AND QTY > 0 THEN 1 ELSE 0 END) AS SAPT_8S,
         MAX(CASE WHEN QTY > 0 THEN LAST_POSITIVE_SALE END) AS ULT_VANZ,
@@ -483,7 +544,7 @@ BEGIN
         CONVERT(DECIMAL(28, 8), COALESCE(windowTotals.VZ_26S, 0)) AS VZ_26S,
         CONVERT(DECIMAL(28, 8), COALESCE(windowTotals.VZ_52S, 0)) AS VZ_52S,
         CONVERT(DECIMAL(28, 8), COALESCE(weeklyStats.WEEK_QTY_SUM, 0)) AS WEEK_QTY_SUM,
-        CONVERT(DECIMAL(28, 8), COALESCE(weeklyStats.VAL_52S, 0)) AS VAL_52S,
+        CONVERT(DECIMAL(28, 8), COALESCE(windowTotals.VAL_52S, 0)) AS VAL_52S,
         COALESCE(weeklyStats.SAPT_VZ, 0) AS SAPT_VZ,
         COALESCE(weeklyStats.SAPT_8S, 0) AS SAPT_8S,
         -- S 4.6: recenta = round(zile de la ultima vanzare / 7), nu indexul bucket-ului saptamanal.

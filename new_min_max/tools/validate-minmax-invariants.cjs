@@ -142,6 +142,16 @@ function trendBase (runParams) {
   return new Set(['13_26', '13_52']).has(base) ? base : '13_52'
 }
 
+// FERESTRE_VZ_ZILE trebuie sa fie exact 4 intregi pozitivi, separati prin virgula.
+function parseFerestreZile (raw) {
+  if (typeof raw !== 'string') return null
+  const parts = raw.split(',').map((part) => part.trim())
+  if (parts.length !== 4) return null
+  const values = parts.map(Number)
+  if (values.some((value) => !Number.isFinite(value) || !Number.isInteger(value) || value <= 0)) return null
+  return values
+}
+
 // runId e deja un intreg validat mai sus -> se interpoleaza direct in SQL,
 // nu ca parametru legat (acelasi motiv ca la OFFSET/FETCH in
 // minmax-engine.class.js: WSMCP nu accepta parametri legati peste tot, si
@@ -350,6 +360,132 @@ function buildInvariants (runId, runParams) {
         if (cuVanzare !== 0) problems.push(`${cuVanzare} randuri cu SAPT_FARA diferit de round(zile/7)`)
         if (faraVanzare !== 0) problems.push(`${faraVanzare} randuri fara ULT_VANZ si SAPT_FARA <> ${nrSaptamani}`)
         return { pass: problems.length === 0, detail: problems.join('; ') || `0 abateri din ${row.TOTAL_ROWS} randuri` }
+      }
+    },
+    {
+      id: 'ferestre_zile',
+      label: 'N04a: snapshot NRZILE/FERESTRE_VZ/FERESTRE_VZ_ZILE/FERESTRE_CAPAT; pe FERESTRE_VZ=ZILE, VZ_4S se re-deriva din sursa VIE numai daca ancora vie (MAX(AZI)) mai coincide cu AZI inghetat al rularii, altfel comparatia se sare (nu esueaza), fiindca sursa a avansat de la rulare',
+      async run () {
+        const problems = []
+        // Spre deosebire de trendBase: lipsa unei chei aici e ABATERE, nu fallback tacit -
+        // rularile dinainte de N04a nu au aceste chei si trebuie sa pice, la fel ca `trend` pe RUNID <= 15.
+        const missingKeys = ['NRZILE', 'FERESTRE_VZ', 'FERESTRE_VZ_ZILE', 'FERESTRE_CAPAT']
+          .filter((key) => runParams[key] === undefined || runParams[key] === null)
+        if (missingKeys.length) problems.push(`chei lipsa din snapshot: ${missingKeys.join(', ')}`)
+
+        const ferestreVz = String(runParams.FERESTRE_VZ || '').trim().toUpperCase()
+        const ferestreCapat = runParams.FERESTRE_CAPAT
+        const nrZile = Number(runParams.NRZILE)
+        const ferestreZile = parseFerestreZile(runParams.FERESTRE_VZ_ZILE)
+
+        if (!missingKeys.includes('FERESTRE_CAPAT') && ferestreCapat !== '[0,N)') {
+          problems.push(`FERESTRE_CAPAT = ${ferestreCapat} (asteptat '[0,N)')`)
+        }
+        if (!missingKeys.includes('FERESTRE_VZ') && !['ZILE', 'SAPT'].includes(ferestreVz)) {
+          problems.push(`FERESTRE_VZ = ${runParams.FERESTRE_VZ} (asteptat ZILE sau SAPT)`)
+        }
+        if (!missingKeys.includes('FERESTRE_VZ_ZILE') && !ferestreZile) {
+          problems.push(`FERESTRE_VZ_ZILE = ${runParams.FERESTRE_VZ_ZILE} (asteptate exact 4 intregi pozitivi)`)
+        }
+        if (ferestreZile && !missingKeys.includes('NRZILE') && ferestreZile.some((value) => value > nrZile)) {
+          problems.push(`FERESTRE_VZ_ZILE ${runParams.FERESTRE_VZ_ZILE} depaseste NRZILE ${nrZile}`)
+        }
+
+        if (problems.length) return { pass: false, detail: problems.join('; ') }
+
+        if (ferestreVz !== 'ZILE') {
+          return {
+            pass: true,
+            detail: `snapshot OK; verificarea pe date nu se aplica in modul ${ferestreVz} (numai FERESTRE_VZ=ZILE re-deriva din sursa)`
+          }
+        }
+
+        const modAtribuireRaw = String(runParams.MOD_ATRIBUIRE_FILIALA || '').trim().toUpperCase()
+        const modAtribuire = ['DOC', 'AGENT', 'CLIENT'].includes(modAtribuireRaw) ? modAtribuireRaw : 'CLIENT'
+        const window1Days = ferestreZile[0]
+
+        // Precondition: AZI e derivat din MAX(TRNDATE) pe date vii (00c_sales_lines.sql), deci
+        // orice vanzare inregistrata dupa rularea inghetata muta ancora inainte si produce
+        // abateri care nu sunt regresii. Comparam ancora vie (@AziOverride = NULL) cu AZI
+        // inghetat al rularii inainte sa rulam comparatia exacta.
+        const [anchorRow] = await execSql(
+          `SELECT
+             CONVERT(VARCHAR(10), (SELECT MAX(AZI) FROM dbo.ufn_MinMaxSalesLines(${COMPANY}, '${modAtribuire}', ${nrZile}, NULL)), 120) AS AZI_LIVE,
+             CONVERT(VARCHAR(10), (SELECT AZI FROM CCCMINMAXRUN WHERE RUNID = ${runId}), 120) AS AZI_INGHETAT`
+        )
+        const aziLive = anchorRow && anchorRow.AZI_LIVE
+        const aziInghetat = anchorRow && anchorRow.AZI_INGHETAT
+
+        if (aziLive && aziInghetat && aziLive > aziInghetat) {
+          return {
+            pass: true,
+            detail: `sursa vie a avansat de la rulare (AZI viu = ${aziLive}, AZI inghetat = ${aziInghetat}); comparatia exacta VZ_4S nu mai e posibila`
+          }
+        }
+
+        const [row] = await execSql(
+          `WITH ActiveBranches AS (
+             SELECT b.BRANCH
+             FROM CCCMINMAXBRANCH b
+             WHERE b.INCLUS = 1 AND b.ESTE_HQ = 0
+               AND EXISTS (
+                 SELECT 1 FROM WHOUSE w
+                 WHERE w.CCCBRANCH = b.BRANCH AND w.COMPANY = ${COMPANY} AND w.ISACTIVE = 1
+               )
+           ),
+           SourceLines AS (
+             SELECT sl.BRANCH, sl.TRDR, sl.MTRL, sl.QTY
+             FROM dbo.ufn_MinMaxSalesLines(${COMPANY}, '${modAtribuire}', ${nrZile},
+                 (SELECT AZI FROM CCCMINMAXRUN WHERE RUNID = ${runId})) sl
+             INNER JOIN ActiveBranches ab ON ab.BRANCH = sl.BRANCH
+             WHERE DATEDIFF(DAY, sl.TRNDATE, sl.AZI) < ${window1Days}
+           ),
+           WinsorizedLines AS (
+             SELECT sl.BRANCH, sl.TRDR, sl.MTRL,
+               CASE
+                 WHEN sl.QTY <= 0 THEN sl.QTY
+                 WHEN w.PRAG_APLICAT = 'P95' AND sl.QTY > w.P95_QTY THEN w.P95_QTY
+                 WHEN w.PRAG_APLICAT = 'MEDIANA' AND sl.QTY > w.MEDIAN_QTY THEN w.MEDIAN_QTY
+                 ELSE sl.QTY
+               END AS WINSORIZED_QTY
+             FROM SourceLines sl
+             LEFT JOIN CCCMINMAXWINSOR w ON w.RUNID = ${runId} AND w.MTRL = sl.MTRL
+           ),
+           ClientNet AS (
+             SELECT BRANCH, TRDR, MTRL,
+               CASE WHEN SUM(WINSORIZED_QTY) < 0 THEN 0 ELSE SUM(WINSORIZED_QTY) END AS NET_QTY
+             FROM WinsorizedLines
+             GROUP BY BRANCH, TRDR, MTRL
+           ),
+           LiveTotals AS (
+             SELECT BRANCH, MTRL, CONVERT(DECIMAL(28, 8), SUM(NET_QTY)) AS VZ_4S_LIVE
+             FROM ClientNet
+             GROUP BY BRANCH, MTRL
+           ),
+           DetTotals AS (
+             SELECT d.BRANCH, d.MTRL, d.VZ_4S
+             FROM CCCMINMAXDET d
+             INNER JOIN ActiveBranches ab ON ab.BRANCH = d.BRANCH
+             WHERE d.RUNID = ${runId}
+           )
+           SELECT
+             COUNT(*) AS TOTAL_COMPARAT,
+             SUM(CASE WHEN ABS(COALESCE(live.VZ_4S_LIVE, 0) - COALESCE(det.VZ_4S, 0)) > 0.00000001 THEN 1 ELSE 0 END) AS ABATERI,
+             SUM(CASE WHEN live.BRANCH IS NULL THEN 1 ELSE 0 END) AS LIPSA_IN_LIVE,
+             SUM(CASE WHEN det.BRANCH IS NULL THEN 1 ELSE 0 END) AS LIPSA_IN_DET
+           FROM LiveTotals live
+           FULL OUTER JOIN DetTotals det ON det.BRANCH = live.BRANCH AND det.MTRL = live.MTRL`
+        )
+
+        const abateri = n(row.ABATERI) || 0
+        const total = n(row.TOTAL_COMPARAT) || 0
+        const lipsaLive = n(row.LIPSA_IN_LIVE) || 0
+        const lipsaDet = n(row.LIPSA_IN_DET) || 0
+        return {
+          pass: abateri === 0,
+          detail: `${abateri} abateri din ${total} perechi (BRANCH, MTRL) comparate ` +
+            `(${lipsaLive} absente din re-derivare, ${lipsaDet} absente din CCCMINMAXDET)`
+        }
       }
     },
     {

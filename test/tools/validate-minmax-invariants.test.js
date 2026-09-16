@@ -144,11 +144,12 @@ describe('MIN/MAX P1/P2 window netting contract', () => {
 
     const classify = sqlSource('01_classify.sql')
     assert.match(classify, /INTO #ClientWeekly[\s\S]*?GROUP BY BRANCH, TRDR, MTRL, WEEK_INDEX;/)
-    assert.match(classify, /SUM\(WINSORIZED_QTY\) AS RAW_NET_QTY[\s\S]*?INTO #ClientWeekly/)
-    assert.match(classify, /WHEN SUM\(CASE WHEN WEEK_INDEX < 4 THEN RAW_NET_QTY ELSE 0 END\) < 0 THEN 0[\s\S]*?INTO #ClientWindowTotals[\s\S]*?FROM #ClientWeekly[\s\S]*?GROUP BY BRANCH, TRDR, MTRL;/)
+    assert.match(classify, /CASE WHEN SUM\(WINSORIZED_QTY\) < 0 THEN 0 ELSE SUM\(WINSORIZED_QTY\) END\s*\) AS NET_QTY[\s\S]*?INTO #ClientWeekly/)
+    assert.doesNotMatch(classify, /RAW_NET_QTY/)
+    assert.match(classify, /WHEN SUM\(CASE WHEN IN_W1 = 1 THEN WINSORIZED_QTY ELSE 0 END\) < 0 THEN 0[\s\S]*?INTO #ClientWindowTotals[\s\S]*?FROM #WinsorizedLines[\s\S]*?GROUP BY BRANCH, TRDR, MTRL;/)
     assert.match(classify, /INTO #BranchWindowTotals[\s\S]*?GROUP BY BRANCH, MTRL;/)
     assert.match(classify, /COALESCE\(windowTotals\.VZ_4S, 0\)/)
-    assert.match(classify, /COALESCE\(weeklyStats\.VAL_52S, 0\)/)
+    assert.match(classify, /COALESCE\(windowTotals\.VAL_52S, 0\)/)
     assert.match(classify, /POWER\(COALESCE\(CONVERT\(FLOAT, weeklyStats\.WEEK_QTY_SUM\), 0\.0\), 2\)/)
     assert.match(classify, /MAX_LUNA_QTY > @ForceZLunaDominanta \* ac\.WEEK_QTY_SUM/)
   })
@@ -175,11 +176,10 @@ describe('MIN/MAX P1/P2 window netting contract', () => {
     const hqWeeklyBlock = classify.match(/IF @HqDinAgregatCompanie = 1\s+BEGIN\s+INSERT INTO #BranchWeekly \([\s\S]*?GROUP BY hq\.BRANCH, bw\.MTRL, bw\.WEEK_INDEX;\s+END;/)
 
     assert.ok(hqWindowBlock, 'HQ window totals must be built at client level')
-    assert.match(hqWindowBlock[0], /FROM #ClientWeekly cw/)
+    assert.match(hqWindowBlock[0], /FROM #WinsorizedLines cw/)
     assert.match(hqWindowBlock[0], /sourceBranch\.ESTE_HQ = 0/)
-    assert.match(hqWindowBlock[0], /WHEN SUM\(CASE WHEN cw\.WEEK_INDEX < 4 THEN cw\.RAW_NET_QTY ELSE 0 END\) < 0 THEN 0/)
-    assert.match(hqWindowBlock[0], /WHEN SUM\(cw\.RAW_NET_QTY\) < 0 THEN 0/)
-    assert.match(hqWindowBlock[0], /cw\.WEEK_INDEX < @NrSaptamani/)
+    assert.match(hqWindowBlock[0], /WHEN SUM\(CASE WHEN cw\.IN_W1 = 1 THEN cw\.WINSORIZED_QTY ELSE 0 END\) < 0 THEN 0/)
+    assert.match(hqWindowBlock[0], /WHEN SUM\(CASE WHEN cw\.IN_W4 = 1 THEN cw\.WINSORIZED_QTY ELSE 0 END\) < 0 THEN 0/)
     assert.ok(hqWeeklyBlock, 'HQ weekly totals must remain a separate series')
     assert.match(hqWeeklyBlock[0], /SUM\(bw\.QTY\)/)
     assert.doesNotMatch(hqWeeklyBlock[0], /RAW_NET_QTY/)
@@ -290,5 +290,92 @@ describe('MIN/MAX trend base contract', () => {
     // Statusurile de lifecycle trebuie sa fie si filtrabile, altfel randurile dispar din UI.
     const service = fs.readFileSync(path.join(root, 'src', 'services', 'minmax-engine', 'minmax-engine.class.js'), 'utf8')
     assert.match(service, /STATUS_TREND_VALUES = new Set\(\['ACTIVE', 'STABLE', 'TREND_DOWN', 'DECLINE', 'NOU', 'OK'\]\)/)
+  })
+})
+
+describe('MIN/MAX N04 calendar day window contract', () => {
+  it('derives sales lines from a calendar day window with a freezable anchor', () => {
+    const salesLines = sqlSource('00c_sales_lines.sql')
+
+    assert.doesNotMatch(salesLines, /DATEDIFF\(WEEK, f\.TRNDATE, @Azi\)/)
+    assert.doesNotMatch(salesLines, /NRSAPT/)
+    assert.match(salesLines, /DATEDIFF\(DAY, f\.TRNDATE, @Azi\) >= 0/)
+    assert.match(salesLines, /DATEDIFF\(DAY, f\.TRNDATE, @Azi\) < @NrZile/)
+    assert.match(salesLines, /CREATE OR ALTER FUNCTION dbo\.ufn_MinMaxSalesLines \(\s*@Company SMALLINT,\s*@ModAtribuireOverride VARCHAR\(10\),\s*@NrZileOverride INT,\s*@AziOverride DATE\s*\)/)
+
+    // Ancora se poate ingheta: ramura @AziOverride trebuie sa preceada recalcularea din MAX(TRNDATE).
+    const anchorOrder = salesLines.match(/IF @AziOverride IS NOT NULL[\s\S]*?ELSE[\s\S]*?MAX\(CONVERT\(DATE, f\.TRNDATE\)\)/)
+    assert.ok(anchorOrder, '@AziOverride branch must precede the MAX(TRNDATE) recomputation')
+  })
+
+  it('keeps the weekly time axis separate from the new calendar day axis (the regression this guards against)', () => {
+    const classify = sqlSource('01_classify.sql')
+
+    // REGRESIA CARE CONTEAZA CEL MAI MULT: N04a a adaugat o axa in zile (IN_W1..IN_W4)
+    // fara sa atinga seria saptamanala; daca cele doua axe s-ar fuziona, SIGMA_WK/SAPT_VZ/XYZ
+    // ar deveni gresite in tacere. Testul pazeste separarea, nu doar prezenta textului.
+    assert.match(classify, /INTO #ClientWeekly[\s\S]*?GROUP BY BRANCH, TRDR, MTRL, WEEK_INDEX;/)
+    assert.match(classify, /INTO #WeeklyStats\s*FROM #BranchWeekly\s*WHERE WEEK_INDEX >= 0 AND WEEK_INDEX < @NrSaptamani/)
+    assert.match(classify, /INTO #MonthlyBuckets\s*FROM #BranchWeekly\s*WHERE WEEK_INDEX >= 0 AND WEEK_INDEX < @NrSaptamani/)
+  })
+
+  it('uses @NrSaptamani, not a hardcoded 52, for the fourth window in SAPT mode', () => {
+    const classify = sqlSource('01_classify.sql')
+
+    assert.match(classify, /DATEDIFF\(WEEK, sl\.TRNDATE, sl\.AZI\) >= 0 AND DATEDIFF\(WEEK, sl\.TRNDATE, sl\.AZI\) < @NrSaptamani\)\s*THEN 1 ELSE 0\s*END AS IN_W4/)
+  })
+
+  it('does not clip VAL_52S to zero in #ClientWindowTotals', () => {
+    const classify = sqlSource('01_classify.sql')
+
+    assert.match(classify, /CONVERT\(DECIMAL\(28, 8\), SUM\(CASE WHEN IN_W4 = 1 THEN LTRNVAL ELSE 0 END\)\) AS VAL_52S/)
+    assert.doesNotMatch(classify, /WHEN SUM\(CASE WHEN IN_W4 = 1 THEN LTRNVAL ELSE 0 END\) < 0 THEN 0/)
+  })
+
+  it('guards FERESTRE_CAPAT, FERESTRE_VZ_ZILE and the frozen anchor with dedicated THROWs', () => {
+    const classify = sqlSource('01_classify.sql')
+    const classifyGroup = sqlSource('02_classify_group.sql')
+
+    assert.match(classify, /THROW 50078, 'sp_MinMaxEngine_Classify: FERESTRE_CAPAT supports only \[0,N\)/)
+    assert.match(classify, /THROW 50079, 'sp_MinMaxEngine_Classify: FERESTRE_VZ_ZILE exceeds NRZILE/)
+    assert.match(classifyGroup, /THROW 50080, 'sp_MinMaxEngine_ClassifyGroup: the run has no frozen AZI/)
+  })
+
+  it('passes the frozen anchor from ClassifyGroup into ufn_MinMaxSalesLines', () => {
+    const classifyGroup = sqlSource('02_classify_group.sql')
+
+    assert.match(classifyGroup, /dbo\.ufn_MinMaxSalesLines\(@Company, @ModAtribuire, @NrZile, @AziInghetat\)/)
+  })
+
+  it('seeds the four new N04a parameters with the documented defaults', () => {
+    const params = sqlSource('00_params.sql')
+
+    assert.match(params, /\('NRZILE',\s*'365',\s*'NUM',\s*'GLOBAL'/)
+    assert.match(params, /\('FERESTRE_VZ_ZILE',\s*'28,91,182,365',\s*'STR',\s*'GLOBAL'/)
+    assert.match(params, /\('FERESTRE_VZ',\s*'ZILE',\s*'STR',\s*'GLOBAL'/)
+    assert.match(params, /\('FERESTRE_CAPAT',\s*'\[0,N\)',\s*'STR',\s*'GLOBAL'/)
+  })
+
+  it('exposes the ferestre_zile invariant in the validator', () => {
+    const validator = fs.readFileSync(path.join(root, 'new_min_max', 'tools', 'validate-minmax-invariants.cjs'), 'utf8')
+    assert.match(validator, /id: 'ferestre_zile'/)
+  })
+
+  it('rejects a malformed FERESTRE_VZ_ZILE with THROW 50081 instead of shifting values silently', () => {
+    const classify = sqlSource('01_classify.sql')
+
+    assert.match(classify, /THROW 50081, 'sp_MinMaxEngine_Classify: FERESTRE_VZ_ZILE must contain exactly four positive, strictly increasing integers\.'/)
+    assert.match(classify, /LEN\(@FerestreZileRaw\) - LEN\(REPLACE\(@FerestreZileRaw, ',', ''\)\)/)
+    assert.doesNotMatch(classify, /SET @Zile1 = 28;/)
+    assert.doesNotMatch(classify, /SET @Zile2 = 91;/)
+    assert.doesNotMatch(classify, /SET @Zile3 = 182;/)
+    assert.doesNotMatch(classify, /SET @Zile4 = 365;/)
+  })
+
+  it('drops the unused RAW_NET_QTY column while keeping the weekly NET_QTY clip in #ClientWeekly', () => {
+    const classify = sqlSource('01_classify.sql')
+
+    assert.doesNotMatch(classify, /RAW_NET_QTY/)
+    assert.match(classify, /CASE WHEN SUM\(WINSORIZED_QTY\) < 0 THEN 0 ELSE SUM\(WINSORIZED_QTY\) END\s*\) AS NET_QTY[\s\S]*?INTO #ClientWeekly/)
   })
 })

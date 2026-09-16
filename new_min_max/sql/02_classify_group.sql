@@ -45,6 +45,7 @@ BEGIN
     --    live din CCCMINMAXPARAMS (previzualizare fara sesiune).
     -- ---------------------------------------------------------------
     DECLARE @NrSaptamani INT;
+    DECLARE @NrZile INT;
     DECLARE @WinsorPct FLOAT;
     DECLARE @WinsorMinLinii INT;
     DECLARE @WinsorSubPrag VARCHAR(10);
@@ -90,6 +91,7 @@ BEGIN
         WHERE SCOPE = 'GLOBAL' AND SCOPEKEY = '';
 
     SELECT @NrSaptamani = TRY_CONVERT(INT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'NRSAPT';
+    SELECT @NrZile = TRY_CONVERT(INT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'NRZILE';
     SELECT @WinsorPct = TRY_CONVERT(FLOAT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'WINSOR_PCT';
     SELECT @WinsorMinLinii = TRY_CONVERT(INT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'WINSOR_MIN_LINII';
     SELECT @WinsorSubPrag = UPPER(LTRIM(RTRIM(PARAMVALUE))) FROM #ResolvedParams WHERE PARAMKEY = 'WINSOR_SUB_PRAG';
@@ -128,6 +130,7 @@ BEGIN
     SELECT @AbcPrimArticolA = TRY_CONVERT(BIT, PARAMVALUE) FROM #ResolvedParams WHERE PARAMKEY = 'ABC_PRIM_ARTICOL_A';
 
     IF COALESCE(@NrSaptamani, 0) <= 0 SET @NrSaptamani = 52;
+    IF COALESCE(@NrZile, 0) <= 0 SET @NrZile = 365;
     IF @WinsorPct IS NULL OR @WinsorPct <= 0 OR @WinsorPct > 1 SET @WinsorPct = 0.95;
     IF COALESCE(@WinsorMinLinii, 0) <= 0 SET @WinsorMinLinii = 8;
     IF @WinsorSubPrag NOT IN ('NONE', 'MEDIANA') OR @WinsorSubPrag IS NULL SET @WinsorSubPrag = 'MEDIANA';
@@ -149,13 +152,24 @@ BEGIN
     SET @AbcPrimArticolA = COALESCE(@AbcPrimArticolA, 1);
 
     -- ---------------------------------------------------------------
+    -- 1b. Ancora inghetata: Classify e prima faza si stabileste AZI pentru sesiune.
+    -- ---------------------------------------------------------------
+    DECLARE @AziInghetat DATE;
+    IF @Persist = 1
+    BEGIN
+        SELECT @AziInghetat = AZI FROM CCCMINMAXRUN WHERE RUNID = @RunId;
+        IF @AziInghetat IS NULL
+            THROW 50080, 'sp_MinMaxEngine_ClassifyGroup: the run has no frozen AZI; sp_MinMaxEngine_Classify must run first.', 1;
+    END;
+
+    -- ---------------------------------------------------------------
     -- 2. Extragere linii vânzări eligibile
     -- ---------------------------------------------------------------
     SELECT
         COMPANY, FINDOC, MTRTRN, LINENUM, TRNDATE, AZI, TRDR, TRDRCODE,
         MTRL, MTRSUP, CODE, BRANCH, QTY, LTRNVAL
     INTO #SalesLines
-    FROM dbo.ufn_MinMaxSalesLines(@Company, @ModAtribuire);
+    FROM dbo.ufn_MinMaxSalesLines(@Company, @ModAtribuire, @NrZile, @AziInghetat);
 
     SELECT @Azi = MAX(AZI) FROM #SalesLines;
     IF @Azi IS NULL

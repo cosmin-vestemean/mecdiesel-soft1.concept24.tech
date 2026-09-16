@@ -6,7 +6,9 @@
 
 CREATE OR ALTER FUNCTION dbo.ufn_MinMaxSalesLines (
     @Company SMALLINT,
-    @ModAtribuireOverride VARCHAR(10)
+    @ModAtribuireOverride VARCHAR(10),
+    @NrZileOverride INT,
+    @AziOverride DATE
 )
 RETURNS @SalesLines TABLE (
     COMPANY SMALLINT NOT NULL,
@@ -30,7 +32,7 @@ BEGIN
     DECLARE @ModAtribuire VARCHAR(10);
     DECLARE @ExcluderiClienti VARCHAR(MAX);
     DECLARE @ExcluderiPrefixe VARCHAR(MAX);
-    DECLARE @NrSaptamani INT;
+    DECLARE @NrZile INT;
 
     -- ---------------------------------------------------------------
     -- 1. Citire parametri din CCCMINMAXPARAMS
@@ -50,51 +52,56 @@ BEGIN
     FROM CCCMINMAXPARAMS
     WHERE PARAMKEY = 'EXCLUDERI_PREFIXE' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
 
-    SELECT @NrSaptamani = TRY_CONVERT(INT, PARAMVALUE)
-    FROM CCCMINMAXPARAMS
-    WHERE PARAMKEY = 'NRSAPT' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
+    SET @NrZile = @NrZileOverride;
+    IF COALESCE(@NrZile, 0) <= 0
+        SELECT @NrZile = TRY_CONVERT(INT, PARAMVALUE)
+        FROM CCCMINMAXPARAMS
+        WHERE PARAMKEY = 'NRZILE' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
 
     IF @ModAtribuire NOT IN ('DOC', 'AGENT', 'CLIENT') OR @ModAtribuire IS NULL
         SET @ModAtribuire = 'CLIENT';
     SET @ExcluderiClienti = COALESCE(@ExcluderiClienti, '');
     SET @ExcluderiPrefixe = COALESCE(@ExcluderiPrefixe, '');
-    IF COALESCE(@NrSaptamani, 0) <= 0 SET @NrSaptamani = 52;
+    IF COALESCE(@NrZile, 0) <= 0 SET @NrZile = 365;
 
     -- ---------------------------------------------------------------
-    -- 2. Data de referinta = ultima vanzare eligibila
+    -- 2. Data de referinta: ancora inghetata (@AziOverride) sau ultima vanzare eligibila
     -- ---------------------------------------------------------------
-    SELECT @Azi = MAX(CONVERT(DATE, f.TRNDATE))
-    FROM MTRTRN mt
-    INNER JOIN FINDOC f
-        ON f.COMPANY = mt.COMPANY AND f.FINDOC = mt.FINDOC AND f.SOSOURCE = mt.SOSOURCE
-    INNER JOIN TPRMS tp
-        ON tp.COMPANY = mt.COMPANY AND tp.SODTYPE = mt.SODTYPE AND tp.TPRMS = mt.TPRMS
-    INNER JOIN MTRL m
-        ON m.MTRL = mt.MTRL AND m.SODTYPE = mt.SODTYPE
-    INNER JOIN TRDR customer
-        ON customer.COMPANY = f.COMPANY AND customer.SODTYPE = 13 AND customer.TRDR = f.TRDR
-    WHERE mt.COMPANY = @Company
-        AND mt.SOSOURCE = 1351
-        AND f.ISCANCEL = 0
-        AND COALESCE(tp.FLG04, 0) = 1
-        AND COALESCE(tp.FLG10, 0) = 1
-        AND m.SODTYPE = 51
-        AND m.MTRACN = 101
-        AND mt.FPRMS NOT IN (1)
-        AND NOT EXISTS (
-            SELECT 1
-            FROM STRING_SPLIT(@ExcluderiClienti, ',') excludedCustomer
-            WHERE LTRIM(RTRIM(excludedCustomer.value)) = customer.CODE
-        )
-        AND NOT EXISTS (
-            SELECT 1
-            FROM STRING_SPLIT(@ExcluderiPrefixe, ',') excludedPrefix
-            WHERE LTRIM(RTRIM(excludedPrefix.value)) <> ''
-                AND m.CODE LIKE LTRIM(RTRIM(excludedPrefix.value)) + '%'
-        );
+    IF @AziOverride IS NOT NULL
+        SET @Azi = @AziOverride;
+    ELSE
+        SELECT @Azi = MAX(CONVERT(DATE, f.TRNDATE))
+        FROM MTRTRN mt
+        INNER JOIN FINDOC f
+            ON f.COMPANY = mt.COMPANY AND f.FINDOC = mt.FINDOC AND f.SOSOURCE = mt.SOSOURCE
+        INNER JOIN TPRMS tp
+            ON tp.COMPANY = mt.COMPANY AND tp.SODTYPE = mt.SODTYPE AND tp.TPRMS = mt.TPRMS
+        INNER JOIN MTRL m
+            ON m.MTRL = mt.MTRL AND m.SODTYPE = mt.SODTYPE
+        INNER JOIN TRDR customer
+            ON customer.COMPANY = f.COMPANY AND customer.SODTYPE = 13 AND customer.TRDR = f.TRDR
+        WHERE mt.COMPANY = @Company
+            AND mt.SOSOURCE = 1351
+            AND f.ISCANCEL = 0
+            AND COALESCE(tp.FLG04, 0) = 1
+            AND COALESCE(tp.FLG10, 0) = 1
+            AND m.SODTYPE = 51
+            AND m.MTRACN = 101
+            AND mt.FPRMS NOT IN (1)
+            AND NOT EXISTS (
+                SELECT 1
+                FROM STRING_SPLIT(@ExcluderiClienti, ',') excludedCustomer
+                WHERE LTRIM(RTRIM(excludedCustomer.value)) = customer.CODE
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM STRING_SPLIT(@ExcluderiPrefixe, ',') excludedPrefix
+                WHERE LTRIM(RTRIM(excludedPrefix.value)) <> ''
+                    AND m.CODE LIKE LTRIM(RTRIM(excludedPrefix.value)) + '%'
+            );
 
     -- ---------------------------------------------------------------
-    -- 3. Liniile din fereastra de NRSAPT saptamani
+    -- 3. Liniile din fereastra de @NrZile zile calendaristice
     -- ---------------------------------------------------------------
     INSERT INTO @SalesLines (
         COMPANY, FINDOC, MTRTRN, LINENUM, TRNDATE, AZI, TRDR, TRDRCODE,
@@ -143,8 +150,8 @@ BEGIN
         AND m.SODTYPE = 51
         AND m.MTRACN = 101
         AND mt.FPRMS NOT IN (1)
-        AND DATEDIFF(WEEK, f.TRNDATE, @Azi) >= 0
-        AND DATEDIFF(WEEK, f.TRNDATE, @Azi) < @NrSaptamani
+        AND DATEDIFF(DAY, f.TRNDATE, @Azi) >= 0
+        AND DATEDIFF(DAY, f.TRNDATE, @Azi) < @NrZile
         AND NOT EXISTS (
             SELECT 1
             FROM STRING_SPLIT(@ExcluderiClienti, ',') excludedCustomer
