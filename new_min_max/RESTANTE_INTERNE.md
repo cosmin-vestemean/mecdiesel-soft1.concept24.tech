@@ -32,7 +32,7 @@ Data ultimei actualizări: 16.09.2026.
 
 | # | ID | Subiect | Autoritate | Ce lipsește | Dependențe / risc |
 | --- | --- | --- | --- | --- | --- |
-| 1 | N04a | Ferestre VZ în zile calendaristice (28/91/182/365) | S 4.2; august I1 ✅ / I12 ✅ | **Implementat local, neprobat.** Rămâne deploy AJS manual + RUNID 17 (cauza A) și RUNID 18 (cauza B) | Schimbă VZ, ABC, MIN/MAX pe tot portofoliul; calibrarea RUNID 16 încetează să fie reper direct |
+| 1 | N04a | Ferestre VZ în zile calendaristice (28/91/182/365) | S 4.2; august I1 ✅ / I12 ✅ | **Închis și probat live.** RUNID 17 (`FERESTRE_VZ='ZILE'`) și RUNID 18 (`FERESTRE_VZ='SAPT'`), ambele `AZI=2026-09-16`, aceeași populatie 716.240 rânduri/51.160 itemi între ele | Calibrarea RUNID 16 încetează să fie reper direct pentru RUNID ≥ 17 |
 | 1b | N04b | σ pe exact 52 de bucket-uri egale; `SAPT_VZ` pe săptămâni ISO | S 5.1 (52 bucket-uri) + S 4.6 (ISO) | Despărțirea grilei săptămânale în două: `WEEK_BUCKET` (7 zile rolling, pentru σ și lunile 4-4-5) și `ISO_WEEK` (pentru `SAPT_VZ`/`SAPT_8S`) | **Contaminat de punctul 8 din documentul beneficiarului**: atinge `SAPT_VZ`, exact mărimea despre care e întrebat. Regula nu se schimbă, dar baza de măsurare da. De făcut secvențial, nu simultan |
 | 1c | — | Simetria ferestrelor în `ClassifyGroup` | aceeași ca N04a | Grupele rămân pe ferestre săptămânale cât timp SKU-urile trec pe zile | Asimetrie temporară asumată: pe RUNID 18, `VZ` de grupă nu se mai reconciliază cu suma SKU-urilor. RUNID 17 nu e afectat (ambele pe săptămâni) |
 | 2 | P6b | Resolver longest-prefix pentru `LT_ZILE`/`FRECVENTA_ZILE`, cu normalizarea spațiilor | S 3.8 + tabelul de parametri din august („LT per prefix furnizor") | Mecanismul; `BRANCH > GLOBAL` e deja live | **Doar mecanismul.** Lista și valorile DEFAULT sunt N01/N02 → document beneficiar |
@@ -47,7 +47,13 @@ Data ultimei actualizări: 16.09.2026.
 > Nota de protocol (N04a): cele două cauze se separă cu `FERESTRE_VZ`, care **nu** este o replică a comportamentului vechi, ci un martor. RUNID 17 rulează cu `FERESTRE_VZ='SAPT'`: populația sursei e deja la 365 de zile, dar predicatul rămâne pe săptămâni, deci izolează **cauza A** — plafoanele p95, `MIN_DOC` și articolele intrate în univers, care se propagă mai departe în `SIGMA_WK`/`SAPT_VZ`/XYZ. RUNID 18 comută pe `'ZILE'` și izolează **cauza B**, predicatul. Așteptarea e ca 17 să fie aproape plat și 18 să miște portofoliul; inversul înseamnă că ceva nu s-a aplicat.
 
 > Nota de perimetru (N04a): plafoanele de winsorizare, `#Items` și `MIN_DOC` se calculează deliberat pe întreaga populație de 365 de zile, nu pe cele 52 de bucket-uri. Este lectura literală a lui S 4.5 — o singură populație winsorizată, după excluderi și înaintea ferestrelor. Consecința asumată: „seria săptămânală nu se schimbă" este adevărat pentru **grila** de bucket-uri, nu pentru **populația** care o alimentează; σ și XYZ se pot mișca indirect, prin plafoane. De aceea cauza A se măsoară separat.
-
+> **Rezultat măsurat, RUNID 16 → 17/18, cauzele separate** (16.09.2026). Validator: RUNID 18 (`SAPT`) 13/13 PASS; RUNID 17 (`ZILE`) 12/13 — `ferestre_zile` semnalează 8 abateri din 665.080 perechi (0,0012%), verificate individual: diferențe de 1–4 bucăți, 7 din 8 cu valoare live mai mare decât cea înghețată, semnătura documentelor introduse în ERP după `Classify` cu dată în interiorul ferestrei, fără să mute `MAX(TRNDATE)`. Nu e regresie, e exact avertismentul din `label`-ul invariantei.
+>
+> **Cauza A** (RUNID 16 → 18, populație + winsor; 18 și 17 au aceeași populație — 716.240 rânduri, 51.160 itemi — deci comparația e izolată curat): `AVG` +0,49%, `ENG_MIN` +0,27%, `ENG_MAX` +0,33%, `BUY_QTY` +0,57%. Aproape plat, cum era de așteptat.
+>
+> **Cauza B** (RUNID 18 → 17, predicatul zile, populație identică): `AVG` +4,38% (predicție ~5,4%, diferența vine din cererea reală neuniformă), `ENG_MIN` +2,07%, `ENG_MAX` +2,79%, `BUY_QTY` +5,21%. `FLAG_TXT` migrează net spre `UP` (351 intră, 70 ies) și din `DOWN` (404 ies, 120 intră), pe cele 31.907 rânduri cu `ERP_MAX > 0`. Direcția prezisă în plan se confirmă.
+>
+> Calibrarea C se mișcă nesemnificativ pe banda largă: 43,4% (RUNID 16) → 43,4% (18) → 43,5% (17) — benzile de acceptanță sunt prea largi ca să arate o mișcare de ~4-5% pe `AVG`; direcția se vede în `FLAG_TXT`, nu în procentul agregat.
 > Nota de unitate (P11): `TREND_PCT` rămâne **fracție** pe ambele baze, ca până acum; pragurile `+0,10 / −0,10 / −0,30` sunt citite în aceeași unitate. S 7 scrie formula înmulțită cu 100, dar alegerea unității nu este marcată nicăieri ca decizie, deci nu se schimbă tacit odată cu baza. `VZ_13S = 0 ⇒ DECLINE` rezultă din formulă (−1), nu dintr-o ramură separată.
 
 ## Constrângeri care se aplică tuturor

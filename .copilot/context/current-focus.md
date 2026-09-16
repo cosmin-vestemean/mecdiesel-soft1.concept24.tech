@@ -1,10 +1,10 @@
 # Current Focus
 
 ## Last Updated
-- 16.09.2026 (N04a implementat local si validat static; asteapta deploy AJS manual si RUNID 17/18)
+- 16.09.2026 (N04a inchis si probat live pe RUNID 17/18; RUNID 16 ramane referinta pre-N04a)
 
 ## Current Goal
-- **N04a este implementat, dar NEPROBAT**: ferestrele VZ trec de la bucket-uri de saptamana la zile calendaristice (28/91/182/365). 12/12 blocuri `IN SYNC`, `node --check` curat pe AJS, 187 teste focalizate trec. Urmeaza deploy manual si doua rulari de proba.
+- **N04a este închis**: ferestrele VZ trec de la bucket-uri de săptămână la zile calendaristice (28/91/182/365). Deployat manual, probat pe două rulări care separă cauzele.
 - P1 branch-scope este implementat, deployat și validat: VZ-urile se netează independent pe toată fereastra per `BRANCH × TRDR × MTRL`, iar seria săptămânală rămâne separată.
 - P2 este decis, implementat, deployat și **validat live pe RUNID 12**: HQ este scope propriu al cererii și compensează același `TRDR × MTRL` între filiale înainte de clip-ul la zero. Extensia P6 longest-prefix rămâne blocată până la lista N5.
 
@@ -70,7 +70,12 @@
 - P6 branch-only este închis; extensia longest-prefix așteaptă lista N5. Plancherul `σ_WK=1,3` rămâne fără confirmare documentară.
 
 ## Next Step
-- **Deploy AJS manual**, apoi doua rulari de proba care separa cauzele. NU se interpreteaza global.
-  - **RUNID 17** cu `FERESTRE_VZ='SAPT'`: populatia sursei e deja la 365 de zile, dar predicatul ramane pe saptamani. Izoleaza **cauza A** \u2014 plafoanele p95, `MIN_DOC`, articolele intrate in univers, si prin ele `SIGMA_WK`/`SAPT_VZ`/XYZ. Asteptare: aproape plat. `VZ_*` nu se poate misca prin fereastra, fiindca `IN_W4` foloseste `@NrSaptamani`, deci zilele suplimentare cad in `WEEK_INDEX = 52` si sunt excluse.
-  - **RUNID 18** cu `FERESTRE_VZ='ZILE'`: izoleaza **cauza B**, predicatul. Asteptare falsificabila, pentru `AZI` miercuri si cerere uniforma: `AVG` creste cu ~5,4% (termenul 4S castiga 3/25 = +12% cu pondere 0,30), deci `MIN`/`MAX`/`BUY` cresc pe tot portofoliul si `FLAG_RATIO` se muta spre `UP`. **Daca 18 iese plat, predicatul nu s-a aplicat** \u2014 nu inseamna ca schimbarea e inutila.\n  - De comparat cu RUNID 16 numai pe `AZI` identic. Daca rularea aluneca peste 2026-09-16, apare drift de fereastra si masuratoarea isi pierde sensul, ca la 11 -> 12.\n- Invarianta noua `ferestre_zile` re-deriva `VZ_4S` din sursa vie, cu ancora inghetata si plafoanele winsorizarii luate inghetate din `CCCMINMAXWINSOR`. Daca ancora vie a avansat fata de rulare, sare comparatia si o declara, in loc sa raporteze esec fals. Acopera numai filialele, nu HQ.\n- Invarianta `trend` **esueaza intentionat pe RUNID <= 15**, iar `ferestre_zile` va esua pe RUNID <= 16, care nu au cheile in snapshot. Nu sunt regresii; nu le \u201erepara\u201d retroactiv.\n- Ramase din N04, in ordine: **N04b** (grila saptamanala despartita in `WEEK_BUCKET` rolling pentru sigma si `ISO_WEEK` pentru `SAPT_VZ`) \u2014 contaminat de punctul 8 din documentul beneficiarului, deci secvential, nu simultan; si **simetria ferestrelor de grupa** in `ClassifyGroup`, care ramane pe saptamani o runda, cu asimetrie asumata pe RUNID 18.\n- Restul ramane blocat pe decizii business: P4/N9-N10, P10, P13 si lista N5 pentru longest-prefix. Nu implementa longest-prefix inainte de lista N5 si nu modifica atribuirea `CLIENT` implicita.
+- **N04a inchis, probat live pe RUNID 17/18 (16.09.2026).** RUNID 17 = `FERESTRE_VZ='ZILE'`, RUNID 18 = `FERESTRE_VZ='SAPT'` (numerotare inversata fata de plan, dar decompunerea ramane valida). Ambele au aceeasi populatie (716.240 randuri, 51.160 itemi), deci 18 -> 17 izoleaza curat cauza B.
+  - **Cauza A** (RUNID 16 -> 18, populatie + winsor): `AVG` +0,49%, `ENG_MIN` +0,27%, `ENG_MAX` +0,33%, `BUY_QTY` +0,57%. Aproape plat, cum era asteptat.
+  - **Cauza B** (RUNID 18 -> 17, predicatul zile): `AVG` +4,38% (predictie ~5,4%), `ENG_MIN` +2,07%, `ENG_MAX` +2,79%, `BUY_QTY` +5,21%. `FLAG_TXT` migreaza net spre `UP` (+281) si dinspre `DOWN` (-284) pe cele 31.907 randuri cu `ERP_MAX > 0`. Directia prezisa in plan se confirma.
+  - Validator: RUNID 18 13/13 PASS; RUNID 17 12/13, `ferestre_zile` semnaleaza 8 abateri din 665.080 perechi (0,0012%) — verificate individual, sunt documente introduse in ERP dupa Classify cu data in interiorul ferestrei, fara sa mute `MAX(TRNDATE)`. Nu e regresie.
+  - Comparatia cu RUNID 16 ramane valida doar pe `AZI=2026-09-16` identic pe toate trei.
+- Invarianta `trend` esueaza intentionat pe RUNID <= 15, iar `ferestre_zile` esueaza intentionat pe RUNID <= 16, care nu au cheile in snapshot. Nu sunt regresii; nu le "repara" retroactiv.
+- Ramase din N04, in ordine: **N04b** (grila saptamanala despartita in `WEEK_BUCKET` rolling pentru sigma si `ISO_WEEK` pentru `SAPT_VZ`) — contaminat de punctul 8 din documentul beneficiarului, deci secvential, nu simultan; si **simetria ferestrelor de grupa** in `ClassifyGroup`, care ramane pe saptamani, cu asimetrie asumata pe RUNID 17 (populatia in zile, agregarea de grupa inca pe saptamani).
+- Restul ramane blocat pe decizii business: P4/N9-N10, P10, P13 si lista N5 pentru longest-prefix. Nu implementa longest-prefix inainte de lista N5 si nu modifica atribuirea `CLIENT` implicita.
 
