@@ -368,8 +368,8 @@ BEGIN
         ON #BranchWeekly (BRANCH, MTRL, WEEK_INDEX);
 
     -- ---------------------------------------------------------------
-    -- 7. P1: netting independent pe fiecare fereastra, per client.
-    --    HQ ramane suma filialelor netate, pana la decizia separata P2.
+    -- 7. Netting independent pe fiecare fereastra, per client si scope.
+    --    HQ foloseste cererea intregii retele inainte de clip-ul la zero.
     -- ---------------------------------------------------------------
     SELECT
         BRANCH, TRDR, MTRL, MAX(MTRSUP) AS MTRSUP, MAX(CODE) AS CODE,
@@ -394,6 +394,39 @@ BEGIN
     WHERE WEEK_INDEX >= 0 AND WEEK_INDEX < @NrSaptamani
     GROUP BY BRANCH, TRDR, MTRL;
 
+    IF @HqDinAgregatCompanie = 1
+    BEGIN
+        INSERT INTO #ClientWindowTotals (
+            BRANCH, TRDR, MTRL, MTRSUP, CODE, VZ_4S, VZ_13S, VZ_26S, VZ_52S
+        )
+        SELECT
+            hq.BRANCH, cw.TRDR, cw.MTRL, MAX(cw.MTRSUP), MAX(cw.CODE),
+            CONVERT(DECIMAL(28, 8), CASE
+                WHEN SUM(CASE WHEN cw.WEEK_INDEX < 4 THEN cw.RAW_NET_QTY ELSE 0 END) < 0 THEN 0
+                ELSE SUM(CASE WHEN cw.WEEK_INDEX < 4 THEN cw.RAW_NET_QTY ELSE 0 END)
+            END),
+            CONVERT(DECIMAL(28, 8), CASE
+                WHEN SUM(CASE WHEN cw.WEEK_INDEX < 13 THEN cw.RAW_NET_QTY ELSE 0 END) < 0 THEN 0
+                ELSE SUM(CASE WHEN cw.WEEK_INDEX < 13 THEN cw.RAW_NET_QTY ELSE 0 END)
+            END),
+            CONVERT(DECIMAL(28, 8), CASE
+                WHEN SUM(CASE WHEN cw.WEEK_INDEX < 26 THEN cw.RAW_NET_QTY ELSE 0 END) < 0 THEN 0
+                ELSE SUM(CASE WHEN cw.WEEK_INDEX < 26 THEN cw.RAW_NET_QTY ELSE 0 END)
+            END),
+            CONVERT(DECIMAL(28, 8), CASE
+                WHEN SUM(cw.RAW_NET_QTY) < 0 THEN 0
+                ELSE SUM(cw.RAW_NET_QTY)
+            END)
+        FROM #ClientWeekly cw
+        INNER JOIN #ActiveBranches sourceBranch
+            ON sourceBranch.BRANCH = cw.BRANCH AND sourceBranch.ESTE_HQ = 0
+        CROSS JOIN #ActiveBranches hq
+        WHERE hq.ESTE_HQ = 1
+          AND cw.WEEK_INDEX >= 0
+          AND cw.WEEK_INDEX < @NrSaptamani
+        GROUP BY hq.BRANCH, cw.TRDR, cw.MTRL;
+    END;
+
     SELECT
         BRANCH, MTRL, MAX(MTRSUP) AS MTRSUP, MAX(CODE) AS CODE,
         CONVERT(DECIMAL(28, 8), SUM(VZ_4S)) AS VZ_4S,
@@ -403,25 +436,6 @@ BEGIN
     INTO #BranchWindowTotals
     FROM #ClientWindowTotals
     GROUP BY BRANCH, MTRL;
-
-    IF @HqDinAgregatCompanie = 1
-    BEGIN
-        INSERT INTO #BranchWindowTotals (
-            BRANCH, MTRL, MTRSUP, CODE, VZ_4S, VZ_13S, VZ_26S, VZ_52S
-        )
-        SELECT
-            hq.BRANCH, totals.MTRL, MAX(totals.MTRSUP), MAX(totals.CODE),
-            CONVERT(DECIMAL(28, 8), SUM(totals.VZ_4S)),
-            CONVERT(DECIMAL(28, 8), SUM(totals.VZ_13S)),
-            CONVERT(DECIMAL(28, 8), SUM(totals.VZ_26S)),
-            CONVERT(DECIMAL(28, 8), SUM(totals.VZ_52S))
-        FROM #BranchWindowTotals totals
-        INNER JOIN #ActiveBranches sourceBranch
-            ON sourceBranch.BRANCH = totals.BRANCH AND sourceBranch.ESTE_HQ = 0
-        CROSS JOIN #ActiveBranches hq
-        WHERE hq.ESTE_HQ = 1
-        GROUP BY hq.BRANCH, totals.MTRL;
-    END;
 
     CREATE CLUSTERED INDEX IX_BranchWindowTotals_BranchMtrl
         ON #BranchWindowTotals (BRANCH, MTRL);

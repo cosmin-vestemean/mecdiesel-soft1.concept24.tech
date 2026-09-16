@@ -135,6 +135,27 @@ describe('MIN/MAX P1 window netting contract', () => {
     assert.match(classify, /COALESCE\(weeklyStats\.VAL_52S, 0\)/)
     assert.match(classify, /POWER\(COALESCE\(CONVERT\(FLOAT, weeklyStats\.WEEK_QTY_SUM\), 0\.0\), 2\)/)
     assert.match(classify, /MAX_LUNA_QTY > @ForceZLunaDominanta \* ac\.WEEK_QTY_SUM/)
-    assert.match(classify, /FROM #BranchWindowTotals totals[\s\S]*?sourceBranch\.ESTE_HQ = 0/)
+  })
+
+  it('nets HQ independently across branches for the same ERP client', () => {
+    const clientLines = [
+      { branch: 2100, quantity: 10 },
+      { branch: 2200, quantity: -6 }
+    ]
+    const branchDemand = clientLines.reduce(
+      (total, { quantity }) => total + Math.max(0, quantity),
+      0
+    )
+    const hqDemand = Math.max(
+      0,
+      clientLines.reduce((total, { quantity }) => total + quantity, 0)
+    )
+
+    assert.strictEqual(branchDemand, 10)
+    assert.strictEqual(hqDemand, 4)
+
+    const classify = sqlSource('01_classify.sql')
+    assert.match(classify, /FROM #ClientWeekly cw[\s\S]*?sourceBranch\.ESTE_HQ = 0[\s\S]*?GROUP BY hq\.BRANCH, cw\.TRDR, cw\.MTRL/)
+    assert.doesNotMatch(classify, /FROM #BranchWindowTotals totals[\s\S]*?sourceBranch\.ESTE_HQ = 0/)
   })
 })

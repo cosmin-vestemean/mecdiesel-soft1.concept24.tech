@@ -72,7 +72,7 @@ Ordinea respecta dependentele: parametri, cerere, clasificare, formule.
 - [ ] **Valorile COV/marimi din C** livrate ca script de incarcare separat, nu ca modificare de seed; se aplica doar in Faza 3 *(model: Claude Haiku)*
 - [ ] **Resolver longest-prefix + LT efectiv** conform S 5.3 in `Classify`; normalizare spatii (`GEW `) *(model: Claude Sonnet 4.6)*
 - [ ] **Univers per scope prin uniuni** (stoc, ERP limits, manual, vanzari) + fallback HQ conditionat de sursa lipsa; densitatea ramane optiune de export. Plafonul de 60 s `X.RUNSQL` impune spargerea `Classify` in batch-uri; uniunile reduc volumul *(model: Claude Sonnet 4.6)*
-- [ ] **Netting per (SKU, scope, client-cod, fereastra)**, HQ ca scope propriu; seria saptamanala pentru sigma pastrata separat *(model: Claude Sonnet 4.6)*
+- [x] **Netting per (SKU, scope, client `TRDR`, fereastra)**, HQ ca scope propriu; seria saptamanala pentru sigma pastrata separat. Implementat local 16.09.2026; deploy si validare SQL live in asteptare *(model: Claude Sonnet 4.6)*
 - [ ] **ABC: populatie STANDARD, cumul inclusiv, tie-break CODE** *(model: Claude Sonnet 4.6)*
 - [ ] **Compute**: `z(ABC)` in safety, `SIGMA_MIN=0` respectat, exceptie CZ pe clasa, garda OD pe BUY, `STOC_NEG_CA_ZERO`, `FLAGS_MODE`, TREND parametrizat cu override NOU/OD, MIN_DOC per scope, SAPT_FARA `round(zile/7)` *(model: Claude Sonnet 4.6)*
 - [ ] **Indicatori lipsa**: ALTREF (`MTRL.CODE1`), STOC_TOTAL_ALTREF per scope, COST_MED_RON/STOC_VAL_EUR/BUY_VALUE_EUR cu lantul de fallback S 9, `EUR_RATE`, `MARGIN_EST` *(model: Claude Sonnet 4.6)*
