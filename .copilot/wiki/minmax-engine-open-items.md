@@ -13,9 +13,6 @@
   live pe RUNID 9 prin `CCCMINMAXPARAMOVERRIDE`, snapshot și rezoluția `BRANCH > GLOBAL`. Rămâne blocată numai extensia
   `BRANCH+PREFIX > BRANCH > PREFIX > GLOBAL`: lipsesc lista canonică N5, normalizarea și valorile
   DEFAULT (fallback-ul global este încă 30/14). `CCCMINMAXDET` păstrează valorile efective per rând.
-- **D2a:** cele 25 linii `ORD_FURN` de pe depozitul 8002 „BONURI VALORICE" (`FPRMS 4500`, factură
-  fără stoc) nu au `CCCBRANCH`. Azi incluse în rândul HQ, excluse de pe filiale. De decis dacă se
-  exclud complet.
 - **Filialele închise** (2300/2400/2600/2900) — **ÎNCHIS 08.09.2026, confirmat de beneficiar:**
   filialele inactive și cele cu depozite inactive **nu prezintă interes**. Cele 7,25 mil RON (5,7%
   valoare 52S) atribuite lor nu sunt o pierdere de corectat, ci o graniță de perimetru asumată;

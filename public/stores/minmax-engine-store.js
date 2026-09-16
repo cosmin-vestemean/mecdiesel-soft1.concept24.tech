@@ -42,7 +42,7 @@ const TRI_STATE_FILTER_KEYS = [
   'warnStocMort', 'warnGrupaMica'
 ];
 const INTERVAL_FILTER_KEYS = [
-  'engMin', 'engMax', 'buyQty', 'stocQty', 'ordFurn', 'acopCur',
+  'engMin', 'engMax', 'buyQty', 'stocFizicQty', 'transferInQty', 'stocQty', 'ordFurn', 'acopCur',
   'flagRatio', 'cv', 'avg', 'vz52s', 'vz26s', 'val52s'
 ];
 
@@ -74,8 +74,10 @@ function getDefaultFilters () {
     mtrl: [],
     ordFurn: {},
     podeaAplicata: null,
+    stocFizicQty: {},
     stocQty: {},
     statusTrend: [],
+    transferInQty: {},
     val52s: {},
     vz26s: { min: MIN_POSITIVE },
     vz52s: {},

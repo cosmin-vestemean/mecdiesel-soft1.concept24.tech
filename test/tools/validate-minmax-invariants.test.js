@@ -75,6 +75,21 @@ describe('MIN/MAX SQL snapshot contract', () => {
     assert.match(startRun, /'CALIBRARE_MOD', @CalibrareMod/)
   })
 
+  it('limits stock and pending supplier orders to active warehouses in active branches', () => {
+    const compute = sqlSource('03_compute.sql')
+
+    assert.match(compute, /WHERE w\.COMPANY = @Company\s+AND w\.ISACTIVE = 1\s+AND w\.CCCBRANCH IS NOT NULL/)
+    assert.match(compute, /INSERT INTO #PendingSup[\s\S]*FROM #PendingSrc ps\s+INNER JOIN #RunBranches rb\s+ON rb\.BRANCH = ps\.BRANCH AND rb\.ESTE_HQ = 0\s+CROSS JOIN/)
+  })
+
+  it('adds open transfers to destination stock before aggregating HQ stock', () => {
+    const compute = sqlSource('03_compute.sql')
+
+    assert.match(compute, /md\.BRANCHSEC\) AS BRANCH[\s\S]*INTO #InTransit[\s\S]*f\.SOSOURCE = 1151[\s\S]*f\.FPRMS = 3153[\s\S]*f\.FULLYTRANSF = 0[\s\S]*md\.WHOUSESEC = 9999/)
+    assert.match(compute, /FROM #StockBranch sb[\s\S]*UNION ALL[\s\S]*FROM #InTransit transit/)
+    assert.match(compute, /INSERT INTO #Stock[\s\S]*FROM #Stock branchStock\s+CROSS JOIN/)
+  })
+
   it('implements P6 branch-only snapshot and resolution without enabling prefixes', () => {
     const params = sqlSource('00_params.sql')
     const startRun = sqlSource('00e_start_run.sql')

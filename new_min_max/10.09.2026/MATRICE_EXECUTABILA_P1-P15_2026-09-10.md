@@ -102,7 +102,7 @@ Concluzie de lucru: **`1.3` este al nostru, nu al beneficiarului.** Nu se mai in
 
 **Toate blocajele pentru primul bloc de implementare sunt rezolvate**: retragere Prepare, P14 CLI, P8, snapshot unic, P3 și P7. Pentru pașii structurali și condiționali rămân întrebări explicite:
 
-1. **P4 / N9-N10**: fallback-ul universului HQ se aplică doar dacă sursa HQ lipsește complet sau și per SKU absent? Care sunt sursele exacte pentru stocul HQ/companie și `ORD_FURN` pe filială?
+1. **P4 / N9-N10**: fallback-ul universului HQ se aplică doar dacă sursa HQ lipsește complet sau și per SKU absent? **Decis 16.09.2026 pentru D1/D2:** HQ este agregatul virtual distinct de București și însumează stocul/comenzile exclusiv din filialele active, prin depozite active mapate; depozitele fără filială se exclud complet.
 2. **P5**: OD primește doar prag de prezentare sau și aprovizionare (`BUY`) după podea?
 3. **P6 / N5**: lista canonică de prefixe, normalizarea și valorile DEFAULT (LT 14 sau 30); mecanismul per filială și selectorul `MTRSUP` sunt deja decise.
 4. **P10**: se adoptă formula literală S fără clamp pe stoc negativ sau rămâne clamp-ul curent?

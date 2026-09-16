@@ -134,13 +134,14 @@ BEGIN
     INTO #WhouseBranch
     FROM WHOUSE w
     WHERE w.COMPANY = @Company
+        AND w.ISACTIVE = 1
         AND w.CCCBRANCH IS NOT NULL;
 
     CREATE CLUSTERED INDEX IX_WhouseBranch_Whouse
         ON #WhouseBranch (WHOUSE);
 
     -- ---------------------------------------------------------------
-    -- 4. #Stock — STOC_QTY per (BRANCH, MTRL); HQ = suma nationala (D1)
+    -- 4. #Stock — STOC_QTY per (BRANCH, MTRL); HQ = suma filialelor active
     -- ---------------------------------------------------------------
     DECLARE @FiscPrd INT = YEAR(GETDATE());
 
@@ -157,25 +158,61 @@ BEGIN
         AND (@Mtrl IS NULL OR fd.MTRL = @Mtrl)
     GROUP BY wb.BRANCH, fd.MTRL;
 
-    SELECT sb.BRANCH, sb.MTRL, sb.STOC_QTY
-    INTO #Stock
-    FROM #StockBranch sb
+    SELECT
+        CONVERT(SMALLINT, md.BRANCHSEC) AS BRANCH,
+        ml.MTRL,
+        CONVERT(DECIMAL(28, 8), SUM(COALESCE(ml.QTY1, 0))) AS TRANSFER_IN_QTY
+    INTO #InTransit
+    FROM FINDOC f
+    INNER JOIN MTRDOC md
+        ON md.COMPANY = f.COMPANY AND md.FINDOC = f.FINDOC
+    INNER JOIN MTRLINES ml
+        ON ml.COMPANY = f.COMPANY AND ml.SOSOURCE = f.SOSOURCE AND ml.FINDOC = f.FINDOC
     INNER JOIN #RunBranches rb
-        ON rb.BRANCH = sb.BRANCH AND rb.ESTE_HQ = 0;
+        ON rb.BRANCH = md.BRANCHSEC AND rb.ESTE_HQ = 0
+    WHERE f.COMPANY = @Company
+        AND f.SOSOURCE = 1151
+        AND f.FPRMS = 3153
+        AND f.FULLYTRANSF = 0
+        AND f.ISCANCEL = 0
+        AND md.WHOUSESEC = 9999
+        AND f.FISCPRD = @FiscPrd
+        AND (@Mtrl IS NULL OR ml.MTRL = @Mtrl)
+    GROUP BY md.BRANCHSEC, ml.MTRL;
 
-    INSERT INTO #Stock (BRANCH, MTRL, STOC_QTY)
-    SELECT hq.BRANCH, sb.MTRL, CONVERT(DECIMAL(28, 8), SUM(sb.STOC_QTY))
-    FROM #StockBranch sb
-    INNER JOIN #RunBranches rb
-        ON rb.BRANCH = sb.BRANCH AND rb.ESTE_HQ = 0
+    SELECT stockComponent.BRANCH, stockComponent.MTRL,
+        CONVERT(DECIMAL(28, 8), SUM(stockComponent.STOC_FIZIC_QTY)) AS STOC_FIZIC_QTY,
+        CONVERT(DECIMAL(28, 8), SUM(stockComponent.TRANSFER_IN_QTY)) AS TRANSFER_IN_QTY,
+        CONVERT(DECIMAL(28, 8), SUM(stockComponent.STOC_FIZIC_QTY + stockComponent.TRANSFER_IN_QTY)) AS STOC_QTY
+    INTO #Stock
+    FROM (
+        SELECT sb.BRANCH, sb.MTRL, sb.STOC_QTY AS STOC_FIZIC_QTY,
+            CONVERT(DECIMAL(28, 8), 0) AS TRANSFER_IN_QTY
+        FROM #StockBranch sb
+        INNER JOIN #RunBranches rb
+            ON rb.BRANCH = sb.BRANCH AND rb.ESTE_HQ = 0
+
+        UNION ALL
+
+        SELECT transit.BRANCH, transit.MTRL, CONVERT(DECIMAL(28, 8), 0), transit.TRANSFER_IN_QTY
+        FROM #InTransit transit
+    ) stockComponent
+    GROUP BY stockComponent.BRANCH, stockComponent.MTRL;
+
+    INSERT INTO #Stock (BRANCH, MTRL, STOC_FIZIC_QTY, TRANSFER_IN_QTY, STOC_QTY)
+    SELECT hq.BRANCH, branchStock.MTRL,
+        CONVERT(DECIMAL(28, 8), SUM(branchStock.STOC_FIZIC_QTY)),
+        CONVERT(DECIMAL(28, 8), SUM(branchStock.TRANSFER_IN_QTY)),
+        CONVERT(DECIMAL(28, 8), SUM(branchStock.STOC_QTY))
+    FROM #Stock branchStock
     CROSS JOIN (SELECT BRANCH FROM #RunBranches WHERE ESTE_HQ = 1) hq
-    GROUP BY hq.BRANCH, sb.MTRL;
+    GROUP BY hq.BRANCH, branchStock.MTRL;
 
     CREATE CLUSTERED INDEX IX_Stock_BranchMtrl
         ON #Stock (BRANCH, MTRL);
 
     -- ---------------------------------------------------------------
-    -- 5. #PendingSup — ORD_FURN per (BRANCH, MTRL); HQ = total companie (D2)
+    -- 5. #PendingSup — ORD_FURN per (BRANCH, MTRL); HQ = suma filialelor active
     --    Expresie directa in loc de FNSOGETLINEPEND: UDF-ul scalar forteaza plan serial.
     -- ---------------------------------------------------------------
     SELECT
@@ -206,10 +243,12 @@ BEGIN
     INNER JOIN #RunBranches rb
         ON rb.BRANCH = ps.BRANCH AND rb.ESTE_HQ = 0;
 
-    -- Totalul de companie include si liniile fara CCCBRANCH (depozit 8002) — D2a deschis.
+    -- HQ agrega numai comenzile filialelor active din rulare.
     INSERT INTO #PendingSup (BRANCH, MTRL, ORD_FURN)
     SELECT hq.BRANCH, ps.MTRL, CONVERT(DECIMAL(28, 8), SUM(ps.ORD_FURN))
     FROM #PendingSrc ps
+    INNER JOIN #RunBranches rb
+        ON rb.BRANCH = ps.BRANCH AND rb.ESTE_HQ = 0
     CROSS JOIN (SELECT BRANCH FROM #RunBranches WHERE ESTE_HQ = 1) hq
     GROUP BY hq.BRANCH, ps.MTRL;
 
@@ -282,6 +321,8 @@ BEGIN
             s.RUNID, s.COMPANY, s.AZI, s.BRANCH, s.ESTE_HQ, s.ESTE_PODEA, s.MTRL,
             s.LIFECYCLE, s.CLASA, s.COV_TGT, s.SL, s.SSF, s.LT_ZILE, s.FRECVENTA_ZILE,
             s.SIGMA_WK, s.MIN_DOC, s.VZ_13S, s.VZ_26S, s.VZ_52S, s.[AVG], s.ad,
+            CONVERT(DECIMAL(28, 8), COALESCE(st.STOC_FIZIC_QTY, 0)) AS STOC_FIZIC_QTY,
+            CONVERT(DECIMAL(28, 8), COALESCE(st.TRANSFER_IN_QTY, 0)) AS TRANSFER_IN_QTY,
             CONVERT(DECIMAL(28, 8), COALESCE(st.STOC_QTY, 0)) AS STOC_QTY,
             CONVERT(DECIMAL(28, 8), COALESCE(pd.ORD_FURN, 0)) AS ORD_FURN,
             CONVERT(DECIMAL(28, 8), COALESCE(NULLIF(el.N_PACK, 0), 1)) AS N_PACK,
@@ -369,7 +410,7 @@ BEGIN
     SELECT
         s6.RUNID, s6.COMPANY, s6.AZI, s6.BRANCH, s6.ESTE_HQ, s6.ESTE_PODEA, s6.MTRL,
         s6.LIFECYCLE, s6.VZ_13S, s6.VZ_26S, s6.VZ_52S, s6.[AVG],
-        s6.STOC_QTY, s6.ORD_FURN, s6.N_PACK,
+        s6.STOC_FIZIC_QTY, s6.TRANSFER_IN_QTY, s6.STOC_QTY, s6.ORD_FURN, s6.N_PACK,
         s6.ERP_MIN, s6.ERP_MAX, s6.ERP_MIN_AUTO, s6.ERP_MAX_AUTO,
         s6.LAST_RECEIPT, s6.ARE_POZITIE_ERP,
         s6.FLAG_LICHIDARE, s6.FLAG_BLOCAT, s6.FLAG_EXCLUS,
@@ -519,7 +560,9 @@ BEGIN
 
         BEGIN TRY
             UPDATE d
-            SET d.STOC_QTY = c.STOC_QTY,
+            SET d.STOC_FIZIC_QTY = c.STOC_FIZIC_QTY,
+                d.TRANSFER_IN_QTY = c.TRANSFER_IN_QTY,
+                d.STOC_QTY = c.STOC_QTY,
                 d.ORD_FURN = c.ORD_FURN,
                 d.N_PACK = c.N_PACK,
                 d.ERP_MIN = c.ERP_MIN,
@@ -647,7 +690,7 @@ BEGIN
     SELECT
         COMPANY, AZI, BRANCH, ESTE_HQ, ESTE_PODEA, MTRL, LIFECYCLE,
         VZ_13S, VZ_26S, VZ_52S, [AVG],
-        STOC_QTY, ORD_FURN, N_PACK,
+        STOC_FIZIC_QTY, TRANSFER_IN_QTY, STOC_QTY, ORD_FURN, N_PACK,
         ERP_MIN, ERP_MAX, ERP_MIN_AUTO, ERP_MAX_AUTO, LAST_RECEIPT, ARE_POZITIE_ERP,
         FLAG_LICHIDARE, FLAG_BLOCAT, FLAG_EXCLUS,
         SAFETY, LT_STOCK, SLTS, BUF, CYCLE,

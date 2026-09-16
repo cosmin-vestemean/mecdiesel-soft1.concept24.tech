@@ -187,11 +187,19 @@ cele 50.481 de HQ care merg în `MTRL`.
 
 ## Sursele D1-D3 (Compute)
 
-- **`STOC_QTY`** = `MTRFINDATA.QTY1`, identic cu soldul `MTRBALSHEET` la 8 zecimale.
+- **`STOC_FIZIC_QTY`** = `MTRFINDATA.QTY1` din depozitele active mapate la filialele active.
+- **`TRANSFER_IN_QTY`** = cantitatea documentelor de transfer `3153` nerecepționate
+  (`SOSOURCE=1151`, `FULLYTRANSF=0`, `WHOUSESEC=9999`), atribuită destinației prin
+  `MTRDOC.BRANCHSEC`. Nu se folosește soldul brut al depozitului 9999, deoarece nu păstrează sigur
+  destinația și poate conține reziduuri.
+- **`STOC_QTY`** = `STOC_FIZIC_QTY + TRANSFER_IN_QTY`. HQ însumează stocurile efective ale
+  filialelor active; nu adaugă depozitul 9999 încă o dată.
 - **`ORD_FURN`** = `MTRLINES`, `SOSOURCE=1251`, `PENDING=1`, `RESTCATEG=1`, document neanulat,
   cantitate `QTY1-QTY1COV-QTY1CANC`, filială din `WHOUSE.CCCBRANCH`. Coincide cu
-  `FNSOGETLINEPEND` pe toate liniile verificate. 25 linii pe depozitul 8002 „BONURI VALORICE" nu au
-  `CCCBRANCH` — incluse azi doar în rândul HQ, excluse de pe filiale (deschis: de exclus complet?).
+  `FNSOGETLINEPEND` pe toate liniile verificate. Decis 16.09.2026: atât stocul, cât și comenzile
+  HQ însumează exclusiv filialele active prin depozite active mapate cu `CCCBRANCH`. Depozitele fără
+  filială, inclusiv 8002 „BONURI VALORICE", sunt excluse complet. HQ este agregatul virtual al
+  rețelei; București rămâne filiala fizică de vânzări și depozitul central.
 - **`LAST_RECEIPT`** = `MAX(MTRTRN.TRNDATE)` per companie/SKU, `SOSOURCE=1251`, `TPRMS.FLG01=1`;
   lipsă rămâne `NULL`, la fel `DISC_FLAG`.
 - Stock per warehouse: `MTRBALSHEET` (`FISCPRD`, `PERIOD`, `IMPQTY1-EXPQTY1`); `MTRSTATS`/

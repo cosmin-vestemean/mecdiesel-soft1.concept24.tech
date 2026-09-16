@@ -56,7 +56,8 @@ describe('minmax-explain-drawer — formula with substituted values (Anexa §B11
     BRANCH: 1000, MTRL: 123, CODE: 'ABC123', MTRL_NAME: 'Test',
     LIFECYCLE: 'STANDARD', CLASA: 'AX', ABC: 'A', XYZ: 'X', MARIME: 'MIC',
     SIGMA_WK: 1.5, SSF: 1.28, LT_ZILE: 14, SL: 95, ad: 2, AVG: 4,
-    COV_TGT: 2.75, FRECVENTA_ZILE: 7, N_PACK: 1, STOC_QTY: 3, ORD_FURN: 0,
+    COV_TGT: 2.75, FRECVENTA_ZILE: 7, N_PACK: 1,
+    STOC_FIZIC_QTY: 2, TRANSFER_IN_QTY: 1, STOC_QTY: 3, ORD_FURN: 0,
     ESTE_HQ: 0, VZ_26S: 50, VZ_52S: 100,
     SAFETY: 3.5, LT_STOCK: 28, SLTS: 1.47, BUF: 33, CYCLE: 14,
     MAX_RAW: 47, MAX_INF: 47, CAP6: 16, VZ26_CAP: 50, MIN_DOC: 1,
@@ -91,6 +92,14 @@ describe('minmax-explain-drawer — formula with substituted values (Anexa §B11
     assert.ok(hasTex(el, 'ENG\\_MAX'), 'ENG_MAX label present in TeX source');
     assert.ok(hasTex(el, 'ENG\\_MIN'), 'ENG_MIN label present in TeX source');
     assert.ok(hasTex(el, 'BUY\\_QTY'), 'BUY_QTY label present in TeX source');
+  });
+
+  it('shows physical stock plus incoming transfer as effective stock', async () => {
+    const el = mount(baseDet);
+    await el.updateComplete;
+
+    assert.ok(hasTex(el, 'STOC\\_FIZIC\\_QTY + TRANSFER\\_IN\\_QTY = 2 + 1'));
+    assert.ok(hasTex(el, 'ENG\\_MAX - STOC^{+} - ORD\\_FURN'));
   });
 
   it('substitutes MIN_BASE = max(ceil(BUF), MIN_DOC) and feeds it into ENG_MIN', async () => {

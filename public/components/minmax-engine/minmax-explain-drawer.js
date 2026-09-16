@@ -32,7 +32,9 @@ const INPUT_FIELDS = [
   { key: 'COV_TGT', label: 'COV_TGT' },
   { key: 'FRECVENTA_ZILE', label: 'FRECVENTA_ZILE' },
   { key: 'N_PACK', label: 'N_PACK' },
-  { key: 'STOC_QTY', label: 'STOC_QTY' },
+  { key: 'STOC_FIZIC_QTY', label: 'STOC_FIZIC_QTY' },
+  { key: 'TRANSFER_IN_QTY', label: 'TRANSFER_IN_QTY' },
+  { key: 'STOC_QTY', label: 'STOC_QTY efectiv' },
   { key: 'ORD_FURN', label: 'ORD_FURN' }
 ];
 
@@ -274,6 +276,8 @@ export class MinmaxExplainDrawer extends LitElement {
     const minBase = Math.max(Math.ceil(buf), minDoc);
     const buyRaw = num(det.BUY_RAW);
     const buyQty = num(det.BUY_QTY);
+    const stocFizicQty = num(det.STOC_FIZIC_QTY);
+    const transferInQty = num(det.TRANSFER_IN_QTY);
     const stocQty = num(det.STOC_QTY);
     const ordFurn = num(det.ORD_FURN);
     const nPack = num(det.N_PACK) || 1;
@@ -323,6 +327,9 @@ export class MinmaxExplainDrawer extends LitElement {
             } = <strong class="text-primary">${n(engMin)}</strong>
           </div>
           <div class="border-top pt-2 mt-1">
+            ${k(`\\text{STOC\\_QTY} = STOC\\_FIZIC\\_QTY + TRANSFER\\_IN\\_QTY = ${t(stocFizicQty)} + ${t(transferInQty)}`)} = <strong>${n(stocQty)}</strong>
+          </div>
+          <div class="mt-1">
             ${k(`\\text{BUY\\_RAW} = \\max(0,\\ ENG\\_MAX - STOC^{+} - ORD\\_FURN) = \\max(0,\\ ${t(engMax)} - ${stocQty > 0 ? t(stocQty) : '0'} - ${t(ordFurn)})`)} = <strong>${n(buyRaw)}</strong>
           </div>
           <div class="mt-1">

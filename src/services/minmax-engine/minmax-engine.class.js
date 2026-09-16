@@ -64,6 +64,8 @@ const DET_COLUMNS = {
   engMin: 'd.ENG_MIN',
   engMax: 'd.ENG_MAX',
   buyQty: 'd.BUY_QTY',
+  stocFizicQty: 'd.STOC_FIZIC_QTY',
+  transferInQty: 'd.TRANSFER_IN_QTY',
   stocQty: 'd.STOC_QTY',
   ordFurn: 'd.ORD_FURN',
   acopCur: 'd.ACOP_CUR',
@@ -323,6 +325,8 @@ function buildDetWhereClauses (filters, params) {
   addInterval(clauses, params, f.engMin, 'd.ENG_MIN', 'engMin')
   addInterval(clauses, params, f.engMax, 'd.ENG_MAX', 'engMax')
   addInterval(clauses, params, f.buyQty, 'd.BUY_QTY', 'buyQty')
+  addInterval(clauses, params, f.stocFizicQty, 'd.STOC_FIZIC_QTY', 'stocFizicQty')
+  addInterval(clauses, params, f.transferInQty, 'd.TRANSFER_IN_QTY', 'transferInQty')
   addInterval(clauses, params, f.stocQty, 'd.STOC_QTY', 'stocQty')
   addInterval(clauses, params, f.ordFurn, 'd.ORD_FURN', 'ordFurn')
   addInterval(clauses, params, f.acopCur, 'd.ACOP_CUR', 'acopCur')
