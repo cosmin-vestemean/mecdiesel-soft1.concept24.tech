@@ -35,6 +35,20 @@
   schema rezervă deja `BRANCH=0` pentru viitorul scope prefix-only. Testul live a folosit HQ
   `21/7`, Cluj `28/10`, București `35/12` și fallback Constanța `30/14`; T9 a raportat zero abateri
   pe 713.104 rânduri. Configurația de test a fost ștearsă după snapshot, care rămâne dovada rulării.
+- **P16: liniile de vânzare eligibile se îngheață o singură dată per `RUNID`, în `CCCMINMAXSALES`**
+  (14 coloane + `RUNID`, index clustered pe `RUNID`, fără PK — unicitatea `MTRTRN`/`LINENUM` nu e
+  confirmată). `Classify` cu `@Persist=1` rescrie complet instantaneul înainte de orice filtru
+  `@Mtrl`, apoi `Classify` și `ClassifyGroup` citesc exclusiv din el; `ClassifyGroup` eșuează
+  explicit (`50089` instantaneu lipsă, `50090` `AZI` neconcordant) în loc să recadă pe sursa vie.
+  Preview (`@Persist=0`) rămâne pe `ufn_MinMaxSalesLines`. Elimină drift-ul dovedit anterior între
+  cele două citiri separate ale sursei (RUNID 27: 3/602 grupe nereconciliate → RUNID 28/30: 0/602).
+  Capcană de implementare: `#SalesLines` trebuie declarat o singură dată (`CREATE TABLE`) în afara
+  ramurilor `IF @Persist`, altfel SQL Server aruncă `Ole Error 80040E14: There is already an object
+  named '#SalesLines'` la a doua `SELECT ... INTO` din același batch — fiecare ramură trebuie să
+  facă doar `INSERT`. Deployat și validat live pe RUNID 30 (`vz_grp_det = 0/602`); validatoarele
+  `ferestre_zile`/`grila_sapt` încă re-derivă din sursa vie, nu din `CCCMINMAXSALES`, deci abaterile
+  lor pe o rulare încheiată sunt drift ulterior, nu o infirmare a lui P16. Proba formală de drift
+  controlat (schimbare ERP între cele două faze) rămâne deschisă — vezi `RESTANTE_INTERNE.md` P16.
 - **Estimarea de ~2 minute pentru o sesiune nu este o limită operațională garantată.** La prima
   lansare completă din UI, `RUNID=6` a rămas `OPEN/RUNNING` deoarece `runPhases` a primit de la S1
   `Ole Error 80040E31: Query timeout expired`. Sesiunea a fost închisă explicit prin `AbandonRun`, iar
@@ -130,6 +144,7 @@ reprezintă 96% (~700 MB / 706.734 rânduri). Antetul `CCCMINMAXRUN` costă ~7 K
 | `CCCMINMAXAPPLY` (Faza 4) | pentru totdeauna | *ce am aplicat*, la nivel de rând |
 | `CCCMINMAXDET` | **curentă + precedenta** | `explain` + comparația dinaintea apply-ului |
 | `CCCMINMAXWEEK` / `WINSOR` | **doar curenta** | substratul lui `explain` |
+| `CCCMINMAXSALES` (P16) | **aceeași fereastră ca `DET`** | instantaneul înghețat de linii de vânzare, sursa comună Classify/ClassifyGroup |
 
 Regim staționar ~1,5 GB, aproape plat, plus ~100 MB/an din auditul de apply. Pentru comparație, 42 de
 sesiuni păstrate integral ar însemna ~30 GB într-o bază ERP de producție partajată, unde costul real
@@ -141,10 +156,22 @@ Regula se auto-întreține într-o buclă de reglaj: fiecare rulare o împinge a
 toate își păstrează parametrii și randamentul.
 
 `PurgeRun` este mecanismul explicit: refuză sesiunea curentă (`50042`), orice sesiune `OPEN`
-(`50043`) și ultimele `RETENTIE_DET_SESIUNI` sesiuni `FULL/DONE` (`50044`), apoi șterge în loturi
-numai `WEEK`/`WINSOR`/`DET`. Antetul `RUN` și agregatul `GRP` rămân; nicio fază nu purjează implicit.
-Installerul AJS execută `AbandonRun` și `PurgeRun` în batch-uri `X.RUNSQL` separate: SQL Server cere
-ca fiecare `CREATE OR ALTER PROCEDURE` să fie primul statement al batch-ului.
+(`50043`), sesiunile protejate de fereastră (`50044`) și reperele persistente `ESTE_REPER=1`
+(`50053`), apoi șterge în loturi `WEEK`/`WINSOR`/`DET`/`SALES` (`CCCMINMAXSALES`, instantaneul P16).
+Antetul `RUN`, agregatul `GRP` și snapshot-ul `RUNPARAM` rămân. `PurgeSelector` este clasificatorul read-only autoritativ
+(`CURRENT`/`OPEN`/`PINNED`/`PROTECTED`/`PURGED`/`ELIGIBLE`), iar `PurgeRetention` parcurge
+`ELIGIBLE` oldest-first și apelează doar `PurgeRun`, cu maximum 2 sesiuni per apel.
+
+După un `FinishRun` reușit, `RunPhases` apelează automat `PurgeRetention @MaxRuns=1` într-un
+`TRY/CATCH` izolat: o eroare de retenție nu schimbă starea motorului, dar este raportată prin
+`RAISERROR` severity 10 în istoricul Agent. `setup()` creează un job separat de backfill, fix,
+fără schedule, cu un singur pas `@MaxRuns=2`; jobul este pornit numai manual. Implementarea a
+fost verificată live pe company 1000: RUNID 13-25 sunt purjate, 26-28 sunt repere păstrate, iar
+RUNID 29 este o rulare `DONE` curentă fără erori; la această probă nu mai exista un candidat
+`ELIGIBLE` cu date de șters.
+
+Installerul AJS execută `AbandonRun` și `PurgeRun` în batch-uri `X.RUNSQL` separate: SQL Server
+cere ca fiecare `CREATE OR ALTER PROCEDURE` să fie primul statement al batch-ului.
 
 **De ce nu „fixăm" sesiunile aplicate:** `CCCMINMAXAPPLY` ([FAZA4_CONTRACT.md](../../new_min_max/FAZA4_CONTRACT.md) §7)
 păstrează deja `OLD_*`/`NEW_*`/`ENG_MIN`/`ENG_MAX` per poziție scrisă, cu `RUNID` și autor — ~78.000

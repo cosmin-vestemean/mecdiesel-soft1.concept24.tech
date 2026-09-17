@@ -269,7 +269,7 @@ Ordinea nu e negociabilă: winsorizarea este definită **per linie de vânzare**
 
 `MIN_DOC` = cea mai mică cantitate de vânzare a articolului din ultimele 52 de săptămâni (unitatea minimă tipică de livrare), default 1 — se calculează din date, nu e parametru.
 
-Pașii 1-3 sunt **comuni** cu `Classify` și `ClassifyGroup` și se execută o singură dată per `RUNID`, materializând `CCCMINMAXWEEK` + `CCCMINMAXWINSOR` (§4.1). Cele trei proceduri citesc de acolo, în loc să reconstruiască fiecare întregul pipeline de la liniile de vânzare. Output-ul propriu al lui `Prepare` rămâne `#MinMaxBase`.
+**P16 — Persisted common input (implemented):** pașii 1-3 sunt **comuni** cu `Classify` și `ClassifyGroup` și se execută o singură dată per `RUNID`. Linia 1 — extragerea liniilor de vânzare brute din ERP — se materializează într-o singură trecere în tabelul persistat `CCCMINMAXSALES` (14 coloane plus `RUNID`), înghețat cu `AZI` din antetul `CCCMINMAXRUN`. Pașii 2-3 (netting, winsorizare) produc `CCCMINMAXWEEK` + `CCCMINMAXWINSOR`, de asemenea calculate o singură dată și citite de ambele faze de clasificare. `Classify` și `ClassifyGroup` citesc același set înghețat de vânzări — nu reconstruiesc `#SalesLines` din sursa vie pe fiecare trecere. Previzualizările rămân live (citesc din ERP în timp real), iar fazele de `Explain`/`Compute` rămân neafectate — ele citesc deja numai stare persistată. Output-ul propriu al lui `Prepare` rămâne `#MinMaxBase`.
 
 ### `sp_MinMaxEngine_Classify` (per SKU)
 

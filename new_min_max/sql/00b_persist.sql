@@ -239,6 +239,39 @@ CREATE TABLE CCCMINMAXGRP (
 );
 
 --=====================================================================
+-- 5b. CCCMINMAXSALES — instantaneu inghetat al liniilor de vanzare eligibile
+--     per RUNID (P16). Proiectia exacta pe 14 coloane a dbo.ufn_MinMaxSalesLines,
+--     plus RUNID. Scris o singura data de sp_MinMaxEngine_Classify (@Persist=1),
+--     inainte de orice filtru @Mtrl; citit de Classify si ClassifyGroup, ambele
+--     cu @Persist=1. Indexul clustered incepe cu RUNID: accesul e mereu
+--     "WHERE RUNID = @RunId", niciodata pe tabelul intreg.
+--=====================================================================
+
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='CCCMINMAXSALES' AND xtype='U')
+CREATE TABLE CCCMINMAXSALES (
+    RUNID INT NOT NULL,
+    COMPANY SMALLINT NOT NULL,
+    FINDOC INT NOT NULL,
+    MTRTRN INT NOT NULL,
+    LINENUM INT NOT NULL,
+    TRNDATE DATETIME NOT NULL,
+    AZI DATE NOT NULL,
+    TRDR INT NOT NULL,
+    TRDRCODE VARCHAR(30) NULL,
+    MTRL INT NOT NULL,
+    MTRSUP INT NULL,
+    CODE VARCHAR(50) NOT NULL,
+    BRANCH SMALLINT NULL,
+    QTY DECIMAL(28, 8) NOT NULL,
+    LTRNVAL DECIMAL(28, 8) NOT NULL
+);
+
+-- Neunic in mod deliberat: MTRTRN/LINENUM nu sunt confirmate unice global
+-- (vezi RESTANTE_INTERNE.md P16), deci clustered index, nu PRIMARY KEY.
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='IX_CCCMINMAXSALES_RUNID' AND object_id = OBJECT_ID('CCCMINMAXSALES'))
+CREATE CLUSTERED INDEX IX_CCCMINMAXSALES_RUNID ON CCCMINMAXSALES(RUNID);
+
+--=====================================================================
 -- 6. Aliniere coloane pentru instalari existente
 --    Sectiunea 2 e IF NOT EXISTS, deci un tabel deja creat nu isi schimba
 --    singur tipurile. Fiecare ALTER e no-op cand tipul este deja corect.

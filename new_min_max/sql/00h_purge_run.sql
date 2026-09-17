@@ -17,6 +17,7 @@ BEGIN
     DECLARE @DeletedWeek INT = 0;
     DECLARE @DeletedWinsor INT = 0;
     DECLARE @DeletedDet INT = 0;
+    DECLARE @DeletedSales INT = 0;
     DECLARE @Affected INT = 1;
     DECLARE @RetentionCount INT;
 
@@ -99,8 +100,21 @@ BEGIN
         SET @DeletedDet = @DeletedDet + @Affected;
     END;
 
+    -- CCCMINMAXSALES (P16): instantaneul liniilor sursa, aceeasi politica de retentie ca DET/WEEK/WINSOR.
+    SET @Affected = 1;
+    WHILE @Affected > 0
+    BEGIN
+        DELETE TOP (@BatchSize)
+        FROM CCCMINMAXSALES
+        WHERE RUNID = @RunId;
+
+        SET @Affected = @@ROWCOUNT;
+        SET @DeletedSales = @DeletedSales + @Affected;
+    END;
+
     SELECT @RunId AS RUNID,
            @DeletedWeek AS DELETED_WEEK,
            @DeletedWinsor AS DELETED_WINSOR,
-           @DeletedDet AS DELETED_DET;
+           @DeletedDet AS DELETED_DET,
+           @DeletedSales AS DELETED_SALES;
 END;

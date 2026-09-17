@@ -548,7 +548,7 @@ describe('MIN/MAX retention purge contract (P17)', () => {
 
     // Both terminal states are reclaimable. The retention window itself stays
     // deliberately limited to FULL/DONE, exactly like PurgeRun's 50044 guard.
-    assert.match(selector, /WHEN r\.SESSION_STATUS IN \('DONE', 'ABANDONED'\)\s*AND NOT EXISTS \(SELECT 1 FROM CCCMINMAXDET WHERE RUNID = r\.RUNID\)\s*AND NOT EXISTS \(SELECT 1 FROM CCCMINMAXWEEK WHERE RUNID = r\.RUNID\)\s*AND NOT EXISTS \(SELECT 1 FROM CCCMINMAXWINSOR WHERE RUNID = r\.RUNID\) THEN 'PURGED'/)
+    assert.match(selector, /WHEN r\.SESSION_STATUS IN \('DONE', 'ABANDONED'\)\s*AND NOT EXISTS \(SELECT 1 FROM CCCMINMAXDET WHERE RUNID = r\.RUNID\)\s*AND NOT EXISTS \(SELECT 1 FROM CCCMINMAXWEEK WHERE RUNID = r\.RUNID\)\s*AND NOT EXISTS \(SELECT 1 FROM CCCMINMAXWINSOR WHERE RUNID = r\.RUNID\)\s*AND NOT EXISTS \(SELECT 1 FROM CCCMINMAXSALES WHERE RUNID = r\.RUNID\) THEN 'PURGED'/)
     assert.match(selector, /WHEN r\.SESSION_STATUS IN \('DONE', 'ABANDONED'\) THEN 'ELIGIBLE'/)
     assert.doesNotMatch(selector, /WHEN r\.SCOPE = 'FULL' THEN 'ELIGIBLE'/)
   })
@@ -557,7 +557,7 @@ describe('MIN/MAX retention purge contract (P17)', () => {
     const retention = sqlSource('00l_purge_retention.sql')
 
     assert.match(retention, /IF COALESCE\(@MaxRuns, 0\) < 1 OR @MaxRuns > 2 SET @MaxRuns = 2;/)
-    assert.match(retention, /INSERT INTO #Selector\s*EXEC dbo\.sp_MinMaxEngine_PurgeSelector @Company = @Company;/)
+    assert.match(retention, /INSERT INTO #Selector \([^)]+\)\s*EXEC dbo\.sp_MinMaxEngine_PurgeSelector @Company = @Company;/)
     assert.match(retention, /SELECT TOP 1 @RunId = RUNID\s*FROM #Selector\s*WHERE PURGE_STATUS = 'ELIGIBLE'[\s\S]*?ORDER BY RUNID ASC;/)
     assert.match(retention, /EXEC dbo\.sp_MinMaxEngine_PurgeRun @Company = @Company, @RunId = @RunId, @BatchSize = @BatchSize;/)
     assert.match(retention, /RAISERROR\(N'MIN\/MAX retention purge failed for RUNID %d: %s', 10, 1, @RunId, @PurgeError\);/)
@@ -610,5 +610,264 @@ describe('MIN/MAX retention purge contract (P17)', () => {
     // the backfill job must never be auto-started the same way.
     assert.doesNotMatch(ajsSource, /sp_start_job[\s\S]{0,200}Backfill/)
     assert.doesNotMatch(ajsSource, /Backfill[\s\S]{0,200}sp_start_job/)
+  })
+})
+
+describe('MIN/MAX P16 frozen sales-line snapshot contract', () => {
+  it('declares CCCMINMAXSALES idempotently with the exact 14-column projection plus RUNID, keyed by a RUNID-leading clustered index (not a PK, since MTRTRN/LINENUM uniqueness is unconfirmed)', () => {
+    const persist = sqlSource('00b_persist.sql')
+
+    assert.match(persist, /IF NOT EXISTS \(SELECT \* FROM sysobjects WHERE name='CCCMINMAXSALES' AND xtype='U'\)\s*CREATE TABLE CCCMINMAXSALES \(/)
+
+    const tableStart = persist.indexOf('CREATE TABLE CCCMINMAXSALES (')
+    const tableEnd = persist.indexOf(');', tableStart)
+    const tableBody = persist.slice(tableStart, tableEnd)
+
+    for (const columnDecl of [
+      'RUNID INT NOT NULL,',
+      'COMPANY SMALLINT NOT NULL,',
+      'FINDOC INT NOT NULL,',
+      'MTRTRN INT NOT NULL,',
+      'LINENUM INT NOT NULL,',
+      'TRNDATE DATETIME NOT NULL,',
+      'AZI DATE NOT NULL,',
+      'TRDR INT NOT NULL,',
+      'TRDRCODE VARCHAR(30) NULL,',
+      'MTRL INT NOT NULL,',
+      'MTRSUP INT NULL,',
+      'CODE VARCHAR(50) NOT NULL,',
+      'BRANCH SMALLINT NULL,',
+      'QTY DECIMAL(28, 8) NOT NULL,',
+      'LTRNVAL DECIMAL(28, 8) NOT NULL'
+    ]) {
+      assert.ok(tableBody.includes(columnDecl), `CCCMINMAXSALES is missing column declaration: ${columnDecl}`)
+    }
+
+    // No PRIMARY KEY / UNIQUE on this table: uniqueness of MTRTRN/LINENUM is
+    // an open question (RESTANTE_INTERNE.md P16), so the constraint would be
+    // an unverified assumption baked into the schema.
+    assert.doesNotMatch(tableBody, /PRIMARY KEY|UNIQUE/)
+
+    assert.match(persist, /IF NOT EXISTS \(SELECT \* FROM sys\.indexes WHERE name='IX_CCCMINMAXSALES_RUNID' AND object_id = OBJECT_ID\('CCCMINMAXSALES'\)\)\s*CREATE CLUSTERED INDEX IX_CCCMINMAXSALES_RUNID ON CCCMINMAXSALES\(RUNID\);/)
+  })
+
+  it('Classify (@Persist=1) refreshes the full CCCMINMAXSALES snapshot for @RunId before any @Mtrl filter, then reads #SalesLines only from that snapshot; preview alone calls the live UDF', () => {
+    const classify = sqlSource('01_classify.sql')
+
+    const persistBranchMatch = classify.match(/IF @Persist = 1\s*BEGIN\s*DELETE FROM CCCMINMAXSALES WHERE RUNID = @RunId;([\s\S]*?)END\s*ELSE\s*BEGIN([\s\S]*?)END;\s*SELECT @Azi = MAX\(AZI\) FROM #SalesLines;/)
+    assert.ok(persistBranchMatch, 'expected an IF @Persist = 1 / ELSE branch around #SalesLines extraction')
+
+    const [, persistBody, previewBody] = persistBranchMatch
+
+    // The full-population write must not carry the @Mtrl filter.
+    const insertMatch = persistBody.match(/INSERT INTO CCCMINMAXSALES \([\s\S]*?\)\s*SELECT[\s\S]*?FROM dbo\.ufn_MinMaxSalesLines\(@Company, @ModAtribuire, @NrZile, NULL\);/)
+    assert.ok(insertMatch, 'expected an unfiltered INSERT INTO CCCMINMAXSALES from the live UDF')
+    assert.doesNotMatch(insertMatch[0], /@Mtrl/)
+
+    // #SalesLines must be sourced from the snapshot, filtered by @Mtrl only here.
+    assert.match(persistBody, /INSERT INTO #SalesLines \([\s\S]*?\)\s*SELECT[\s\S]*?FROM CCCMINMAXSALES\s*WHERE RUNID = @RunId\s*AND \(@Mtrl IS NULL OR MTRL = @Mtrl\);/)
+    assert.doesNotMatch(persistBody.slice(persistBody.indexOf('INSERT INTO #SalesLines')), /ufn_MinMaxSalesLines/)
+
+    // The DELETE (refresh) must precede the INSERT, which must precede the snapshot read.
+    const insertPos = persistBody.indexOf('INSERT INTO CCCMINMAXSALES')
+    const readPos = persistBody.indexOf('FROM CCCMINMAXSALES')
+    assert.ok(insertPos > -1 && readPos > insertPos, 'INSERT must precede the snapshot read')
+
+    // Preview keeps calling the live UDF with the @Mtrl filter, untouched.
+    assert.match(previewBody, /INSERT INTO #SalesLines \([\s\S]*?\)\s*SELECT[\s\S]*?FROM dbo\.ufn_MinMaxSalesLines\(@Company, @ModAtribuire, @NrZile, NULL\)\s*WHERE @Mtrl IS NULL OR MTRL = @Mtrl;/)
+    assert.strictEqual((classify.match(/CREATE TABLE #SalesLines/g) || []).length, 1)
+    assert.doesNotMatch(classify, /^\s*INTO #SalesLines\b/m)
+  })
+
+  it('ClassifyGroup (@Persist=1) reads #SalesLines only from CCCMINMAXSALES for @RunId, guards an empty/missing snapshot with a distinct THROW, and never falls back to the live UDF; preview keeps calling the UDF', () => {
+    const classifyGroup = sqlSource('02_classify_group.sql')
+
+    const persistBranchMatch = classifyGroup.match(/IF @Persist = 1\s*BEGIN\s*IF NOT EXISTS \(SELECT 1 FROM CCCMINMAXSALES WHERE RUNID = @RunId\)\s*THROW (\d+), '([^']+)', 1;([\s\S]*?)END\s*ELSE\s*BEGIN([\s\S]*?)END;\s*SELECT @Azi = MAX\(AZI\) FROM #SalesLines;/)
+    assert.ok(persistBranchMatch, 'expected an IF @Persist = 1 / ELSE branch guarding and reading CCCMINMAXSALES')
+
+    const [, throwCode, throwMessage, persistBody, previewBody] = persistBranchMatch
+
+    // Distinct code from every other THROW already in this procedure (50001-50088 range).
+    assert.strictEqual(throwCode, '50089')
+    assert.match(throwMessage, /no sales snapshot found for this RUNID/)
+    assert.match(throwMessage, /sp_MinMaxEngine_Classify must run first/)
+
+    assert.match(persistBody, /INSERT INTO #SalesLines \([\s\S]*?\)\s*SELECT[\s\S]*?FROM CCCMINMAXSALES\s*WHERE RUNID = @RunId;/)
+    assert.doesNotMatch(persistBody, /ufn_MinMaxSalesLines/)
+
+    // Preview is unchanged: live UDF, frozen-AZI override, no snapshot involved.
+    assert.match(previewBody, /INSERT INTO #SalesLines \([\s\S]*?\)\s*SELECT[\s\S]*?FROM dbo\.ufn_MinMaxSalesLines\(@Company, @ModAtribuire, @NrZile, @AziInghetat\);/)
+    assert.doesNotMatch(previewBody, /CCCMINMAXSALES/)
+    assert.strictEqual((classifyGroup.match(/CREATE TABLE #SalesLines/g) || []).length, 1)
+    assert.doesNotMatch(classifyGroup, /^\s*INTO #SalesLines\b/m)
+  })
+
+  it('does not derive #Groups/#ItemGroups from CCCMINMAXDET: vz_grp_det stays an independent reconciliation invariant', () => {
+    const classifyGroup = sqlSource('02_classify_group.sql')
+    assert.doesNotMatch(classifyGroup, /CCCMINMAXDET/)
+  })
+
+  it('extends retention (PurgeRun) and the read-only selector diagnostic (PurgeSelector) to CCCMINMAXSALES alongside DET/WEEK/WINSOR', () => {
+    const purgeRun = sqlSource('00h_purge_run.sql')
+    const selector = sqlSource('00k_purge_selector.sql')
+
+    // PurgeRun: batched delete loop, same shape as the DET/WEEK/WINSOR loops,
+    // running after the existing pin/OPEN/current/retention guards (50042/50043/50053/50044).
+    assert.match(purgeRun, /DECLARE @DeletedSales INT = 0;/)
+    assert.match(purgeRun, /DELETE TOP \(@BatchSize\)\s*FROM CCCMINMAXSALES\s*WHERE RUNID = @RunId;\s*SET @Affected = @@ROWCOUNT;\s*SET @DeletedSales = @DeletedSales \+ @Affected;/)
+    assert.match(purgeRun, /@DeletedSales AS DELETED_SALES/)
+
+    const detLoopPos = purgeRun.indexOf('FROM CCCMINMAXDET\n        WHERE RUNID = @RunId;')
+    const salesLoopPos = purgeRun.indexOf('FROM CCCMINMAXSALES\n        WHERE RUNID = @RunId;')
+    assert.ok(detLoopPos > -1 && salesLoopPos > detLoopPos, 'CCCMINMAXSALES purge loop runs after the DET loop')
+
+    const pinGuardPos = purgeRun.indexOf('THROW 50053')
+    assert.ok(pinGuardPos > -1 && salesLoopPos > pinGuardPos, 'the pin/retention guards must still run before any delete loop')
+
+    // PurgeSelector: HAS_SALES alongside HAS_DET/HAS_WEEK/HAS_WINSOR, and the
+    // PURGED classification requires all four to be absent (read-only, no DELETE).
+    assert.doesNotMatch(selector, /\bDELETE\b/i)
+    assert.match(selector, /CASE WHEN EXISTS \(SELECT 1 FROM CCCMINMAXSALES WHERE RUNID = r\.RUNID\) THEN 1 ELSE 0 END AS HAS_SALES/)
+    assert.match(selector, /AND NOT EXISTS \(SELECT 1 FROM CCCMINMAXWINSOR WHERE RUNID = r\.RUNID\)\s*AND NOT EXISTS \(SELECT 1 FROM CCCMINMAXSALES WHERE RUNID = r\.RUNID\) THEN 'PURGED'/)
+  })
+
+  it('keeps the AJS mirror (S1-MEC/AJS/NewMinMax.js) byte-identical to the P16 SQL sources', () => {
+    const { toSqlLines } = require('../../new_min_max/tools/sql-to-js.cjs')
+    const js = fs.readFileSync(path.join(root, 'S1-MEC/AJS/NewMinMax.js'), 'utf8')
+
+    function extract (fn) {
+      const i = js.indexOf('function ' + fn)
+      const s = js.indexOf('return [', i)
+      const e = js.indexOf('].join("\\n");', s)
+      const body = js.slice(s + 'return ['.length, e).trim().replace(/,$/, '')
+      return JSON.parse('[' + body + ']')
+    }
+
+    for (const [fn, rel] of [
+      ['getPersistTablesSql', '00b_persist.sql'],
+      ['getClassifyProcedureSql', '01_classify.sql'],
+      ['getClassifyGroupProcedureSql', '02_classify_group.sql'],
+      ['getPurgeRunSql', '00h_purge_run.sql'],
+      ['getPurgeSelectorSql', '00k_purge_selector.sql'],
+      ['getPurgeRetentionSql', '00l_purge_retention.sql']
+    ]) {
+      const fromJs = extract(fn)
+      const expected = toSqlLines(sqlSource(rel))
+      assert.deepStrictEqual(fromJs, expected, `${fn} mirror drifted from ${rel}`)
+    }
+  })
+
+  it('fails closed (THROW 50090) when the persisted snapshot AZI does not match the frozen run AZI, with no UDF fallback', () => {
+    const classifyGroup = sqlSource('02_classify_group.sql')
+
+    assert.match(classifyGroup, /IF @Persist = 1 AND @Azi <> @AziInghetat\s*THROW 50090, 'sp_MinMaxEngine_ClassifyGroup: the sales snapshot AZI does not match the frozen run AZI\.', 1;/)
+
+    // 50090 must be a single, distinct error code, checked only after the
+    // no-lines guard (50001) and only on the persisted path.
+    const codes = [...classifyGroup.matchAll(/THROW (\d+),/g)].map((m) => m[1])
+    assert.strictEqual(codes.filter((c) => c === '50090').length, 1, '50090 must be used exactly once')
+    assert.ok(classifyGroup.indexOf('THROW 50090') > classifyGroup.indexOf('THROW 50001'), '50090 guard must run after the no-lines guard')
+  })
+
+  it('keeps the #Selector shape in PurgeRetention exactly aligned with PurgeSelector\'s result-set (guards the positional INSERT ... EXEC contract)', () => {
+    const selector = sqlSource('00k_purge_selector.sql')
+    const retention = sqlSource('00l_purge_retention.sql')
+
+    const expectedColumns = [
+      'RUNID', 'SCOPE', 'SESSION_STATUS', 'ESTE_CURENT', 'ESTE_REPER',
+      'HAS_DET', 'HAS_WEEK', 'HAS_WINSOR', 'HAS_SALES', 'IS_RETENTION_PROTECTED', 'PURGE_STATUS'
+    ]
+
+    // PurgeSelector's final SELECT projects each column in this exact order.
+    const selectorPositions = expectedColumns.map((col) => {
+      const pos = selector.search(new RegExp(`(?:AS |r\\.)${col}\\b`))
+      assert.ok(pos > -1, `PurgeSelector must project ${col}`)
+      return pos
+    })
+    for (let i = 1; i < selectorPositions.length; i += 1) {
+      assert.ok(selectorPositions[i] > selectorPositions[i - 1], `PurgeSelector must project ${expectedColumns[i]} after ${expectedColumns[i - 1]}`)
+    }
+
+    // #Selector's CREATE TABLE column order must match exactly (positional INSERT ... EXEC target).
+    const declStart = retention.indexOf('CREATE TABLE #Selector (') + 'CREATE TABLE #Selector ('.length
+    const declEnd = retention.indexOf(');', declStart)
+    const declaredColumns = retention.slice(declStart, declEnd)
+      .split('\n').map((l) => l.trim()).filter(Boolean).map((l) => l.split(/\s+/)[0])
+    assert.deepStrictEqual(declaredColumns, expectedColumns)
+
+    // The explicit INSERT column list must repeat the same order (no positional guessing).
+    const insertMatch = retention.match(/INSERT INTO #Selector \(([^)]+)\)\s*EXEC dbo\.sp_MinMaxEngine_PurgeSelector/)
+    assert.ok(insertMatch, 'expected an explicit column list on INSERT INTO #Selector ... EXEC')
+    assert.deepStrictEqual(insertMatch[1].split(',').map((c) => c.trim()), expectedColumns)
+  })
+
+  it('keeps @PurgeResult/@Result in PurgeRetention aligned with PurgeRun\'s result-set (DELETED_SALES end-to-end)', () => {
+    const purgeRun = sqlSource('00h_purge_run.sql')
+    const retention = sqlSource('00l_purge_retention.sql')
+
+    const expectedColumns = ['RUNID', 'DELETED_WEEK', 'DELETED_WINSOR', 'DELETED_DET', 'DELETED_SALES']
+
+    // PurgeRun's final SELECT projects each column in this exact order.
+    const purgeRunPositions = expectedColumns.map((col) => {
+      const pos = purgeRun.search(new RegExp(`@\\w+ AS ${col}\\b`))
+      assert.ok(pos > -1, `PurgeRun must project ${col}`)
+      return pos
+    })
+    for (let i = 1; i < purgeRunPositions.length; i += 1) {
+      assert.ok(purgeRunPositions[i] > purgeRunPositions[i - 1], `PurgeRun must project ${expectedColumns[i]} after ${expectedColumns[i - 1]}`)
+    }
+
+    // @PurgeResult is the positional INSERT ... EXEC target for PurgeRun; its declared
+    // shape and explicit column list must match exactly, including DELETED_SALES.
+    const purgeResultMatch = retention.match(/DECLARE @PurgeResult TABLE \(([^)]+)\);/)
+    assert.ok(purgeResultMatch)
+    assert.deepStrictEqual(purgeResultMatch[1].split(',').map((c) => c.trim().split(/\s+/)[0]), expectedColumns)
+
+    const insertMatch = retention.match(/INSERT INTO @PurgeResult \(([^)]+)\)\s*EXEC dbo\.sp_MinMaxEngine_PurgeRun/)
+    assert.ok(insertMatch, 'expected an explicit column list on INSERT INTO @PurgeResult ... EXEC')
+    assert.deepStrictEqual(insertMatch[1].split(',').map((c) => c.trim()), expectedColumns)
+
+    // @Result and the final SELECT must carry DELETED_SALES through end-to-end too.
+    assert.match(retention, /DECLARE @Result TABLE \(\s*RUNID INT NOT NULL,\s*DELETED_WEEK INT NULL,\s*DELETED_WINSOR INT NULL,\s*DELETED_DET INT NULL,\s*DELETED_SALES INT NULL,\s*ERRORMSG NVARCHAR\(500\) NULL\s*\);/)
+    assert.match(retention, /SELECT RUNID, DELETED_WEEK, DELETED_WINSOR, DELETED_DET, DELETED_SALES, NULL FROM @PurgeResult;/)
+    assert.match(retention, /VALUES \(@RunId, NULL, NULL, NULL, NULL, @PurgeError\);/)
+    assert.match(retention, /SELECT RUNID, DELETED_WEEK, DELETED_WINSOR, DELETED_DET, DELETED_SALES, ERRORMSG\s*FROM @Result/)
+  })
+
+  it('maps DELETED_SALES/HAS_SALES to camelCase in the AJS purgeRun/purgeSelector endpoint methods', () => {
+    const js = fs.readFileSync(path.join(root, 'S1-MEC/AJS/NewMinMax.js'), 'utf8')
+
+    const purgeRunStart = js.indexOf('function purgeRun(obj) {')
+    const purgeRunEnd = js.indexOf('\nfunction ', purgeRunStart + 1)
+    assert.ok(purgeRunStart > -1 && purgeRunEnd > purgeRunStart)
+    assert.match(js.slice(purgeRunStart, purgeRunEnd), /deletedSales: ds\.DELETED_SALES/)
+
+    const purgeSelectorStart = js.indexOf('function purgeSelector(obj) {')
+    const purgeSelectorEnd = js.indexOf('\nfunction ', purgeSelectorStart + 1)
+    assert.ok(purgeSelectorStart > -1 && purgeSelectorEnd > purgeSelectorStart)
+    assert.match(js.slice(purgeSelectorStart, purgeSelectorEnd), /hasSales: ds\.HAS_SALES/)
+  })
+
+  it('includes CCCMINMAXSALES in the setup() response tables array, exactly once, in the correct position (after RUNPARAM, before DET)', () => {
+    const js = fs.readFileSync(path.join(root, 'S1-MEC/AJS/NewMinMax.js'), 'utf8')
+
+    // Find the setup function and its return statement with the tables array
+      const setupMatch = js.match(/function setup\(obj\)\s*\{[\s\S]*?return JSON\.stringify\(\{\s*success:\s*true,\s*tables:\s*\[([\s\S]*?)\],/m)
+    assert.ok(setupMatch && setupMatch[1], 'setup() must return a JSON object with a tables array')
+
+    const tablesContent = setupMatch[1]
+    const tables = tablesContent.split(',').map((t) => t.trim().replace(/["\s]/g, '')).filter(Boolean)
+
+    // Verify CCCMINMAXSALES appears exactly once
+    const salesCount = tables.filter((t) => t === 'CCCMINMAXSALES').length
+    assert.strictEqual(salesCount, 1, 'CCCMINMAXSALES must appear exactly once in the tables array')
+
+    // Verify it comes after RUNPARAM and before DET
+    const salesIdx = tables.indexOf('CCCMINMAXSALES')
+    const runparamIdx = tables.indexOf('CCCMINMAXRUNPARAM')
+    const detIdx = tables.indexOf('CCCMINMAXDET')
+    assert.ok(runparamIdx >= 0 && detIdx >= 0 && salesIdx >= 0, 'CCCMINMAXRUNPARAM and CCCMINMAXDET must both be present')
+    assert.strictEqual(salesIdx, runparamIdx + 1, 'CCCMINMAXSALES must come immediately after CCCMINMAXRUNPARAM')
+    assert.ok(salesIdx < detIdx, 'CCCMINMAXSALES must come before CCCMINMAXDET')
   })
 })

@@ -49,14 +49,14 @@ SELECT
     SUM(a.used_pages) * 8 / 1024.0 AS UsedMB
 FROM sys.partitions p
 INNER JOIN sys.allocation_units a ON a.container_id = p.hobt_id
-WHERE OBJECT_NAME(p.object_id) IN ('CCCMINMAXDET', 'CCCMINMAXWEEK', 'CCCMINMAXWINSOR',
+WHERE OBJECT_NAME(p.object_id) IN ('CCCMINMAXDET', 'CCCMINMAXWEEK', 'CCCMINMAXWINSOR', 'CCCMINMAXSALES',
                                     'CCCMINMAXRUN', 'CCCMINMAXGRP', 'CCCMINMAXRUNPARAM')
 GROUP BY p.object_id
 ORDER BY TotalMB DESC;
 ```
 
 Rulează această interogare **înainte** de orice pin/backfill (baseline) și **după** fiecare pas
-manual de mai jos. Compară doar `CCCMINMAXDET`/`WEEK`/`WINSOR` — acelea trebuie să scadă;
+manual de mai jos. Compară doar `CCCMINMAXDET`/`WEEK`/`WINSOR`/`SALES` — acelea trebuie să scadă;
 `CCCMINMAXRUN`/`GRP`/`RUNPARAM` nu trebuie să se miște deloc (vezi §5).
 
 ## 2. Deploy manual (AJS `setup`)
@@ -120,7 +120,8 @@ WHERE r.COMPANY = <company>
   AND r.SESSION_STATUS IN ('DONE', 'ABANDONED')
   AND (EXISTS (SELECT 1 FROM CCCMINMAXDET d WHERE d.RUNID = r.RUNID)
     OR EXISTS (SELECT 1 FROM CCCMINMAXWEEK w WHERE w.RUNID = r.RUNID)
-    OR EXISTS (SELECT 1 FROM CCCMINMAXWINSOR x WHERE x.RUNID = r.RUNID))
+    OR EXISTS (SELECT 1 FROM CCCMINMAXWINSOR x WHERE x.RUNID = r.RUNID)
+    OR EXISTS (SELECT 1 FROM CCCMINMAXSALES s WHERE s.RUNID = r.RUNID))
 GROUP BY r.SCOPE, r.SESSION_STATUS;
 ```
 
@@ -175,14 +176,14 @@ SELECT COUNT(*) FROM CCCMINMAXRUNPARAM WHERE RUNID IN (<lista RUNID purjate>);
 
 Numărul de rânduri `CCCMINMAXRUN` nu trebuie să scadă (nimeni nu șterge antete). `CCCMINMAXGRP` și
 `CCCMINMAXRUNPARAM` pentru `RUNID`-urile purjate trebuie să rămână **identice** cu ce erau înainte —
-`PurgeRun` șterge doar `DET`/`WEEK`/`WINSOR`.
+`PurgeRun` șterge doar `DET`/`WEEK`/`WINSOR`/`SALES`.
 
 ## 8. Acceptanță finală
 
-- `CCCMINMAXDET`/`WEEK`/`WINSOR` conțin date **doar** pentru: sesiunea curentă, sesiunile din
+- `CCCMINMAXDET`/`WEEK`/`WINSOR`/`SALES` conțin date **doar** pentru: sesiunea curentă, sesiunile din
   fereastra `RETENTIE_DET_SESIUNI` (implicit ultimele 2 `FULL/DONE`), și orice `RUNID` pinuit
   (`ESTE_REPER=1`, azi 26/27/28). Orice alt `RUNID` terminal (`DONE` sau `ABANDONED`), indiferent
-  de scope, are `DET`/`WEEK`/`WINSOR` goale.
+  de scope, are `DET`/`WEEK`/`WINSOR`/`SALES` goale.
 - `sp_MinMaxEngine_PurgeSelector` confirmă asta direct: zero rânduri `ELIGIBLE` cu `HAS_DET=1` după
   ce backfill-ul a rulat suficiente treceri.
 - `CCCMINMAXRUN`/`GRP`/`RUNPARAM` neschimbate ca număr de rânduri (§7).

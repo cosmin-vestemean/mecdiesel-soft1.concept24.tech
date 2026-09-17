@@ -256,13 +256,64 @@ BEGIN
 
     -- ---------------------------------------------------------------
     -- 2. Extragere linii vânzări eligibile
+    --    @Persist=1 (P16): CCCMINMAXSALES se rescrie complet pentru @RunId,
+    --    inaintea oricarui filtru @Mtrl, apoi #SalesLines citeste numai
+    --    din acel instantaneu inghetat. Preview (@Persist=0) ramane pe
+    --    sursa vie, ca pana acum.
     -- ---------------------------------------------------------------
-    SELECT
-        COMPANY, FINDOC, MTRTRN, LINENUM, TRNDATE, AZI, TRDR, TRDRCODE,
-        MTRL, MTRSUP, CODE, BRANCH, QTY, LTRNVAL
-    INTO #SalesLines
-    FROM dbo.ufn_MinMaxSalesLines(@Company, @ModAtribuire, @NrZile, NULL)
-    WHERE @Mtrl IS NULL OR MTRL = @Mtrl;
+        CREATE TABLE #SalesLines (
+            COMPANY SMALLINT NOT NULL,
+            FINDOC INT NOT NULL,
+            MTRTRN INT NOT NULL,
+            LINENUM INT NOT NULL,
+            TRNDATE DATETIME NOT NULL,
+            AZI DATE NOT NULL,
+            TRDR INT NOT NULL,
+            TRDRCODE VARCHAR(30) NULL,
+            MTRL INT NOT NULL,
+            MTRSUP INT NULL,
+            CODE VARCHAR(50) NOT NULL,
+            BRANCH SMALLINT NULL,
+            QTY DECIMAL(28, 8) NOT NULL,
+            LTRNVAL DECIMAL(28, 8) NOT NULL
+        );
+
+    IF @Persist = 1
+    BEGIN
+        DELETE FROM CCCMINMAXSALES WHERE RUNID = @RunId;
+
+        INSERT INTO CCCMINMAXSALES (
+            RUNID, COMPANY, FINDOC, MTRTRN, LINENUM, TRNDATE, AZI, TRDR, TRDRCODE,
+            MTRL, MTRSUP, CODE, BRANCH, QTY, LTRNVAL
+        )
+        SELECT
+            @RunId, COMPANY, FINDOC, MTRTRN, LINENUM, TRNDATE, AZI, TRDR, TRDRCODE,
+            MTRL, MTRSUP, CODE, BRANCH, QTY, LTRNVAL
+        FROM dbo.ufn_MinMaxSalesLines(@Company, @ModAtribuire, @NrZile, NULL);
+
+        INSERT INTO #SalesLines (
+            COMPANY, FINDOC, MTRTRN, LINENUM, TRNDATE, AZI, TRDR, TRDRCODE,
+            MTRL, MTRSUP, CODE, BRANCH, QTY, LTRNVAL
+        )
+        SELECT
+            COMPANY, FINDOC, MTRTRN, LINENUM, TRNDATE, AZI, TRDR, TRDRCODE,
+            MTRL, MTRSUP, CODE, BRANCH, QTY, LTRNVAL
+        FROM CCCMINMAXSALES
+        WHERE RUNID = @RunId
+            AND (@Mtrl IS NULL OR MTRL = @Mtrl);
+    END
+    ELSE
+    BEGIN
+        INSERT INTO #SalesLines (
+            COMPANY, FINDOC, MTRTRN, LINENUM, TRNDATE, AZI, TRDR, TRDRCODE,
+            MTRL, MTRSUP, CODE, BRANCH, QTY, LTRNVAL
+        )
+        SELECT
+            COMPANY, FINDOC, MTRTRN, LINENUM, TRNDATE, AZI, TRDR, TRDRCODE,
+            MTRL, MTRSUP, CODE, BRANCH, QTY, LTRNVAL
+        FROM dbo.ufn_MinMaxSalesLines(@Company, @ModAtribuire, @NrZile, NULL)
+        WHERE @Mtrl IS NULL OR MTRL = @Mtrl;
+    END;
 
     SELECT @Azi = MAX(AZI) FROM #SalesLines;
     IF @Azi IS NULL

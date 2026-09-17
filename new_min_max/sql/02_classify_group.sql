@@ -210,16 +210,62 @@ BEGIN
 
     -- ---------------------------------------------------------------
     -- 2. Extragere linii vânzări eligibile
+    --    @Persist=1 (P16): citeste exclusiv instantaneul CCCMINMAXSALES
+    --    scris de sp_MinMaxEngine_Classify; fara fallback pe sursa vie
+    --    daca instantaneul lipseste. Preview (@Persist=0) ramane pe UDF.
     -- ---------------------------------------------------------------
-    SELECT
-        COMPANY, FINDOC, MTRTRN, LINENUM, TRNDATE, AZI, TRDR, TRDRCODE,
-        MTRL, MTRSUP, CODE, BRANCH, QTY, LTRNVAL
-    INTO #SalesLines
-    FROM dbo.ufn_MinMaxSalesLines(@Company, @ModAtribuire, @NrZile, @AziInghetat);
+        CREATE TABLE #SalesLines (
+            COMPANY SMALLINT NOT NULL,
+            FINDOC INT NOT NULL,
+            MTRTRN INT NOT NULL,
+            LINENUM INT NOT NULL,
+            TRNDATE DATETIME NOT NULL,
+            AZI DATE NOT NULL,
+            TRDR INT NOT NULL,
+            TRDRCODE VARCHAR(30) NULL,
+            MTRL INT NOT NULL,
+            MTRSUP INT NULL,
+            CODE VARCHAR(50) NOT NULL,
+            BRANCH SMALLINT NULL,
+            QTY DECIMAL(28, 8) NOT NULL,
+            LTRNVAL DECIMAL(28, 8) NOT NULL
+        );
+
+    IF @Persist = 1
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM CCCMINMAXSALES WHERE RUNID = @RunId)
+            THROW 50089, 'sp_MinMaxEngine_ClassifyGroup: no sales snapshot found for this RUNID; sp_MinMaxEngine_Classify must run first.', 1;
+
+        INSERT INTO #SalesLines (
+            COMPANY, FINDOC, MTRTRN, LINENUM, TRNDATE, AZI, TRDR, TRDRCODE,
+            MTRL, MTRSUP, CODE, BRANCH, QTY, LTRNVAL
+        )
+        SELECT
+            COMPANY, FINDOC, MTRTRN, LINENUM, TRNDATE, AZI, TRDR, TRDRCODE,
+            MTRL, MTRSUP, CODE, BRANCH, QTY, LTRNVAL
+        FROM CCCMINMAXSALES
+        WHERE RUNID = @RunId;
+    END
+    ELSE
+    BEGIN
+        INSERT INTO #SalesLines (
+            COMPANY, FINDOC, MTRTRN, LINENUM, TRNDATE, AZI, TRDR, TRDRCODE,
+            MTRL, MTRSUP, CODE, BRANCH, QTY, LTRNVAL
+        )
+        SELECT
+            COMPANY, FINDOC, MTRTRN, LINENUM, TRNDATE, AZI, TRDR, TRDRCODE,
+            MTRL, MTRSUP, CODE, BRANCH, QTY, LTRNVAL
+        FROM dbo.ufn_MinMaxSalesLines(@Company, @ModAtribuire, @NrZile, @AziInghetat);
+    END;
 
     SELECT @Azi = MAX(AZI) FROM #SalesLines;
     IF @Azi IS NULL
         THROW 50001, 'sp_MinMaxEngine_ClassifyGroup: no eligible sales lines were found.', 1;
+
+    -- Fail closed: the snapshot must carry the exact same anchor Classify froze on
+    -- CCCMINMAXRUN.AZI; no UDF fallback exists to recover from a stale/foreign snapshot.
+    IF @Persist = 1 AND @Azi <> @AziInghetat
+        THROW 50090, 'sp_MinMaxEngine_ClassifyGroup: the sales snapshot AZI does not match the frozen run AZI.', 1;
 
     -- ---------------------------------------------------------------
     -- 3. Filiale active incluse
