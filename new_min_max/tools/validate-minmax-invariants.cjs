@@ -401,7 +401,7 @@ function buildInvariants (runId, runParams) {
         }
 
         const modAtribuireRaw = String(runParams.MOD_ATRIBUIRE_FILIALA || '').trim().toUpperCase()
-        const modAtribuire = ['DOC', 'AGENT', 'CLIENT'].includes(modAtribuireRaw) ? modAtribuireRaw : 'CLIENT'
+        const modAtribuire = ['DOC', 'AGENT', 'CLIENT'].includes(modAtribuireRaw) ? modAtribuireRaw : 'AGENT'
         const window1Days = ferestreZile[0]
 
         // Precondition: AZI e derivat din MAX(TRNDATE) pe date vii (00c_sales_lines.sql), deci
@@ -541,7 +541,7 @@ function buildInvariants (runId, runParams) {
         }
 
         const modAtribuireRaw = String(runParams.MOD_ATRIBUIRE_FILIALA || '').trim().toUpperCase()
-        const modAtribuire = ['DOC', 'AGENT', 'CLIENT'].includes(modAtribuireRaw) ? modAtribuireRaw : 'CLIENT'
+        const modAtribuire = ['DOC', 'AGENT', 'CLIENT'].includes(modAtribuireRaw) ? modAtribuireRaw : 'AGENT'
         const nrZileRun = Number(runParams.NRZILE) > 0 ? Number(runParams.NRZILE) : 365
 
         // Acelasi precondition ca la ferestre_zile: AZI e derivat din MAX(TRNDATE) pe date vii,

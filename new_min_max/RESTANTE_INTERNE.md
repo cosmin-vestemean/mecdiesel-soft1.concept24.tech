@@ -6,7 +6,7 @@ Data ultimei actualizări: 16.09.2026.
 
 **Ce nu conține**: orice punct unde septembrie contrazice august sau unde specificația tace. Acelea sunt în [INTREBARI_BENEFICIAR.md](INTREBARI_BENEFICIAR.md) și nu se implementează prin default ales de noi.
 
-**Regulă**: un rând iese de aici numai când este implementat, validat pe o rulare și consemnat cu RUNID-ul probei. Valoarea efectivă a oricărui parametru apare în foaia PARAMETRI a rulării — nimic nu se adoptă tacit.
+**Regulă**: un rând se marchează închis numai când este implementat, validat pe o rulare și consemnat cu RUNID-ul probei. Valoarea efectivă a oricărui parametru apare în foaia PARAMETRI a rulării — nimic nu se adoptă tacit.
 
 ## Închise
 
@@ -20,9 +20,10 @@ Data ultimei actualizări: 16.09.2026.
 | P8 | `SIGMA_MIN = 0` valid și distinct de absent | A2, partea de implementare | RUNID 11 |
 | P11 | TREND pe `13S/52S` (S 7), parametrizat prin `TREND_BAZA`; NOU/OD au status propriu | S 7 explicit; august avea 13S/26S doar în text, fără marcaj de decizie | RUNID 16: `TREND_BAZA='13_52'` în snapshot, 0 abateri pe 708.554 rânduri |
 | N04a | Ferestre VZ în zile calendaristice (28/91/182/365) | S 4.2; august I1 ✅ / I12 ✅ | RUNID 17/18, cauze separate; efectul predicatului reconfirmat independent pe 20 → 21 și 22 → 24 |
-| N04b | σ pe exact 52 de bucket-uri egale; `SAPT_VZ` pe săptămâni ISO | S 5.1 (52 bucket-uri) + S 4.6 (ISO) | RUNID 19–25, factorială completă pe trei axe; producția este RUNID 25 |
+| N04b | σ pe exact 52 de bucket-uri egale; `SAPT_VZ` pe săptămâni ISO | S 5.1 (52 bucket-uri) + S 4.6 (ISO) | RUNID 19–25, factorială completă pe trei axe; la închiderea N04b producția era RUNID 25 |
 | D15a | `SAPT_FARA = round(zile de la ULT_VANZ / 7)`, simetric SKU/grupă | S 4.6 | RUNID 15, 0 abateri — dar vezi nota de calendar |
 | — | `ClassifyGroup`: `NR_SKU_GRP` pe populația filtrată | perimetru confirmat 08.09 | RUNID 7: 504/602 → 0/602 |
+| 1c | Simetria ferestrelor **și a grilei** în `ClassifyGroup` | aceeași ca N04a + S 5.1 | RUNID 26: 16/16 invariante PASS; SUM(CCCMINMAXDET.VZ_4S/13S/26S/52S, VAL_52S)=CCCMINMAXGRP: 0/602 diferențe vs 313/602 RUNID 25; snapshot RUNID 25/26 identic, SKU bit-cu-bit identic |
 
 > Nota de calendar (D15a): `DATEDIFF(WEEK, …)` și `round(zile/7)` coincid **exact când AZI cade miercurea** (0/365 lag-uri diferă; 52/365 marți-joi, 104/365 luni-vineri, 156/365 sâmbătă-duminică). RUNID 15 are `AZI=2026-09-16`, miercuri, deci proba live nu putea arăta diferența. Nu deduce de aici că formula veche era echivalentă.
 
@@ -34,13 +35,15 @@ Data ultimei actualizări: 16.09.2026.
 
 | # | ID | Subiect | Autoritate | Ce lipsește | Dependențe / risc |
 | --- | --- | --- | --- | --- | --- |
-| 1c | — | Simetria ferestrelor **și a grilei** în `ClassifyGroup` | aceeași ca N04a + S 5.1 | `ClassifyGroup` rămâne pe ferestre săptămânale **și** pe grila `DATEDIFF(WEEK)` pentru σ de grupă | Asimetria s-a **adâncit** după N04b: sunt acum două decalaje, nu unul. Pe RUNID 25 `VZ` de grupă nu se reconciliază cu suma SKU-urilor, iar σ de grupă rămâne pe bucket-uri inegale. Cele două se închid împreună — ating aceleași secțiuni din `02_classify_group.sql` |
-| 2 | P6b | Resolver longest-prefix pentru `LT_ZILE`/`FRECVENTA_ZILE`, cu normalizarea spațiilor | S 3.8 + tabelul de parametri din august („LT per prefix furnizor") | Mecanismul; `BRANCH > GLOBAL` e deja live | **Doar mecanismul.** Lista și valorile DEFAULT sunt N01/N02 → document beneficiar |
-| 3 | P4 | Univers per scope prin uniuni (stoc, limite ERP, manual, vânzări) în loc de „numai vânzări" | S 4.1 | `#Items` se construiește exclusiv din liniile de vânzare | Cea mai mare schimbare structurală; crește `CCCMINMAXDET` (azi ~700 MB per sesiune, 96% din spațiu) și durata rulării. Articolele doar în transfer intră automat, fiindcă `STOC_QTY` include transferul |
-| 4 | P13 | `MIN_DOC` per scope, nu global pe companie | S 4.6 („per SKU și scope") | Azi e calculat per `MTRL` și copiat tuturor filialelor | **După P4.** Numai varianta literală; corecțiile de robustețe sunt propunerea noastră → document beneficiar |
-| 5 | P15 | Indicatori și livrabile declarate, absente: `ALTREF`, `STOC_TOTAL_ALTREF` per scope, `COST_MED_RON`/`STOC_VAL_EUR`/`BUY_VALUE_EUR` cu lanțul de fallback, cele 41 de coloane, SUMMARY cu HQ separat, raportul obligatoriu de rulare | S 7, S 8, S 9 | Tot blocul | Raportul S 8 este și vehiculul prin care declarăm ce default am folosit la fiecare punct de mai sus |
-| 6 | P10 | `STOC_NEG_CA_ZERO` expus ca parametru, păstrând comportamentul actual | E10 (august, propunere) = comportamentul de azi; S 5.6 e formula literală fără clamp | Doar parametrul + apariția în PARAMETRI | Nu schimbă nimic numeric; face alternativa o decizie vizibilă, nu una ascunsă în cod |
-| 7 | — | Schelet de parametri pentru răspunsurile așteptate: `Z_A/Z_B/Z_C/Z_NOU`, `SL_NOU`, `FLAGS_MODE`, `CZ_CYCLE_ZERO` legat de `CLASA` | pregătire pentru A1/A4/B2/N06 | Seed idempotent cu valorile de azi | Zero efect numeric; transformă răspunsul beneficiarului într-o editare de configurare, nu într-un commit |
+| 1 | P6b | Resolver longest-prefix pentru `LT_ZILE`/`FRECVENTA_ZILE`, cu normalizarea spațiilor | S 3.8 + tabelul de parametri din august („LT per prefix furnizor") | Mecanismul; `BRANCH > GLOBAL` e deja live | **Doar mecanismul.** Lista și valorile DEFAULT sunt N01/N02 → document beneficiar |
+| 2 | P13 | `MIN_DOC` per scope, nu global pe companie | S 4.6 („per SKU și scope") | Azi e calculat per `MTRL` și copiat tuturor filialelor | **După P4.** Se implementează numai varianta literală, fără corecții de robustețe adăugate de noi |
+| 3 | P15 | Indicatori și livrabile declarate, absente: `ALTREF`, `STOC_TOTAL_ALTREF` per scope, `COST_MED_RON`/`STOC_VAL_EUR`/`BUY_VALUE_EUR` cu lanțul de fallback, cele 41 de coloane, SUMMARY cu HQ separat, raportul obligatoriu de rulare | S 7, S 8, S 9 | Tot blocul | Raportul S 8 este și vehiculul prin care declarăm ce default am folosit la fiecare punct de mai sus |
+| 4 | P10 | `STOC_NEG_CA_ZERO` expus ca parametru, păstrând comportamentul actual | E10 (august, propunere) = comportamentul de azi; S 5.6 e formula literală fără clamp | Doar parametrul + apariția în PARAMETRI | Nu schimbă nimic numeric; face alternativa o decizie vizibilă, nu una ascunsă în cod |
+| 5 | — | Schelet de parametri pentru răspunsurile așteptate: `Z_A/Z_B/Z_C/Z_NOU`, `SL_NOU`, `FLAGS_MODE`, `CZ_CYCLE_ZERO` legat de `CLASA` | pregătire pentru A1/A4/B2/N06 | Seed idempotent cu valorile de azi | Zero efect numeric; transformă răspunsul beneficiarului într-o editare de configurare, nu într-un commit |
+
+P4 (universul per scope) este mutat în
+[INTREBARI_BENEFICIAR.md](INTREBARI_BENEFICIAR.md), punctul 9, pentru clarificările de integrare din
+S 4.1. P13 rămâne autorizat de S 4.6 și se implementează după P4.
 
 > Nota de diagnostic (N04a), de citit înainte de a interpreta rularea de probă: marginea dreaptă a ferestrei era o zi exactă (`AZI`), dar cea stângă era cuantizată la duminică de `DATEDIFF(WEEK, …)`. Ferestrele efective erau deci **sistematic mai scurte** decât cele declarate, cu `6 − index_zi` zile, și variau cu ziua în care cade `AZI`: `VZ_4S` acoperea **22–28 de zile**, nu 28. Deficitul relativ e invers proporțional cu lungimea ferestrei, deci lovea cel mai tare exact fereastra cu ponderea cea mai mare în `AVG` (`AVG_WEIGHT_4S = 0,30`). Pentru `AZI` miercuri, la cerere uniformă, `AVG` ar trebui să crească cu ~5,4%, deci `MIN`/`MAX`/`BUY` cresc pe tot portofoliul, iar `FLAG_RATIO` se mută spre `UP`. **Aceasta este predicția falsificabilă a lui RUNID 18**: dacă `AVG` nu crește, predicatul nu s-a aplicat.
 
@@ -66,7 +69,7 @@ Data ultimei actualizări: 16.09.2026.
 >
 > **Decizia celor doi martori s-a validat pe date** (16.09.2026): efectul lui `ROLLING` asupra lui `SAPT_VZ` (11.986 rânduri) și cel al lui `ISO` (aceleași 11.986 rânduri, în sens invers) se anulează exact. Cu un singur martor s-ar fi anulat în interiorul aceleiași rulări, iar regresia intermediară n-ar fi fost niciodată vizibilă.
 
-> **Rezultat măsurat N04b, factorială completă pe trei axe** (16.09.2026, șapte rulări, `AZI=2026-09-16` pe toate, populație 716.240 rânduri / 51.160 itemi). Configurația de producție este **RUNID 25** (`ZILE` + `ROLLING` + `ISO`), 15/15 invariante PASS.
+> **Rezultat măsurat N04b, factorială completă pe trei axe** (16.09.2026, șapte rulări, `AZI=2026-09-16` pe toate, populație 716.240 rânduri / 51.160 itemi). La închiderea N04b, configurația de producție era **RUNID 25** (`ZILE` + `ROLLING` + `ISO`), 15/15 invariante PASS.
 >
 > | RUNID | FERESTRE | GRILĂ | BAZĂ | Σ total | AVG total | STANDARD |
 > | --- | --- | --- | --- | --- | --- | --- |

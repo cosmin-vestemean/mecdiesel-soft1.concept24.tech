@@ -45,7 +45,7 @@ export class MinmaxRunPanel extends LitElement {
     super();
 
     this.historyError = '';
-    this.branchAssignmentMode = 'CLIENT';
+    this.branchAssignmentMode = 'AGENT';
     this.calibrareMod = 'C';
     this.canEdit = false;
     this.loading = false;
@@ -255,9 +255,9 @@ export class MinmaxRunPanel extends LitElement {
                 ?disabled="${Boolean(openRun) || this.runLaunch.starting || this.runLaunch.polling}"
                 @change="${this._setBranchAssignmentMode}"
               >
-                <option value="CLIENT" title="Atribuie vanzarea filialei din TRDBRANCH a clientului; daca lipseste, foloseste filiala documentului. Implicit.">Client (TRDBRANCH)</option>
+                <option value="CLIENT" title="Atribuie vanzarea filialei din TRDBRANCH a clientului; daca lipseste, foloseste filiala documentului.">Client (TRDBRANCH)</option>
                 <option value="DOC" title="Atribuie vanzarea filialei documentului de vanzare (FINDOC.BRANCH).">Document (FINDOC)</option>
-                <option value="AGENT" title="Atribuie vanzarea filialei agentului de vanzare (PRSN.BRANCH), ca in jobul legacy.">Agent (PRSN)</option>
+                <option value="AGENT" title="Atribuie vanzarea filialei agentului de vanzare (PRSN.BRANCH), ca in jobul legacy. Implicit.">Agent (PRSN)</option>
               </select>
             </label>
             <label class="d-flex align-items-center gap-2 mb-0 small" for="minmax-calibrare-mod">

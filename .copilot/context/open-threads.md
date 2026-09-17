@@ -41,7 +41,7 @@ Firele **pe obiectiv** rămân în `current-focus.md`.
 
 - id: mod-atribuire-client-neprezentat-beneficiarului
   opened: 2026-09-10
-  status: open
+  status: closed
   area: new_min_max/PLAN_IMPLEMENTARE.md + sql/ufn_MinMaxSalesLines
   summary: >
     MOD_ATRIBUIRE_FILIALA are default CLIENT (FINDOC.TRDBRANCH), mod introdus de
@@ -54,9 +54,11 @@ Firele **pe obiectiv** rămân în `current-focus.md`.
     Decizie luata; ramane deschis doar riscul ca beneficiarul sa nu stie ca
     exista a treia optiune si ca ea este activa implicit.
   next_step: >
-    De semnalat explicit beneficiarului existenta modului CLIENT si faptul ca
-    este default, cu cifra de impact (o treime din linii), la urmatoarea
-    interactiune de confirmare.
+    INCHIS 17.09.2026. Default-ul a trecut pe AGENT (ca in jobul legacy) in seed
+    si in toate fallback-urile SQL/validator/UI, iar modul CLIENT nu mai este
+    activ implicit. Intrebarea a intrat in INTREBARI_BENEFICIAR.md ca punctul 10,
+    cu cifrele de impact si cu exemplul client Bucuresti / ridicare din Cluj.
+    RUNID 26 ramane ultimul reper masurat pe CLIENT.
 
 - id: switch-ui-banda-acceptanta
   opened: 2026-09-10

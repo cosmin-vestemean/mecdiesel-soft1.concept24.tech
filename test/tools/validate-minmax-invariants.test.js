@@ -470,4 +470,33 @@ describe('MIN/MAX N04b weekly grid split contract', () => {
     const validator = fs.readFileSync(path.join(root, 'new_min_max', 'tools', 'validate-minmax-invariants.cjs'), 'utf8')
     assert.match(validator, /id: 'grila_sapt'/)
   })
+
+  it('exposes the vz_grp_det invariant in the validator (item 1c)', () => {
+    const validator = fs.readFileSync(path.join(root, 'new_min_max', 'tools', 'validate-minmax-invariants.cjs'), 'utf8')
+    assert.match(validator, /id: 'vz_grp_det'/)
+  })
+})
+
+describe('MIN/MAX branch assignment default contract', () => {
+  it('seeds MOD_ATRIBUIRE_FILIALA with AGENT', () => {
+    assert.match(sqlSource('00_params.sql'), /\('MOD_ATRIBUIRE_FILIALA',\s*'AGENT',\s*'STR',\s*'GLOBAL'/)
+  })
+
+  it('falls back to AGENT in every stage that resolves the mode on its own', () => {
+    assert.match(sqlSource('00e_start_run.sql'), /IF @BranchAssignmentMode = '' OR @BranchAssignmentMode IS NULL\s*SET @BranchAssignmentMode = 'AGENT';/)
+    assert.match(sqlSource('00c_sales_lines.sql'), /IF @ModAtribuire NOT IN \('DOC', 'AGENT', 'CLIENT'\) OR @ModAtribuire IS NULL\s*SET @ModAtribuire = 'AGENT';/)
+    assert.match(sqlSource('01_classify.sql'), /OR @ModAtribuire IS NULL SET @ModAtribuire = 'AGENT';/)
+    assert.match(sqlSource('02_classify_group.sql'), /OR @ModAtribuire IS NULL SET @ModAtribuire = 'AGENT';/)
+  })
+
+  it('keeps all three modes selectable, so the default is a parameter and not a hardcoded rule', () => {
+    assert.match(sqlSource('00e_start_run.sql'), /IF @BranchAssignmentMode NOT IN \('DOC', 'AGENT', 'CLIENT'\)\s*THROW 50052/)
+  })
+
+  it('re-derives live sales lines with the mode frozen in the snapshot, not with the current default', () => {
+    const validator = fs.readFileSync(path.join(root, 'new_min_max', 'tools', 'validate-minmax-invariants.cjs'), 'utf8')
+
+    assert.match(validator, /const modAtribuireRaw = String\(runParams\.MOD_ATRIBUIRE_FILIALA \|\| ''\)/)
+    assert.doesNotMatch(validator, /\? modAtribuireRaw : 'CLIENT'/)
+  })
 })

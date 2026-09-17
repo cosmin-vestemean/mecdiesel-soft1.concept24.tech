@@ -2,14 +2,14 @@
 
 Data: 16.09.2026. Destinatar: beneficiar. Statut: document de lucru, se trimite după validare internă.
 
-Fiecare punct de mai jos are aceeași structură: ce spune documentația, ce am constatat, ce propunem. Am separat deliberat două situații care nu trebuie confundate:
+Punctele 1-10 au aceeași structură: ce spune documentația, ce am constatat, ce propunem. Am separat deliberat două situații care nu trebuie confundate:
 
 - **Contradicție** — materialele din septembrie spun altceva decât ce am consemnat noi ca fiind confirmat de dumneavoastră în august. Nu alegem tacit varianta mai recentă.
 - **Gol** — specificația nu tratează cazul, iar orice valoare am pune ar fi invenția noastră prezentată ca regulă.
 
-Punctele unde specificația este clară și codul nostru devia nu apar aici: le corectăm noi, fără să vă cerem timp.
+Punctele unde specificația este clară și codul nostru devia nu apar aici: le corectăm noi, fără să vă cerem timp. Punctul 11 nu este o întrebare, ci un livrabil.
 
-Până la răspuns, motorul rămâne pe comportamentul actual, iar raportul fiecărei rulări declară explicit ce valoare a folosit. Nu adoptăm nimic în tăcere.
+Până la răspuns, motorul rămâne pe comportamentul actual, iar foaia PARAMETRI asociată fiecărei rulări declară explicit ce valoare a folosit. Nu adoptăm nimic în tăcere.
 
 ---
 
@@ -81,7 +81,7 @@ Până la răspuns, motorul rămâne pe comportamentul actual, iar raportul fiec
 
 **Punctul decisiv**: rândul implicit, cel care se aplică oricărui cod nerecunoscut. Documentația scrie termen de livrare 14 zile și frecvență 30. Fișierul dumneavoastră de rezultate conține 30 la termenul de livrare, iar exemplul pe care l-am reconstituit numeric din el se potrivește cu 30, nu cu 14.
 
-**Întrebare**: lista canonică completă, în formă unică, și valoarea implicită — 14 sau 30? Până la răspuns, motorul folosește un fallback tehnic, semnalat ca atare în raportul fiecărei rulări.
+**Întrebare**: lista canonică completă, în formă unică, și valoarea implicită — 14 sau 30? Până la răspuns, motorul folosește un fallback tehnic, semnalat ca atare în foaia PARAMETRI a fiecărei rulări.
 
 ---
 
@@ -111,22 +111,67 @@ Până la răspuns, motorul rămâne pe comportamentul actual, iar raportul fiec
 
 ---
 
-## 9. Cantitatea minimă vândută *(clarificare simplă)*
+## 9. Universul de articole calculat pentru HQ și fiecare filială *(gol)*
 
-**Septembrie, S 4.6**: pragul „cea mai mică cantitate vândută" este listat între mărimile calculate per articol **și per locație**.
+**Septembrie, S 4.1** definește universuri diferite:
 
-**Astăzi**: îl calculăm o singură dată pe companie și îl aplicăm tuturor filialelor.
+- la HQ: articole din stocul brut total și din sursa MIN/MAX brută HQ, cu un fallback din vânzări;
+- la filială: uniunea articolelor cu stoc pozitiv, poziție ERP, poziție manuală sau vânzări.
 
-**Ce înseamnă diferența**: dacă un articol se livrează în mod obișnuit în cutii de 12, dar undeva în rețea a existat o vânzare izolată de 1 bucată, varianta actuală coboară pragul la 1 în toate filialele.
+**Astăzi**: motorul pornește numai de la articolele cu vânzări eligibile și creează aceleași articole
+pentru toate filialele.
 
-**Propunerea noastră**: calcul pe filială, conform specificației, fără corecții suplimentare. Dacă doriți o protecție împotriva tranzacțiilor izolate, o proiectăm separat — nu o introducem tacit, fiindcă ar fi o regulă a noastră, nu a dumneavoastră.
+**Ce facem după răspuns**: implementăm uniunile per scope așa cum le definește S 4.1. Clarificările
+solicitate mai jos privesc exclusiv situațiile pe care specificația nu le definește, iar orice
+alegere de-a noastră acolo ar fi invenția noastră prezentată ca regulă.
 
-**Întrebare**: confirmați calculul pe filială?
+**Constatare**: stocul folosit pentru apartenența la univers include transferurile nerecepționate —
+implementarea folosește deja `STOC_QTY = STOC_FIZIC_QTY + TRANSFER_IN_QTY`, conform deciziei D1/D2.
+
+**Propunerea noastră, pentru fiecare gol real**:
+
+1. Sursa poziției manuale și maparea rândului `BUCURESTI`: propunem maparea directă la filiala fizică
+	București, nu la HQ. Alegeți: (a) filiala fizică București; (b) HQ; (c) altă sursă — precizați.
+2. Fallback-ul HQ din vânzări: propunem aplicarea numai când lipsește **întreaga** sursă MIN/MAX brută
+	HQ. Alegeți: (a) numai la lipsa întregii surse; (b) și per articol absent din acea sursă.
+3. „Poziție ERP": propunem existența rândului, indiferent de valoarea limitei. Alegeți: (a) existența
+	rândului; (b) existența unei limite MIN/MAX pozitive.
+4. Podeaua Bucureștiului pentru un articol existent la HQ, dar absent din universul București:
+	propunem crearea articolului la București pentru aplicarea podelei procentuale. Alegeți: (a) se
+	creează pentru aplicarea podelei; (b) rămâne absent, fără podea. Aici stabilim existența rândului;
+	procentul podelei se confirmă separat în foaia de parametri.
+
+**Întrebare**: alegeți una dintre variantele indicate pentru fiecare din cele patru puncte de mai
+sus, sau precizați altă sursă/regulă acolo unde propunerea noastră nu se potrivește. Răspunsul
+dumneavoastră completează exclusiv cazurile-limită nedefinite; uniunile per scope rămân cele
+descrise de S 4.1.
 
 ---
 
-## 10. Foaia de parametri a primei rulări aliniate
+## 10. Cărei filiale îi aparține o vânzare *(gol)*
 
-Independent de cele nouă puncte, avem nevoie de **o singură foaie de parametri semnată**, care devine configurația de referință: matricea de acoperire, inclusiv coloana pentru filialele medii, rămasă necompletată; încadrarea fiecărei filiale pe mărime; podeaua Bucureștiului (documentația spune 40%, motorul folosește 30%); nivelurile de serviciu; coeficienții HQ.
+**Septembrie**: specificația primește filiala ca dată de intrare și nu descrie cum se derivă ea din ERP.
 
-Aceasta este oricum cerută de specificație pentru auditul fiecărei rulări. Vă propunem să o tratăm ca livrabil unic, nu ca pe zece confirmări separate.
+**August**: documentul de confirmare vă oferea două variante — filiala documentului sau filiala agentului. Jobul dumneavoastră actual folosește filiala agentului.
+
+**Constatare**: motorul are astăzi trei moduri, dintre care al treilea, „filiala clientului", **a fost adăugat de noi** și nu v-a fost supus niciodată:
+
+- **filiala documentului** — de unde a ieșit fizic marfa;
+- **filiala agentului** — filiala agentului de vânzare, ca în jobul actual;
+- **filiala clientului** — filiala atașată manual clientului în ERP, cu revenire la filiala documentului când maparea lipsește.
+
+**De ce contează**: alegerea mută liniile de vânzare între filiale, deci schimbă cererea, clasificarea ABC, variabilitatea și în final MIN/MAX-ul fiecărei filiale. Între atribuirea pe document și cea pe agent diferă circa o treime din liniile de vânzare. Filiala agentului și cea a clientului coincid în 87,7% din cazuri, iar filiala documentului coincide cu cea a clientului doar în 60,5%.
+
+**Cazul care ne-a făcut să vă întrebăm**: un client înregistrat la București ridică marfa din Cluj. Pe „filiala clientului", cererea se contabilizează la București, deși marfa a plecat din Cluj; pe „filiala documentului", la Cluj; pe „filiala agentului", la filiala celui care a vândut. Nu există un răspuns corect în absența unei reguli de business: depinde dacă stocul trebuie să urmeze locul de consum al clientului sau punctul din care livrați efectiv.
+
+**Ce am schimbat până la răspunsul dumneavoastră**: am pus valoarea implicită pe **filiala agentului**, ca în jobul pe care îl folosiți astăzi, în locul modului introdus de noi. Am preferat să revenim la comportamentul dumneavoastră cunoscut decât să păstrăm activ un default propriu.
+
+**Întrebare**: confirmați filiala agentului, sau preferați filiala documentului ori filiala clientului? Dacă regula reală este mixtă — de exemplu ridicarea din alt depozit rămâne cererea filialei clientului — descrieți-o, fiindcă astăzi nu este scrisă nicăieri.
+
+---
+
+## 11. Foaia de parametri a primei rulări aliniate
+
+Independent de cele zece puncte, avem nevoie de **o singură foaie de parametri semnată**, care devine configurația de referință: matricea de acoperire, inclusiv coloana pentru filialele medii, rămasă necompletată; încadrarea fiecărei filiale pe mărime; podeaua Bucureștiului (documentația spune 40%, motorul folosește 30%); nivelurile de serviciu; coeficienții HQ.
+
+Aceasta este oricum cerută de specificație pentru auditul fiecărei rulări. Vă propunem să o tratăm ca un singur livrabil, nu ca pe confirmări separate pentru fiecare valoare.

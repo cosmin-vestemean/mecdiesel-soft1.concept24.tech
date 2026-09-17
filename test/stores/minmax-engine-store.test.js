@@ -221,7 +221,7 @@ describe('minmax-engine-store — Phase 6 run lifecycle', () => {
     const ok = await store.runEngine({ poll: false });
 
     assert.strictEqual(ok, true);
-    assert.strictEqual(payload.branchAssignmentMode, 'CLIENT');
+    assert.strictEqual(payload.branchAssignmentMode, 'AGENT');
     assert.strictEqual(payload.calibrareMod, 'C');
     assert.strictEqual(payload.scope, 'FULL');
     assert.strictEqual(payload.token, 'test-token');

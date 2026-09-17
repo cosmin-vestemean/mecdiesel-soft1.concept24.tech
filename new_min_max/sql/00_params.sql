@@ -135,7 +135,7 @@ CREATE TABLE CCCMINMAXPARAMOVERRIDE (
         -- Perimetru de date
         ('EXCLUDERI_CLIENTI',      'C.000003,MECDIS', 'LIST', 'GLOBAL', '', 'Coduri TRDR.CODE excluse (NU id-uri TRDR - codurile nu sunt unice). MECDI2 si INTE79 raman incluse'),
         ('EXCLUDERI_PREFIXE',      'DISC.,OTHER.',    'LIST', 'GLOBAL', '', 'Prefixe de cod articol excluse din calcul'),
-        ('MOD_ATRIBUIRE_FILIALA',  'CLIENT',          'STR',  'GLOBAL', '', 'DOC (FINDOC.BRANCH) / AGENT (PRSN.BRANCH) / CLIENT (TRDBRANCH.BRANCH) - I7, de confirmat'),
+        ('MOD_ATRIBUIRE_FILIALA',  'AGENT',           'STR',  'GLOBAL', '', 'DOC (FINDOC.BRANCH) / AGENT (PRSN.BRANCH) / CLIENT (TRDBRANCH.BRANCH) - I7, implicit AGENT ca in jobul legacy; de confirmat'),
         ('HQ_DIN_AGREGAT_COMPANIE','1',               'BOOL', 'GLOBAL', '', 'HQ se dimensioneaza pe vanzarile insumate ale filialelor; HQ nu are cerere proprie (I6)'),
         ('CALIBRARE_MOD',          'C',               'STR',  'GLOBAL', '', 'Metrica de calibrare raportata ca principala la lansare: A/B/C (P14)'),
 

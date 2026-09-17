@@ -180,7 +180,7 @@ BEGIN
     IF @WinsorPct IS NULL OR @WinsorPct <= 0 OR @WinsorPct > 1 SET @WinsorPct = 0.95;
     IF COALESCE(@WinsorMinLinii, 0) <= 0 SET @WinsorMinLinii = 8;
     IF @WinsorSubPrag NOT IN ('NONE', 'MEDIANA') OR @WinsorSubPrag IS NULL SET @WinsorSubPrag = 'MEDIANA';
-    IF @ModAtribuire NOT IN ('DOC', 'AGENT', 'CLIENT') OR @ModAtribuire IS NULL SET @ModAtribuire = 'CLIENT';
+    IF @ModAtribuire NOT IN ('DOC', 'AGENT', 'CLIENT') OR @ModAtribuire IS NULL SET @ModAtribuire = 'AGENT';
     SET @HqDinAgregatCompanie = COALESCE(@HqDinAgregatCompanie, 1);
     IF COALESCE(@PragRecHq, 0) <= 0 SET @PragRecHq = 39;
     IF COALESCE(@PragRecBr, 0) <= 0 SET @PragRecBr = 26;

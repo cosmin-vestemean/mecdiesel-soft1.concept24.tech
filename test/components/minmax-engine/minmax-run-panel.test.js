@@ -67,7 +67,7 @@ describe('minmax-run-panel — Phase 6 launch button', () => {
     try {
       await element.updateComplete;
       element.querySelector('button[title="Porneste o sesiune MIN/MAX noua"]').click();
-      assert.deepStrictEqual(calls, ['runEngine:CLIENT']);
+      assert.deepStrictEqual(calls, ['runEngine:AGENT']);
     } finally {
       window.confirm = originalConfirm;
     }

@@ -631,7 +631,7 @@ export class MinmaxEngineStore {
     }
   }
 
-  async runEngine ({ branchAssignmentMode = 'CLIENT', calibrareMod = 'C', poll = true } = {}) {
+  async runEngine ({ branchAssignmentMode = 'AGENT', calibrareMod = 'C', poll = true } = {}) {
     const seq = this._beginRequest('run');
     this._stopRunPolling();
     this.dispatch({ type: 'SET_RUN_LAUNCH', payload: { error: '', polling: false, runId: null, starting: true } });

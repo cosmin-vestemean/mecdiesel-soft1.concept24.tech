@@ -28,7 +28,7 @@ BEGIN
         WHERE PARAMKEY = 'MOD_ATRIBUIRE_FILIALA' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
 
     IF @BranchAssignmentMode = '' OR @BranchAssignmentMode IS NULL
-        SET @BranchAssignmentMode = 'CLIENT';
+        SET @BranchAssignmentMode = 'AGENT';
 
     IF @CalibrareMod = ''
         SELECT @CalibrareMod = UPPER(LTRIM(RTRIM(PARAMVALUE)))

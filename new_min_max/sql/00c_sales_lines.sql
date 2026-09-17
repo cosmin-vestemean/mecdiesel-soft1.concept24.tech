@@ -59,7 +59,7 @@ BEGIN
         WHERE PARAMKEY = 'NRZILE' AND SCOPE = 'GLOBAL' AND SCOPEKEY = '';
 
     IF @ModAtribuire NOT IN ('DOC', 'AGENT', 'CLIENT') OR @ModAtribuire IS NULL
-        SET @ModAtribuire = 'CLIENT';
+        SET @ModAtribuire = 'AGENT';
     SET @ExcluderiClienti = COALESCE(@ExcluderiClienti, '');
     SET @ExcluderiPrefixe = COALESCE(@ExcluderiPrefixe, '');
     IF COALESCE(@NrZile, 0) <= 0 SET @NrZile = 365;
