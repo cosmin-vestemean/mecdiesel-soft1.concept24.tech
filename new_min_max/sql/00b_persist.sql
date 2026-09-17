@@ -479,6 +479,14 @@ IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
            WHERE TABLE_NAME='CCCMINMAXRUN' AND COLUMN_NAME='ESTE_CURENT')
 ALTER TABLE CCCMINMAXRUN ADD ESTE_CURENT BIT NULL;
 
+-- Pin minimal si generalizat (P17): un reper marcat explicit prin UPDATE
+-- operational nu poate fi purjat de sp_MinMaxEngine_PurgeRun, indiferent de
+-- pozitia lui in fereastra RETENTIE_DET_SESIUNI. Nu se seteaza aici pentru
+-- niciun RUNID; secventa de pin este operationala, separata de setup.
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_NAME='CCCMINMAXRUN' AND COLUMN_NAME='ESTE_REPER')
+ALTER TABLE CCCMINMAXRUN ADD ESTE_REPER BIT NOT NULL CONSTRAINT DF_CCCMINMAXRUN_ESTE_REPER DEFAULT (0);
+
 --=====================================================================
 -- 7. Eliminare JSON-uri de dezvoltare (decizie 10.09.2026): snapshot-ul
 --    CCCMINMAXRUNPARAM le inlocuieste. Sistem in dezvoltare, fara migrare

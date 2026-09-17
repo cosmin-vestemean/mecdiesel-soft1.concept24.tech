@@ -11,5 +11,6 @@ export const minmaxEngineMethods = [
   'saveParams', // write path via execSql — atomic via execSql `statements`
   'runEngine', // startRun + fire-and-forget runPhases via /JS/NewMinMax (FAZA6 §4)
   'abandonRun', // marks an OPEN session ABANDONED (FAZA6 §5)
-  'purgeRun' // purges DET/WEEK/WINSOR for a finished, non-current session (FAZA6 §6)
+  'purgeRun', // purges DET/WEEK/WINSOR for a finished, non-current session (FAZA6 §6)
+  'purgeSelector' // read-only retention classification per RUNID (P17, FAZA6 §6)
 ]

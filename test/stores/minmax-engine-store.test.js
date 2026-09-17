@@ -439,6 +439,74 @@ describe('minmax-engine-store — Phase 6 run lifecycle', () => {
     assert.strictEqual(store.getState().runHistory[0].SESSION_STATUS, 'ABANDONED');
   });
 
+  // P17: purgeRun() on the abandonRun() pattern — call the service, refresh
+  // history, own error slot (never runLaunch, which belongs to run polling).
+  it('purges a session and refreshes history', async () => {
+    const store = new MinmaxEngineStore();
+    const calls = [];
+    store._getService = () => ({
+      history: async () => ({ rows: [{ RUNID: 13, SESSION_STATUS: 'DONE' }] }),
+      purgeRun: async (payload) => {
+        calls.push({ method: 'purgeRun', payload });
+        return { deletedDet: 706734, deletedWeek: 12345, deletedWinsor: 100, runId: 13 };
+      }
+    });
+
+    const result = await store.purgeRun(13, 5000);
+
+    assert.strictEqual(calls[0].payload.runId, 13);
+    assert.strictEqual(calls[0].payload.batchSize, 5000);
+    assert.strictEqual(calls[0].payload.token, 'test-token');
+    assert.strictEqual(result.deletedDet, 706734);
+    assert.strictEqual(store.getState().purgeRunError, '');
+    assert.strictEqual(store.getState().runHistory[0].RUNID, 13);
+  });
+
+  it('records a purgeRun failure without touching runLaunch state', async () => {
+    const store = new MinmaxEngineStore();
+    store._getService = () => ({
+      purgeRun: async () => { throw new Error('sp_MinMaxEngine_PurgeRun: the current session cannot be purged.'); }
+    });
+
+    const result = await store.purgeRun(28);
+
+    assert.strictEqual(result, null);
+    assert.strictEqual(store.getState().purgeRunError, 'sp_MinMaxEngine_PurgeRun: the current session cannot be purged.');
+    assert.strictEqual(store.getState().runLaunch.error, '', 'purgeRun failures must not surface as a run-launch error');
+  });
+
+  // P17: purgeSelector() is read-only — the store never derives PURGE_STATUS
+  // itself, only stores what the SQL-computed selector returned.
+  it('loads the retention selector rows as-is', async () => {
+    const store = new MinmaxEngineStore();
+    const rows = [
+      { esteCurent: 1, esteReper: 0, purgeStatus: 'CURRENT', runId: 28 },
+      { esteCurent: 0, esteReper: 1, purgeStatus: 'PINNED', runId: 26 }
+    ];
+    store._getService = () => ({ purgeSelector: async () => ({ rows }) });
+
+    const result = await store.loadPurgeSelector();
+
+    assert.deepStrictEqual(result, rows);
+    assert.deepStrictEqual(store.getState().purgeSelector.rows, rows);
+    assert.strictEqual(store.getState().purgeSelector.loading, false);
+    assert.strictEqual(store.getState().purgeSelector.error, '');
+  });
+
+  it('records a purgeSelector failure without clearing previously loaded rows behavior contract', async () => {
+    const store = new MinmaxEngineStore();
+    const existingRows = [{ runId: 26, purgeStatus: 'PINNED' }];
+    store.dispatch({ type: 'SET_PURGE_SELECTOR_ROWS', payload: existingRows });
+    store._getService = () => ({ purgeSelector: async () => { throw new Error('network blip'); } });
+
+    const result = await store.loadPurgeSelector();
+
+    assert.strictEqual(result, undefined);
+    assert.deepStrictEqual(store.getState().purgeSelector.rows, existingRows);
+    assert.strictEqual(store.getState().purgeSelector.error, 'network blip');
+    assert.strictEqual(store.getState().purgeSelector.loading, false);
+  });
+
   it('counts a history failure as a retryable polling error', async () => {
     const store = new MinmaxEngineStore();
     store._getService = () => ({ history: async () => { throw new Error('network blip'); } });

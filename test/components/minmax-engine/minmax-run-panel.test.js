@@ -24,7 +24,9 @@ describe('minmax-run-panel — Phase 6 launch button', () => {
     element._store = {
       getState: () => ({ params: { writesEnabled } }),
       abandonRun: (runId) => calls.push(`abandonRun:${runId}`),
-      runEngine: (options) => calls.push(`runEngine:${options.branchAssignmentMode}`)
+      runEngine: (options) => calls.push(`runEngine:${options.branchAssignmentMode}`),
+      loadHistory: () => calls.push('loadHistory'),
+      loadPurgeSelector: () => calls.push('loadPurgeSelector')
     };
     element.writesEnabled = writesEnabled;
     element.canEdit = true;
@@ -231,5 +233,66 @@ describe('minmax-run-panel — Phase 6 launch button', () => {
     assert.ok(rowText.includes('39s'));
     assert.ok(rowText.includes('2m 12s'));
     assert.ok(rowText.includes('10.09.2026'));
+  });
+
+  // P17: the read-only retention selector renders discreetly — only PINNED
+  // and PURGED add information the row doesn't already show, no destructive
+  // button is ever rendered by this component.
+  it('renders a REPER badge for a PINNED run and stays silent for PROTECTED/ELIGIBLE', async () => {
+    setAppToken(jwtWithRoles(['minmax.edit']));
+    const { element } = mount();
+    element.runHistory = [
+      { RUNID: 26, SESSION_STATUS: 'DONE', COMPUTE_STATUS: 'DONE', GROUP_STATUS: 'DONE' },
+      { RUNID: 27, SESSION_STATUS: 'DONE', COMPUTE_STATUS: 'DONE', GROUP_STATUS: 'DONE' },
+      { RUNID: 28, SESSION_STATUS: 'DONE', COMPUTE_STATUS: 'DONE', GROUP_STATUS: 'DONE' }
+    ];
+    element.purgeSelectorRows = [
+      { esteCurent: 0, esteReper: 1, purgeStatus: 'PINNED', runId: 26 },
+      { esteCurent: 0, esteReper: 0, purgeStatus: 'PROTECTED', runId: 27 },
+      { esteCurent: 0, esteReper: 0, purgeStatus: 'ELIGIBLE', runId: 28 }
+    ];
+    await element.updateComplete;
+
+    const rows = [...element.querySelectorAll('tbody tr')];
+    assert.ok(rows[0].querySelector('.badge.bg-info'), 'PINNED renders a REPER badge');
+    assert.ok(rows[0].textContent.includes('REPER'));
+    assert.ok(!rows[1].querySelector('.badge.bg-info'), 'PROTECTED stays silent');
+    assert.ok(!rows[2].querySelector('.badge.bg-info'), 'ELIGIBLE stays silent');
+    assert.ok(!element.querySelector('button[title="Purjeaza sesiunea"]'), 'no destructive purge button is rendered');
+  });
+
+  it('shows a muted note for a PURGED run instead of a badge', async () => {
+    setAppToken(jwtWithRoles(['minmax.edit']));
+    const { element } = mount();
+    element.runHistory = [{ RUNID: 20, SESSION_STATUS: 'DONE', COMPUTE_STATUS: 'DONE', GROUP_STATUS: 'DONE' }];
+    element.purgeSelectorRows = [{ esteCurent: 0, esteReper: 0, purgeStatus: 'PURGED', runId: 20 }];
+    await element.updateComplete;
+
+    const row = element.querySelector('tbody tr');
+    assert.ok(row.textContent.includes('date eliberate'));
+    assert.ok(!row.querySelector('.badge.bg-info'));
+  });
+
+  it('refreshes both history and the retention selector from the manual refresh button', async () => {
+    setAppToken(jwtWithRoles(['minmax.edit']));
+    const { calls, element } = mount();
+    await element.updateComplete;
+
+    element.querySelector('button[title="Reincarca istoricul"]').click();
+    assert.ok(calls.includes('loadHistory'));
+    assert.ok(calls.includes('loadPurgeSelector'));
+  });
+
+  it('shows a loading indicator and error text for the retention selector without blocking the table', async () => {
+    setAppToken(jwtWithRoles(['minmax.edit']));
+    const { element } = mount();
+    element.purgeSelectorLoading = true;
+    await element.updateComplete;
+    assert.ok(element.querySelector('summary .fa-spinner'), 'loading spinner shown next to the history summary');
+
+    element.purgeSelectorLoading = false;
+    element.purgeSelectorError = 'Nu s-a putut incarca selectorul de retentie.';
+    await element.updateComplete;
+    assert.ok(element.textContent.includes('Retentie neverificata'));
   });
 });

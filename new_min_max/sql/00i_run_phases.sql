@@ -7,6 +7,9 @@
 -- STATUS/ERRORMSG-style columns, so the generic CATCH below only fills in
 -- ERRORMSG when none of them got the chance to (e.g. FinishRun's own
 -- precondition THROW, which never touches those columns itself).
+-- After a successful FinishRun (P17), a single automatic retention purge
+-- runs in its own isolated TRY/CATCH: failure never touches the engine's
+-- error columns and never THROWs, only a severity 10 message.
 -- ===================================================================
 
 CREATE OR ALTER PROCEDURE dbo.sp_MinMaxEngine_RunPhases
@@ -59,5 +62,19 @@ BEGIN
         END;
 
         THROW;
+    END CATCH;
+
+    -- Purjare automata a retentiei (P17), maximum o rulare, numai dupa un
+    -- FinishRun reusit (codul de mai sus ar fi terminat procedura prin THROW
+    -- altfel). Izolata deliberat intr-un TRY/CATCH separat: o eroare de
+    -- purjare NU marcheaza sesiunea motorului esuata si NU atinge
+    -- ERRORMSG/COMPUTE_ERRORMSG/GROUP_ERRORMSG - doar un mesaj de
+    -- severitate 10 in job history, fara THROW.
+    BEGIN TRY
+        EXEC dbo.sp_MinMaxEngine_PurgeRetention @Company = @Company, @MaxRuns = 1;
+    END TRY
+    BEGIN CATCH
+        DECLARE @PurgeErrorMsg NVARCHAR(400) = LEFT(ERROR_MESSAGE(), 400);
+        RAISERROR('sp_MinMaxEngine_RunPhases: automatic retention purge failed (%s).', 10, 1, @PurgeErrorMsg) WITH NOWAIT;
     END CATCH;
 END;

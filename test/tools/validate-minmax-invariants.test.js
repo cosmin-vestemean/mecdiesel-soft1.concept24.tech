@@ -500,3 +500,115 @@ describe('MIN/MAX branch assignment default contract', () => {
     assert.doesNotMatch(validator, /\? modAtribuireRaw : 'CLIENT'/)
   })
 })
+
+describe('MIN/MAX retention purge contract (P17)', () => {
+  it('keeps PurgeRun the final authority: current (50042), OPEN (50043) and pin (50053/ESTE_REPER) guards precede the 50044 retention throw', () => {
+    const purgeRun = sqlSource('00h_purge_run.sql')
+
+    assert.match(purgeRun, /IF COALESCE\(@EsteCurent, 0\) = 1\s*THROW 50042/)
+    assert.match(purgeRun, /IF @SessionStatus = 'OPEN'\s*THROW 50043/)
+    assert.match(purgeRun, /ESTE_REPER = 1\s*\)\s*THROW 50053/)
+    assert.match(purgeRun, /THROW 50044, 'sp_MinMaxEngine_PurgeRun: RUNID is protected by RETENTIE_DET_SESIUNI\.'/)
+
+    // Guard order in source: current, then OPEN, then pin, then retention window.
+    const order = ['THROW 50042', 'THROW 50043', 'THROW 50053', 'THROW 50044']
+      .map((needle) => purgeRun.indexOf(needle))
+    assert.ok(order.every((pos) => pos > -1), 'all four guards present')
+    for (let i = 1; i < order.length; i += 1) {
+      assert.ok(order[i] > order[i - 1], `guard ${order[i]} must come after ${order[i - 1]}`)
+    }
+  })
+
+  it('selector labels CURRENT/OPEN/PINNED/PROTECTED/PURGED before ELIGIBLE, never deletes, and drives from the same RETENTIE_DET_SESIUNI window as PurgeRun', () => {
+    const selector = sqlSource('00k_purge_selector.sql')
+    const purgeRun = sqlSource('00h_purge_run.sql')
+
+    assert.doesNotMatch(selector, /\bDELETE\b/i)
+    assert.match(selector, /PARAMKEY = 'RETENTIE_DET_SESIUNI'/)
+    assert.match(selector, /IF COALESCE\(@RetentionCount, 0\) < 1 SET @RetentionCount = 2;/)
+
+    // Same "protected" shape as PurgeRun: TOP(@RetentionCount) most recent
+    // FULL/DONE runs, oldest excluded.
+    assert.match(selector, /SELECT TOP \(@RetentionCount\) RUNID\s*FROM CCCMINMAXRUN\s*WHERE COMPANY = @Company\s*AND SCOPE = 'FULL'\s*AND SESSION_STATUS = 'DONE'\s*ORDER BY RUNID DESC/)
+    assert.match(purgeRun, /SELECT TOP \(@RetentionCount\) RUNID\s*FROM CCCMINMAXRUN\s*WHERE COMPANY = @Company\s*AND SCOPE = 'FULL'\s*AND SESSION_STATUS = 'DONE'\s*ORDER BY RUNID DESC/)
+
+    const casePos = selector.indexOf('CASE')
+    const currentPos = selector.indexOf("'CURRENT'")
+    const openPos = selector.indexOf("'OPEN'")
+    const pinnedPos = selector.indexOf("'PINNED'")
+    const protectedPos = selector.indexOf("'PROTECTED'")
+    const purgedPos = selector.indexOf("'PURGED'")
+    const eligiblePos = selector.indexOf("'ELIGIBLE'")
+    for (const pos of [casePos, currentPos, openPos, pinnedPos, protectedPos, purgedPos, eligiblePos]) {
+      assert.ok(pos > -1, 'every PURGE_STATUS branch is present')
+    }
+    // CASE evaluates in source order: CURRENT, OPEN, PINNED, PROTECTED, PURGED, ELIGIBLE.
+    assert.ok(currentPos < openPos && openPos < pinnedPos && pinnedPos < protectedPos)
+    assert.ok(protectedPos < purgedPos && purgedPos < eligiblePos)
+
+    // Both terminal states are reclaimable. The retention window itself stays
+    // deliberately limited to FULL/DONE, exactly like PurgeRun's 50044 guard.
+    assert.match(selector, /WHEN r\.SESSION_STATUS IN \('DONE', 'ABANDONED'\)\s*AND NOT EXISTS \(SELECT 1 FROM CCCMINMAXDET WHERE RUNID = r\.RUNID\)\s*AND NOT EXISTS \(SELECT 1 FROM CCCMINMAXWEEK WHERE RUNID = r\.RUNID\)\s*AND NOT EXISTS \(SELECT 1 FROM CCCMINMAXWINSOR WHERE RUNID = r\.RUNID\) THEN 'PURGED'/)
+    assert.match(selector, /WHEN r\.SESSION_STATUS IN \('DONE', 'ABANDONED'\) THEN 'ELIGIBLE'/)
+    assert.doesNotMatch(selector, /WHEN r\.SCOPE = 'FULL' THEN 'ELIGIBLE'/)
+  })
+
+  it('executor picks oldest-first ELIGIBLE candidates, calls only sp_MinMaxEngine_PurgeRun up to 2 runs, never DELETEs RUN/GRP/RUNPARAM and never wraps the loop in a transaction', () => {
+    const retention = sqlSource('00l_purge_retention.sql')
+
+    assert.match(retention, /IF COALESCE\(@MaxRuns, 0\) < 1 OR @MaxRuns > 2 SET @MaxRuns = 2;/)
+    assert.match(retention, /INSERT INTO #Selector\s*EXEC dbo\.sp_MinMaxEngine_PurgeSelector @Company = @Company;/)
+    assert.match(retention, /SELECT TOP 1 @RunId = RUNID\s*FROM #Selector\s*WHERE PURGE_STATUS = 'ELIGIBLE'[\s\S]*?ORDER BY RUNID ASC;/)
+    assert.match(retention, /EXEC dbo\.sp_MinMaxEngine_PurgeRun @Company = @Company, @RunId = @RunId, @BatchSize = @BatchSize;/)
+    assert.match(retention, /RAISERROR\(N'MIN\/MAX retention purge failed for RUNID %d: %s', 10, 1, @RunId, @PurgeError\);/)
+
+    // No DELETE of its own against a registry table (clearing the local
+    // @PurgeResult table variable between iterations is fine), and no
+    // direct DML against the header/registry tables either.
+    assert.doesNotMatch(retention, /DELETE\s+FROM\s+CCCMINMAX/i)
+    assert.doesNotMatch(retention, /(?:UPDATE|INSERT INTO)\s+CCCMINMAXRUN\b(?!PARAM)/i)
+    assert.doesNotMatch(retention, /(?:UPDATE|INSERT INTO)\s+CCCMINMAXGRP\b/i)
+    assert.doesNotMatch(retention, /(?:UPDATE|INSERT INTO)\s+CCCMINMAXRUNPARAM\b/i)
+
+    // No global transaction wrapping the loop: a per-row failure is caught
+    // and recorded, not rolled back batch-wide.
+    assert.doesNotMatch(retention, /BEGIN TRANSACTION/i)
+    assert.doesNotMatch(retention, /COMMIT TRANSACTION/i)
+    assert.match(retention, /BEGIN TRY[\s\S]*EXEC dbo\.sp_MinMaxEngine_PurgeRun[\s\S]*END TRY\s*BEGIN CATCH/)
+  })
+
+  it('auto-purges at most once after a successful FinishRun, isolated in its own TRY/CATCH with no THROW and no engine error-column contamination', () => {
+    const runPhases = sqlSource('00i_run_phases.sql')
+
+    assert.match(runPhases, /EXEC dbo\.sp_MinMaxEngine_PurgeRetention @Company = @Company, @MaxRuns = 1;/)
+
+    const finishRunThrowPos = runPhases.lastIndexOf('THROW;')
+    const purgeCallPos = runPhases.indexOf('sp_MinMaxEngine_PurgeRetention')
+    assert.ok(finishRunThrowPos > -1 && purgeCallPos > finishRunThrowPos, 'auto-purge runs after the engine CATCH/THROW block, i.e. only on a successful FinishRun')
+
+    const purgeBlock = runPhases.slice(runPhases.indexOf('BEGIN TRY', purgeCallPos - 200))
+    assert.match(purgeBlock, /BEGIN TRY\s*EXEC dbo\.sp_MinMaxEngine_PurgeRetention[\s\S]*END TRY\s*BEGIN CATCH/)
+    assert.doesNotMatch(purgeBlock, /\bTHROW\b/)
+    assert.doesNotMatch(purgeBlock, /ERRORMSG\s*=/)
+    assert.match(purgeBlock, /RAISERROR\(.*10, 1/)
+  })
+
+  it('backfill job is one fixed TSQL step with a hardcoded @MaxRuns = 2 command, no schedule, setup-only and never started', () => {
+    const backfill = sqlSource('00m_ensure_backfill_job.sql')
+
+    assert.match(backfill, /MEC_MinMaxEngine_PurgeRetentionBackfill_/)
+    assert.match(backfill, /N'EXEC dbo\.sp_MinMaxEngine_PurgeRetention @Company = '\s*\+\s*CONVERT\(NVARCHAR\(10\), @Company\) \+ N', @MaxRuns = 2;';/)
+    assert.match(backfill, /COUNT\(\*\) FROM msdb\.dbo\.sysjobsteps sx WHERE sx\.job_id = j\.job_id\) = 1/)
+    assert.match(backfill, /NOT EXISTS \(SELECT 1 FROM msdb\.dbo\.sysjobschedules sc WHERE sc\.job_id = j\.job_id\)/)
+    // The comment documents that starting is manual (mentions sp_start_job in
+    // prose); the procedure body itself must never issue that EXEC.
+    assert.doesNotMatch(backfill, /EXEC\s+(?:msdb\.dbo\.)?sp_start_job/i)
+
+    const ajsSource = fs.readFileSync(path.join(root, 'external', 'MEC', 'SyncItalia', 'S1', 'AJS', 'NewMinMax.js'), 'utf8')
+    assert.match(ajsSource, /X\.RUNSQL\(getEnsureBackfillJobProcedureSql\(\), null\);\s*\/\/[\s\S]*?\s*X\.RUNSQL\("EXEC dbo\.sp_MinMaxEngine_EnsureBackfillJob @Company = " \+ X\.SYS\.COMPANY, null\);/)
+    // sp_start_job is used elsewhere for the phase-runner job (runPhases);
+    // the backfill job must never be auto-started the same way.
+    assert.doesNotMatch(ajsSource, /sp_start_job[\s\S]{0,200}Backfill/)
+    assert.doesNotMatch(ajsSource, /Backfill[\s\S]{0,200}sp_start_job/)
+  })
+})

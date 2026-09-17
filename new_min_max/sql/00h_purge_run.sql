@@ -37,6 +37,11 @@ BEGIN
     IF @SessionStatus = 'OPEN'
         THROW 50043, 'sp_MinMaxEngine_PurgeRun: an OPEN session cannot be purged.', 1;
 
+    IF EXISTS (
+        SELECT 1 FROM CCCMINMAXRUN WHERE RUNID = @RunId AND COMPANY = @Company AND ESTE_REPER = 1
+    )
+        THROW 50053, 'sp_MinMaxEngine_PurgeRun: RUNID is pinned (ESTE_REPER) and cannot be purged.', 1;
+
     SELECT @RetentionCount = TRY_CONVERT(INT, PARAMVALUE)
     FROM CCCMINMAXPARAMS
     WHERE PARAMKEY = 'RETENTIE_DET_SESIUNI'

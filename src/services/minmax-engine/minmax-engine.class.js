@@ -1097,6 +1097,23 @@ export class MinmaxEngineService {
     this._audit('purgeRun', params, { runId })
     return { runId, ...(response.data || {}) }
   }
+
+  /**
+   * Read-only retention classification for every CCCMINMAXRUN session of
+   * this company (P17, FAZA6_CONTRACT.md §6): CURRENT/OPEN/PINNED/
+   * PROTECTED/PURGED/ELIGIBLE, computed in SQL by
+   * dbo.sp_MinMaxEngine_PurgeSelector - never derived in the browser. Never
+   * gated by MINMAX_ENGINE_WRITES_ENABLED: it changes nothing, unlike
+   * purgeRun above.
+   */
+  async purgeSelector (data) {
+    const token = requireToken(data)
+    const response = await this._callAjs('purgeSelector', {}, token)
+    if (!response || response.success === false) {
+      throw this._translateAjsError(response)
+    }
+    return { rows: Array.isArray(response.rows) ? response.rows : [] }
+  }
 }
 
 export const getOptions = (app) => {

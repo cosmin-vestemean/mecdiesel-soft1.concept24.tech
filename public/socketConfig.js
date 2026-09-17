@@ -111,7 +111,8 @@ client.use("minmax-engine", socketClient.service("minmax-engine"), {
     "saveParams",
     "runEngine",
     "abandonRun",
-    "purgeRun"
+    "purgeRun",
+    "purgeSelector"
   ],
 });
 

@@ -26,8 +26,9 @@ function makeApp () {
     async saveParams () { return { ok: true, method: 'saveParams' } },
     async runEngine () { return { ok: true, method: 'runEngine' } },
     async abandonRun () { return { ok: true, method: 'abandonRun' } },
-    async purgeRun () { return { ok: true, method: 'purgeRun' } }
-  }, { methods: ['results', 'saveParams', 'runEngine', 'abandonRun', 'purgeRun'] })
+    async purgeRun () { return { ok: true, method: 'purgeRun' } },
+    async purgeSelector () { return { ok: true, method: 'purgeSelector' } }
+  }, { methods: ['results', 'saveParams', 'runEngine', 'abandonRun', 'purgeRun', 'purgeSelector'] })
 
   app.service('minmax-engine').hooks({
     around: {
@@ -69,6 +70,18 @@ describe('minmax-engine authorization hooks (§12.8, unit — no S1/DB)', () => 
       authentication: { strategy: 'jwt', accessToken }
     })
     assert.deepStrictEqual(result, { ok: true, method: 'results' })
+  })
+
+  // P17: read-only, gated only by the default `all` hook (minmax.read) —
+  // unlike runEngine/abandonRun/purgeRun below, it never requires minmax.edit.
+  it('minmax.read alone reaches purgeSelector() (read-only, no minmax.edit required)', async () => {
+    const app = makeApp()
+    const accessToken = await mintToken(app, [ROLE_READ])
+    const result = await app.service('minmax-engine').purgeSelector({}, {
+      provider: 'socketio',
+      authentication: { strategy: 'jwt', accessToken }
+    })
+    assert.deepStrictEqual(result, { ok: true, method: 'purgeSelector' })
   })
 
   it('minmax.read alone is rejected on saveParams() with Forbidden (403)', async () => {

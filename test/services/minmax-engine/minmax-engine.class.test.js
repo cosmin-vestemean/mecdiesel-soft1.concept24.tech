@@ -1274,6 +1274,54 @@ describe('minmax-engine service (unit, HTTP mocked)', () => {
         )
       })
     })
+
+    // P17: read-only, never gated by MINMAX_ENGINE_WRITES_ENABLED (unlike
+    // runEngine/abandonRun/purgeRun above) — it changes nothing in S1.
+    describe('purgeSelector()', () => {
+      it('is NOT rejected by the writesEnabled kill-switch (read-only)', async () => {
+        nock(FAKE_BASE_URL)
+          .post('/JS/NewMinMax/purgeSelector')
+          .reply(200, ajsReply({ rows: [], success: true }))
+
+        const service = makeService({ writesEnabled: false })
+        const result = await service.purgeSelector({ token: 'tok' })
+        assert.deepStrictEqual(result, { rows: [] })
+      })
+
+      it('returns the SQL-computed retention classification rows, camelCased', async () => {
+        nock(FAKE_BASE_URL)
+          .post('/JS/NewMinMax/purgeSelector', (body) => JSON.parse(body.JSONDATA) !== undefined)
+          .reply(200, ajsReply({
+            rows: [
+              { esteCurent: 1, esteReper: 0, hasDet: 1, hasWeek: 1, hasWinsor: 1, isRetentionProtected: 0, purgeStatus: 'CURRENT', runId: 28, scope: 'FULL', sessionStatus: 'DONE' },
+              { esteCurent: 0, esteReper: 1, hasDet: 1, hasWeek: 0, hasWinsor: 0, isRetentionProtected: 0, purgeStatus: 'PINNED', runId: 26, scope: 'FULL', sessionStatus: 'DONE' },
+              { esteCurent: 0, esteReper: 0, hasDet: 0, hasWeek: 0, hasWinsor: 0, isRetentionProtected: 0, purgeStatus: 'PURGED', runId: 13, scope: 'FULL', sessionStatus: 'DONE' }
+            ],
+            success: true
+          }))
+
+        const service = makeService({ writesEnabled: false })
+        const result = await service.purgeSelector({ token: 'tok' })
+        assert.strictEqual(result.rows.length, 3)
+        assert.strictEqual(result.rows[0].purgeStatus, 'CURRENT')
+        assert.strictEqual(result.rows[1].purgeStatus, 'PINNED')
+        assert.strictEqual(result.rows[2].purgeStatus, 'PURGED')
+      })
+
+      it('requires an S1 session token like every other method', async () => {
+        const service = makeService({ writesEnabled: false })
+        await assert.rejects(service.purgeSelector({}), /Missing S1 session token/)
+      })
+
+      it('translates a failed AJS response into a rejected promise', async () => {
+        nock(FAKE_BASE_URL)
+          .post('/JS/NewMinMax/purgeSelector')
+          .reply(200, ajsReply({ error: 'boom', success: false }))
+
+        const service = makeService({ writesEnabled: false })
+        await assert.rejects(service.purgeSelector({ token: 'tok' }), /boom/)
+      })
+    })
   })
 })
 

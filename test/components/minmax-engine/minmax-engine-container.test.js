@@ -19,7 +19,7 @@ describe('minmax-engine-container — lazy activation (§12.9)', () => {
   it('does not fetch on mount and initializes each flow once on activation', async () => {
     const calls = [];
     const originals = {};
-    for (const method of ['loadHistory', 'loadParams', 'loadResults', 'loadGroupAbc']) {
+    for (const method of ['loadHistory', 'loadPurgeSelector', 'loadParams', 'loadResults', 'loadGroupAbc']) {
       originals[method] = minmaxEngineStore[method];
       minmaxEngineStore[method] = async (...args) => { calls.push({ method, args }); };
     }
@@ -37,13 +37,14 @@ describe('minmax-engine-container — lazy activation (§12.9)', () => {
 
       assert.deepStrictEqual(calls, [
         { method: 'loadHistory', args: [] },
+        { method: 'loadPurgeSelector', args: [] },
         { method: 'loadParams', args: [] },
         { method: 'loadResults', args: [{ withTotal: true }] },
         { method: 'loadGroupAbc', args: [{}, { withTotal: true }] }
       ]);
 
       await element.activate();
-      assert.strictEqual(calls.length, 4);
+      assert.strictEqual(calls.length, 5);
     } finally {
       Object.assign(minmaxEngineStore, originals);
     }

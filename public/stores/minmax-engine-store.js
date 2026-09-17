@@ -205,7 +205,7 @@ export class MinmaxEngineStore {
     // resolves after a newer one can never clobber fresher state. `explain`
     // is also incremented on drawer close, so a response for an already-
     // closed drawer is discarded too.
-    this._sequences = { explain: 0, groupAbc: 0, history: 0, params: 0, results: 0, run: 0 };
+    this._sequences = { explain: 0, groupAbc: 0, history: 0, params: 0, purgeSelector: 0, results: 0, run: 0 };
     this._runPollTimer = null;
 
     this.subscribe = this.subscribe.bind(this);
@@ -230,6 +230,11 @@ export class MinmaxEngineStore {
 
       // Params/COV/branches (CCCMINMAXPARAMS et al.) — contract §7
       params: { branches: [], cov: [], error: '', overrides: [], params: [], saveError: '', saving: false, writesEnabled: false },
+
+      // Read-only retention selector (P17): CURRENT/OPEN/PINNED/PROTECTED/
+      // PURGED/ELIGIBLE per RUNID, computed in SQL, never derived here.
+      purgeSelector: { error: '', loading: false, rows: [] },
+      purgeRunError: '',
       runLaunch: { error: '', polling: false, runId: null, starting: false },
       resolvedRunId: null, // actual RUNID the last successful results() call used
       rows: [],
@@ -364,6 +369,25 @@ export class MinmaxEngineStore {
           page: 1,
           pageSize: Math.min(MAX_PAGE_SIZE, Math.max(1, Number(action.payload) || DEFAULT_PAGE_SIZE))
         };
+        break;
+
+      case 'SET_PURGE_SELECTOR_LOADING':
+        newState.purgeSelector = { ...newState.purgeSelector, loading: Boolean(action.payload) };
+        break;
+
+      case 'SET_PURGE_SELECTOR_ERROR':
+        newState.purgeSelector = { ...newState.purgeSelector, error: action.payload || '' };
+        break;
+
+      case 'SET_PURGE_SELECTOR_ROWS':
+        newState.purgeSelector = {
+          ...newState.purgeSelector,
+          rows: Array.isArray(action.payload) ? action.payload : []
+        };
+        break;
+
+      case 'SET_PURGE_RUN_ERROR':
+        newState.purgeRunError = action.payload || '';
         break;
 
       case 'SET_GROUP_ABC_RESULTS':
@@ -721,6 +745,11 @@ export class MinmaxEngineStore {
       if (run.SESSION_STATUS === 'DONE') {
         this.setRunId(null);
         await this.loadResults({ withTotal: true });
+        // FinishRun triggers at most one automatic retention purge (P17);
+        // refresh the read-only selector so a newly-purged/newly-protected
+        // RUNID shows up without a manual reload. Failure-isolated: a
+        // purgeSelector error here only sets its own error slot.
+        this.loadPurgeSelector();
       } else {
         this.dispatch({
           type: 'SET_RUN_LAUNCH',
@@ -756,6 +785,49 @@ export class MinmaxEngineStore {
         payload: { error: this._translateRunEngineError(err), starting: false }
       });
       return false;
+    }
+  }
+
+  // --- Async Orchestration: purgeRun() — FAZA6_CONTRACT.md §6, P17 ---
+  // Same shape as abandonRun() above (call the service, refresh history), but
+  // its own error slot: purgeRun() isn't part of the run-launch/polling flow.
+  // No UI button wires this in yet (P17 decision 6) — this exists so the
+  // lifecycle operation already exposed by the service isn't missing from the
+  // one layer meant to own every minmax-engine service call.
+  async purgeRun (runId, batchSize) {
+    this.dispatch({ type: 'SET_PURGE_RUN_ERROR', payload: '' });
+    try {
+      const service = await this._authenticatedService();
+      const response = await service.purgeRun({ batchSize, runId, token: this._token() });
+      await this.loadHistory();
+      return response;
+    } catch (err) {
+      console.error('minmax-engine-store: purgeRun failed', err);
+      this.dispatch({ type: 'SET_PURGE_RUN_ERROR', payload: (err && err.message) || 'Purjarea sesiunii a esuat.' });
+      return null;
+    }
+  }
+
+  // --- Async Orchestration: purgeSelector() — read-only, P17 ---
+  // Authoritative retention classification (CURRENT/OPEN/PINNED/PROTECTED/
+  // PURGED/ELIGIBLE per RUNID), computed entirely in SQL; this store never
+  // derives the label itself, only displays what the service returns.
+  async loadPurgeSelector () {
+    const seq = this._beginRequest('purgeSelector');
+    this.dispatch({ type: 'SET_PURGE_SELECTOR_LOADING', payload: true });
+    this.dispatch({ type: 'SET_PURGE_SELECTOR_ERROR', payload: '' });
+    try {
+      const service = await this._authenticatedService();
+      const response = await service.purgeSelector({ token: this._token() });
+      if (!this._isCurrent('purgeSelector', seq)) return;
+      this.dispatch({ type: 'SET_PURGE_SELECTOR_ROWS', payload: response.rows });
+      return response.rows;
+    } catch (err) {
+      if (!this._isCurrent('purgeSelector', seq)) return;
+      console.error('minmax-engine-store: loadPurgeSelector failed', err);
+      this.dispatch({ type: 'SET_PURGE_SELECTOR_ERROR', payload: (err && err.message) || 'Nu s-a putut incarca selectorul de retentie.' });
+    } finally {
+      if (this._isCurrent('purgeSelector', seq)) this.dispatch({ type: 'SET_PURGE_SELECTOR_LOADING', payload: false });
     }
   }
 

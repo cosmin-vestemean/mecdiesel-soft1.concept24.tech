@@ -33,6 +33,9 @@ export class MinmaxRunPanel extends LitElement {
       canEdit: { type: Boolean },
       loading: { type: Boolean },
       loadingHistory: { type: Boolean },
+      purgeSelectorRows: { type: Array },
+      purgeSelectorLoading: { type: Boolean },
+      purgeSelectorError: { type: String },
       runLaunch: { type: Object },
       resolvedRunId: { type: Number },
       runHistory: { type: Array },
@@ -50,6 +53,9 @@ export class MinmaxRunPanel extends LitElement {
     this.canEdit = false;
     this.loading = false;
     this.loadingHistory = false;
+    this.purgeSelectorRows = [];
+    this.purgeSelectorLoading = false;
+    this.purgeSelectorError = '';
     this.runLaunch = { error: '', polling: false, runId: null, starting: false };
     this.resolvedRunId = null;
     this.runHistory = [];
@@ -98,6 +104,9 @@ export class MinmaxRunPanel extends LitElement {
     this.historyError = state.historyError;
     this.loading = state.loading;
     this.runLaunch = state.runLaunch;
+    this.purgeSelectorRows = (state.purgeSelector && state.purgeSelector.rows) || [];
+    this.purgeSelectorLoading = Boolean(state.purgeSelector && state.purgeSelector.loading);
+    this.purgeSelectorError = (state.purgeSelector && state.purgeSelector.error) || '';
     this.writesEnabled = Boolean(state.params && state.params.writesEnabled);
     this.canEdit = getAppTokenRoles().includes('minmax.edit');
 
@@ -142,7 +151,11 @@ export class MinmaxRunPanel extends LitElement {
   }
 
   _refreshHistory () {
-    if (this._store) this._store.loadHistory();
+    if (!this._store) return;
+    this._store.loadHistory();
+    // Same manual trigger also re-reads the read-only retention selector
+    // (P17) so a PINNED/PURGED label never lags the history refresh.
+    this._store.loadPurgeSelector();
   }
 
   _startRun () {
@@ -231,6 +244,22 @@ export class MinmaxRunPanel extends LitElement {
     }
     const cls = STATUS_BADGE_CLASS[status] || 'bg-secondary';
     return html`<span class="badge ${cls}">${status}</span>`;
+  }
+
+  // Read-only retention label (P17): only PINNED/PURGED add information the
+  // rest of the row doesn't already show (CURENT/OPEN are already badged).
+  // PROTECTED/ELIGIBLE stay silent on purpose — there is no purge button
+  // here, so surfacing them would just be noise without an action to take.
+  _purgeBadge (runId) {
+    const row = this.purgeSelectorRows.find((r) => Number(r.runId) === Number(runId));
+    if (!row) return '';
+    if (row.purgeStatus === 'PINNED') {
+      return html`<span class="badge bg-info text-dark ms-1" title="Reper: pastrat manual, exclus din retentia automata (ESTE_REPER)">REPER</span>`;
+    }
+    if (row.purgeStatus === 'PURGED') {
+      return html`<span class="text-muted small ms-1" title="Detaliile (CCCMINMAXDET/WEEK/WINSOR) au fost eliberate de politica de retentie">date eliberate</span>`;
+    }
+    return '';
   }
 
   render () {
@@ -349,7 +378,11 @@ export class MinmaxRunPanel extends LitElement {
               Istoric sesiuni (${this.runHistory.length})${this.resolvedRunId !== null
                 ? ` — curenta: RUNID ${this.resolvedRunId}`
                 : ''}
+              ${this.purgeSelectorLoading ? html`<i class="fas fa-spinner fa-spin ms-1" title="Se verifica retentia..."></i>` : ''}
             </summary>
+            ${this.purgeSelectorError
+              ? html`<div class="small text-muted mt-1">Retentie neverificata: ${this.purgeSelectorError}</div>`
+              : ''}
             <div class="table-responsive mt-2">
               <table class="table table-sm table-hover align-middle mb-0">
               <thead>
@@ -396,6 +429,7 @@ export class MinmaxRunPanel extends LitElement {
                     <td>
                       ${run.RUNID}
                       ${run.ESTE_CURENT ? html`<span class="badge bg-primary ms-1">CURENT</span>` : ''}
+                      ${this._purgeBadge(run.RUNID)}
                     </td>
                     <td>${this._formatDate(run.AZI)}</td>
                     <td>${run.SCOPE || '-'}</td>
